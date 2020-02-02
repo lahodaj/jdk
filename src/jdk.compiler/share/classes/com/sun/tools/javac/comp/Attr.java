@@ -3020,6 +3020,7 @@ public class Attr extends JCTree.Visitor {
             if (needsRecovery) {
                 attribTree(that, env, recoveryInfo);
             }
+            return ; //wrong
         }
     }
     //where
