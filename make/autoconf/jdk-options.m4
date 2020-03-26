@@ -421,6 +421,30 @@ AC_DEFUN_ONCE([JDKOPT_SETUP_CODE_COVERAGE],
   AC_SUBST(JCOV_FILTERS)
 ])
 
+################################################################################
+#
+# Jackpot static analysis
+#
+AC_DEFUN_ONCE([JDKOPT_SETUP_JACKPOT],
+[
+  AC_ARG_WITH(jackpot, [AS_HELP_STRING([--with-jackpot],
+      [jackpot tool location])])
+  JACKPOT_ENABLED=
+  JACKPOT_HOME=
+  if test "x$with_jackpot" = "x" ; then
+    JACKPOT_ENABLED="false"
+  else
+    JACKPOT_HOME="$with_jackpot"
+    if test ! -f "$JACKPOT_HOME/jackpot.jar"; then
+      AC_MSG_RESULT([fail])
+      AC_MSG_ERROR([Invalid Jackpot tool location: "$JACKPOT_HOME/jackpot.jar" does not exist])
+    fi
+    JACKPOT_ENABLED="true"
+  fi
+  AC_SUBST(JACKPOT_ENABLED)
+  AC_SUBST(JACKPOT_HOME)
+])
+
 ###############################################################################
 #
 # AddressSanitizer

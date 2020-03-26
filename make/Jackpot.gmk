@@ -1,0 +1,65 @@
+#
+# Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+# DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+#
+# This code is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 2 only, as
+# published by the Free Software Foundation.  Oracle designates this
+# particular file as subject to the "Classpath" exception as provided
+# by Oracle in the LICENSE file that accompanied this code.
+#
+# This code is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# version 2 for more details (a copy is included in the LICENSE file that
+# accompanied this code).
+#
+# You should have received a copy of the GNU General Public License version
+# 2 along with this work; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+#
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
+#
+
+# This must be the first rule
+default: all
+
+include $(SPEC)
+include MakeBase.gmk
+include JavaCompilation.gmk
+include SetupJavaCompilers.gmk
+include Modules.gmk
+
+ALL_MODULES := $(call FindAllModules)
+
+JACKPOT_MODULES ?= $(ALL_MODULES)
+JACKPOT_TARGETS := $(addsuffix -jackpot, $(JACKPOT_MODULES))
+JACKPOT_CLASSPATH = \
+    $(call PathList, \
+        $(foreach m, $(ALL_MODULES), $(if $($(m)_BIN), $($(m)_BIN), $(JDK_OUTPUTDIR)/modules/$m)))
+JACKPOT_JAR := $(JACKPOT_HOME)/jackpot.jar
+JACKPOT_EXTRA_OPTIONS ?=
+
+jdk.internal.vm.compiler_JACKPOT_CONFIG=$(TOPDIR)/make/conf/jdk.internal.vm.compiler-cfg_hints.xml
+
+define DeclareModuleJackpot
+  $1-jackpot:
+	$(ECHO) Running Jackpot 3.0 for: $1
+	$(JDK_IMAGE_DIR)/bin/java --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.desktop/sun.awt=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED -classpath $(JACKPOT_JAR) org.netbeans.modules.jackpot30.cmdline.Main -classpath $(JACKPOT_CLASSPATH) --config-file $(if $($(m)_JACKPOT_CONFIG), $($(m)_JACKPOT_CONFIG), $(TOPDIR)/make/conf/cfg_hints.xml) $(JACKPOT_EXTRA_OPTIONS) $(call FindModuleSrcDirs, $1)
+	$(ECHO) Done running Jackpot 3.0 for: $1
+
+endef
+
+
+$(foreach m, $(JACKPOT_MODULES), $(eval $(call DeclareModuleJackpot,$m)))
+
+jackpot: $(JACKPOT_TARGETS)
+
+TARGETS += $(JACKPOT_TARGETS)
+TARGETS += jackpot
+
+################################################################################
+
+all: jackpot

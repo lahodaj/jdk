@@ -1,0 +1,11 @@
+'Use StringUtils.toLowerCase instead of String.toLowerCase()':
+$str.toLowerCase() :: $str instanceof java.lang.String
+=>
+com.sun.tools.javac.util.StringUtils.toLowerCase($str)
+;;
+
+'Use StringUtils.toUpperCase instead of String.toUpperCase()':
+$str.toUpperCase() :: $str instanceof java.lang.String
+=>
+com.sun.tools.javac.util.StringUtils.toUpperCase($str)
+;;

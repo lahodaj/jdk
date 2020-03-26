@@ -1260,6 +1260,11 @@ create-main-targets-include:
 	  @$(ECHO) ALL_MAIN_TARGETS := $(sort $(ALL_TARGETS)) > \
 	      $(MAKESUPPORT_OUTPUTDIR)/main-targets.gmk
 
+jackpot:
+	+($(CD) $(TOPDIR)/make && $(MAKE) $(MAKE_ARGS) -f Jackpot.gmk)
+
+ALL_TARGETS += jackpot
+
 ################################################################################
 # Hook to include the corresponding custom file, if present.
 $(eval $(call IncludeCustomExtension, Main-post.gmk))
