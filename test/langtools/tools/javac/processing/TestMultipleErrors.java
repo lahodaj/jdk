@@ -5,7 +5,7 @@
  * @library /tools/javac/lib
  * @modules jdk.compiler
  * @build JavacTestingAbstractProcessor TestMultipleErrors
- * @compile/fail/ref=TestMultipleErrors.out -XDrawDiagnostics -processor TestMultipleErrors TestMultipleErrors.java
+ * @compile/fail -XDrawDiagnostics -processor TestMultipleErrors TestMultipleErrors.java
  */
 
 import java.util.*;
