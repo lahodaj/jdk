@@ -24,6 +24,17 @@
  */
 package build.tools.depend;
 
+import com.sun.source.tree.ClassTree;
+import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.IdentifierTree;
+import com.sun.source.tree.ImportTree;
+import com.sun.source.tree.LiteralTree;
+import com.sun.source.tree.MemberReferenceTree;
+import com.sun.source.tree.MemberSelectTree;
+import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.ModifiersTree;
+import com.sun.source.tree.Tree;
+import com.sun.source.tree.VariableTree;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -84,8 +95,29 @@ import com.sun.source.util.TaskEvent;
 import com.sun.source.util.TaskEvent.Kind;
 import com.sun.source.util.TaskListener;
 import com.sun.source.util.TreePath;
+import com.sun.source.util.TreeScanner;
 import com.sun.source.util.Trees;
+import com.sun.tools.javac.api.BasicJavacTask;
+import com.sun.tools.javac.main.JavaCompiler;
+import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
+import com.sun.tools.javac.util.Context;
+import com.sun.tools.javac.util.ListBuffer;
+import com.sun.tools.javac.util.Options;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.Name;
+import javax.tools.ForwardingJavaFileManager;
+import javax.tools.JavaFileManager;
+import javax.tools.StandardLocation;
+import javax.tools.ToolProvider;
 
 public class Depend implements Plugin {
 
@@ -96,6 +128,84 @@ public class Depend implements Plugin {
 
     @Override
     public void init(JavacTask jt, String... args) {
+        try (JavaFileManager jfm = ToolProvider.getSystemJavaCompiler().getStandardFileManager(null, null, null)) {
+            JavaFileManager fm = new ForwardingJavaFileManager<JavaFileManager>(jfm) {
+                @Override
+                public ClassLoader getClassLoader(JavaFileManager.Location location) {
+                    if (location == StandardLocation.CLASS_PATH) {
+                        return Depend.class.getClassLoader();
+                    }
+                    return super.getClassLoader(location);
+                }
+            };
+            ((JavacTask) ToolProvider.getSystemJavaCompiler().getTask(null, fm, null, List.of("-proc:only", "-XDaccessInternalAPI=true"), List.of("java.lang.Object"), null)).analyze();
+        } catch (IOException ex) {
+            throw new IllegalStateException(ex);
+        }
+
+        AtomicBoolean noApiChange = new AtomicBoolean(); 
+        try {
+            Context context = ((BasicJavacTask) jt).getContext();
+            Options options = Options.instance(context);
+            String modifiedInputs = options.get("modifiedInputs");
+            if (modifiedInputs == null) {
+                throw new IllegalStateException("Expected modifiedInputs to be set using -XDmodifiedInputs=<list-of-files>");
+            }
+            Set<String> modified = new HashSet<>(Arrays.asList(modifiedInputs.split(" ")));
+            Path internalAPIDigestFile = Paths.get(args[1]);
+            Map<String, String> internalAPI = new LinkedHashMap<>();
+            if (Files.isReadable(internalAPIDigestFile)) {
+                Files.readAllLines(internalAPIDigestFile, StandardCharsets.UTF_8)
+                     .forEach(line -> {
+                         String[] keyAndValue = line.split("=");
+                         internalAPI.put(keyAndValue[0], keyAndValue[1]);
+                     });
+            }
+            JavaCompiler compiler = JavaCompiler.instance(context);
+            JavaCompiler.class.getDeclaredField("doParseFiles").set(compiler, (Function<Iterable<JavaFileObject>, com.sun.tools.javac.util.List<JCCompilationUnit>>) fileObjects -> {
+                Map<JavaFileObject, JCCompilationUnit> files2CUT = new IdentityHashMap<>();
+                boolean fullRecompile = modified.stream().anyMatch(f -> !f.endsWith(".java")); //TODO: case sensitive!
+                for (JavaFileObject jfo : fileObjects) {
+                    if (modified.contains(jfo.getName())) {
+                        JCCompilationUnit parsed = compiler.parse(jfo);
+                        files2CUT.put(jfo, parsed);
+                        String currentSignature = treeDigest(parsed);
+                        if (!currentSignature.equals(internalAPI.get(jfo.getName()))) {
+                            fullRecompile |= true;
+                            internalAPI.put(jfo.getName(), currentSignature);
+                        }
+                    }
+                }
+
+                ListBuffer<JCCompilationUnit> result = new ListBuffer<>();
+                if (fullRecompile) {
+                    for (JavaFileObject jfo : fileObjects) {
+                        JCCompilationUnit parsed = files2CUT.get(jfo);
+                        if (parsed == null) {
+                            parsed = compiler.parse(jfo);
+                            internalAPI.put(jfo.getName(), treeDigest(parsed));
+                        }
+                        result.add(parsed);
+                    }
+                    try (OutputStream out = Files.newOutputStream(internalAPIDigestFile)) {
+                        String hashes = internalAPI.entrySet()
+                                                   .stream()
+                                                   .map(e -> e.getKey() + "=" + e.getValue())
+                                                   .collect(Collectors.joining("\n"));
+                        out.write(hashes.getBytes(StandardCharsets.UTF_8));
+                    } catch (IOException ex) {
+                        throw new IllegalStateException(ex);
+                    }
+                } else {
+                    result.addAll(result);
+                    noApiChange.set(true);
+                }
+                return result.toList();
+            });
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
         jt.addTaskListener(new TaskListener() {
             private final Map<ModuleElement, Set<PackageElement>> apiPackages = new HashMap<>();
             private final MessageDigest apiHash;
@@ -132,7 +242,7 @@ public class Depend implements Plugin {
                         }
                     }
                 }
-                if (te.getKind() == Kind.COMPILATION) {
+                if (te.getKind() == Kind.COMPILATION && !noApiChange.get()) {
                     String previousSignature = null;
                     File digestFile = new File(args[0]);
                     try (InputStream in = new FileInputStream(digestFile)) {
@@ -154,6 +264,15 @@ public class Depend implements Plugin {
         });
     }
 
+    private String treeDigest(JCCompilationUnit cu) {
+        try {
+            TreeVisitor v = new TreeVisitor(MessageDigest.getInstance("MD5"));
+            v.scan(cu, null);
+            return Depend.this.toString(v.apiHash.digest());
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
     private String toString(byte[] digest) {
         StringBuilder result = new StringBuilder();
 
@@ -531,6 +650,153 @@ public class Depend implements Plugin {
             }
             update(")");
             return null;
+        }
+
+    }
+    
+    private static final class TreeVisitor extends TreeScanner<Void, Void> {
+
+        private final Set<Name> seenIdentifiers = new HashSet<>();
+        private final MessageDigest apiHash;
+        private final Charset utf8;
+
+        public TreeVisitor(MessageDigest apiHash) {
+            this.apiHash = apiHash;
+            utf8 = Charset.forName("UTF-8");
+        }
+
+        private void update(CharSequence data) {
+            apiHash.update(data.toString().getBytes(utf8));
+        }
+
+        @Override
+        public Void scan(Tree tree, Void p) {
+            update("(");
+            if (tree != null) {
+                update(tree.getKind().name());
+            };
+            super.scan(tree, p);
+            update(")");
+            return null;
+        }
+
+        @Override
+        public Void visitCompilationUnit(CompilationUnitTree node, Void p) {
+            scan(node.getPackage(), p);
+            seenIdentifiers.clear();
+            scan(node.getTypeDecls(), p);
+            List<ImportTree> importantImports = new ArrayList<>();
+            for (ImportTree imp : node.getImports()) {
+                Tree t = imp.getQualifiedIdentifier();
+                if (t.getKind() == Tree.Kind.MEMBER_SELECT) {
+                    Name member = ((MemberSelectTree) t).getIdentifier();
+                    if (member.contentEquals("*") || seenIdentifiers.contains(member)) {
+                        importantImports.add(imp);
+                    }
+                } else {
+                    //should not happen, possibly erroneous source?
+                    importantImports.add(imp);
+                }
+            }
+            importantImports.sort((imp1, imp2) -> {
+                if (imp1.isStatic() ^ imp2.isStatic()) {
+                    return imp1.isStatic() ? -1 : 1;
+                } else {
+                    return imp1.getQualifiedIdentifier().toString().compareTo(imp2.getQualifiedIdentifier().toString());
+                }
+            });
+            scan(importantImports, p);
+            return null;
+        }
+
+        @Override
+        public Void visitIdentifier(IdentifierTree node, Void p) {
+            update(node.getName());
+            seenIdentifiers.add(node.getName());
+            return super.visitIdentifier(node, p);
+        }
+
+        @Override
+        public Void visitMemberSelect(MemberSelectTree node, Void p) {
+            update(node.getIdentifier());
+            return super.visitMemberSelect(node, p);
+        }
+
+        @Override
+        public Void visitMemberReference(MemberReferenceTree node, Void p) {
+            update(node.getName());
+            return super.visitMemberReference(node, p);
+        }
+
+        @Override
+        public Void scan(Iterable<? extends Tree> nodes, Void p) {
+            update("(");
+            super.scan(nodes, p);
+            update(")");
+            return null;
+        }
+
+        @Override
+        public Void visitClass(ClassTree node, Void p) {
+            update(node.getSimpleName());
+            scan(node.getModifiers(), p);
+            scan(node.getTypeParameters(), p);
+            scan(node.getExtendsClause(), p);
+            scan(node.getImplementsClause(), p);
+            scan(node.getMembers()
+                     .stream()
+                     .filter(this::importantMember)
+                     .collect(Collectors.toList()),
+                 p);
+            return null;
+        }
+
+        private boolean importantMember(Tree m) {
+            return switch (m.getKind()) {
+                case ANNOTATION_TYPE, CLASS, ENUM, INTERFACE, RECORD ->
+                    !isPrivate(((ClassTree) m).getModifiers());
+                case METHOD ->
+                    !isPrivate(((MethodTree) m).getModifiers());
+                case VARIABLE ->
+                    !isPrivate(((VariableTree) m).getModifiers());
+                case BLOCK -> false;
+                default -> throw new IllegalStateException("Unexpected tree kind: " + m.getKind());
+            };
+        }
+
+        private boolean isPrivate(ModifiersTree mt) {
+            return mt.getFlags().contains(Modifier.PRIVATE);
+        }
+
+        @Override
+        public Void visitVariable(VariableTree node, Void p) {
+            update(node.getName());
+            return super.visitVariable(node, p);
+        }
+
+        @Override
+        public Void visitMethod(MethodTree node, Void p) {
+            update(node.getName());
+            scan(node.getModifiers(), p);
+            scan(node.getReturnType(), p);
+            scan(node.getTypeParameters(), p);
+            scan(node.getParameters(), p);
+            scan(node.getReceiverParameter(), p);
+            scan(node.getThrows(), p);
+            scan(node.getDefaultValue(), p);
+            return null;
+        }
+
+        @Override
+        public Void visitLiteral(LiteralTree node, Void p) {
+            update(String.valueOf(node.getValue()));
+            return super.visitLiteral(node, p);
+        }
+
+        @Override
+        public Void visitModifiers(ModifiersTree node, Void p) {
+            update(node.getFlags().toString());
+            return super.visitModifiers(node, p);
         }
 
     }
