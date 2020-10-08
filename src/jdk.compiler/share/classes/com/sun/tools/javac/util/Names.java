@@ -25,6 +25,8 @@
 
 package com.sun.tools.javac.util;
 
+import com.sun.tools.javac.util.CrashRecorder;
+
 /**
  * Access to the compiler's name table.  Standard names are defined,
  * as well as methods to create new names.
@@ -46,6 +48,8 @@ public class Names {
         }
         return instance;
     }
+
+    final CrashRecorder crashRecorder;
 
     // operators and punctuation
     public final Name asterisk;
@@ -217,6 +221,7 @@ public class Names {
     public final Name.Table table;
 
     public Names(Context context) {
+        crashRecorder = CrashRecorder.instance(context);
         Options options = Options.instance(context);
         table = createTable(options);
 

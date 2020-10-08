@@ -376,6 +376,8 @@ public class JavaCompiler {
 
     protected CompileStates compileStates;
 
+    protected CrashRecorder crashRecorder;
+
     /** Construct a new compiler using a shared context.
      */
     public JavaCompiler(Context context) {
@@ -400,6 +402,7 @@ public class JavaCompiler {
         fileManager = context.get(JavaFileManager.class);
         parserFactory = ParserFactory.instance(context);
         compileStates = CompileStates.instance(context);
+        crashRecorder = CrashRecorder.instance(context);
 
         try {
             // catch completion problems with predefineds
@@ -634,9 +637,14 @@ public class JavaCompiler {
                 keepComments = true;
                 genEndPos = true;
             }
-            Parser parser = parserFactory.newParser(content, keepComments(), genEndPos,
-                                lineDebugInfo, filename.isNameCompatible("module-info", Kind.SOURCE));
-            tree = parser.parseCompilationUnit();
+            try {
+                Parser parser = parserFactory.newParser(content, keepComments(), genEndPos,
+                                    lineDebugInfo, filename.isNameCompatible("module-info", Kind.SOURCE));
+                tree = parser.parseCompilationUnit();
+            } catch (Throwable t) {
+                crashRecorder.recordCrashingPath(t, filename);
+                throw t;
+            }
             if (verbose) {
                 log.printVerbose("parsing.done", Long.toString(elapsed(msec)));
             }
@@ -1348,6 +1356,9 @@ public class JavaCompiler {
                 attr.postAttr(env.tree);
             }
             compileStates.put(env, CompileState.ATTR);
+        } catch (Throwable t) {
+            crashRecorder.recordCrashingPath(t, env);
+            throw t;
         }
         finally {
             log.useSource(prev);
@@ -1414,6 +1425,9 @@ public class JavaCompiler {
             finally {
                 log.useSource(prev);
             }
+        } catch (Throwable t) {
+            crashRecorder.recordCrashingPath(t, env);
+            throw t;
         }
         finally {
             if (!taskListener.isEmpty()) {
@@ -1596,6 +1610,9 @@ public class JavaCompiler {
                 JCClassDecl cdef = (JCClassDecl)l.head;
                 results.add(new Pair<>(env, cdef));
             }
+        } catch (Throwable t) {
+            crashRecorder.recordCrashingPath(t, env);
+            throw t;
         }
         finally {
             log.useSource(prev);
@@ -1649,6 +1666,9 @@ public class JavaCompiler {
                 log.error(cdef.pos(),
                           Errors.ClassCantWrite(cdef.sym, ex.getMessage()));
                 return;
+            } catch (Throwable t) {
+                crashRecorder.recordCrashingPath(t, x.fst);
+                throw t;
             } finally {
                 log.useSource(prev);
             }

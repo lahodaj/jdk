@@ -104,6 +104,7 @@ public class Enter extends JCTree.Visitor {
     TypeEnvs typeEnvs;
     Modules modules;
     JCDiagnostic.Factory diags;
+    CrashRecorder crashRecorder;
 
     private final Todo todo;
 
@@ -128,6 +129,7 @@ public class Enter extends JCTree.Visitor {
         names = Names.instance(context);
         modules = Modules.instance(context);
         diags = JCDiagnostic.Factory.instance(context);
+        crashRecorder = CrashRecorder.instance(context);
 
         predefClassDef = make.ClassDef(
             make.Modifiers(PUBLIC),
@@ -287,6 +289,9 @@ public class Enter extends JCTree.Visitor {
             return result;
         }  catch (CompletionFailure ex) {
             return chk.completionError(tree.pos(), ex);
+        } catch (Throwable t) {
+            crashRecorder.recordCrashingPath(t, env);
+            throw t;
         } finally {
             annotate.unblockAnnotations();
             this.env = prevEnv;

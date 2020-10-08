@@ -787,7 +787,14 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
             this.sym = sym;
         }
         @Override
-        public void accept(Visitor v) { v.visitClassDef(this); }
+        public void accept(Visitor v) {
+            try {
+                v.visitClassDef(this);
+            } catch (Throwable t) {
+                CrashRecorder.instance(name).recordCrashingPath(t, this);
+                throw t;
+            }
+        }
 
         @SuppressWarnings("preview")
         @DefinedBy(Api.COMPILER_TREE)
@@ -890,7 +897,15 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
             this.sym = sym;
         }
         @Override
-        public void accept(Visitor v) { v.visitMethodDef(this); }
+        public void accept(Visitor v) {
+            try {
+                v.visitMethodDef(this);
+                //TODO: special case "safe" exceptions, like CompletionFailure and Inference?
+            } catch (Throwable t) {
+                CrashRecorder.instance(name).recordCrashingPath(t, this);
+                throw t;
+            }
+        }
 
         @DefinedBy(Api.COMPILER_TREE)
         public Kind getKind() { return Kind.METHOD; }
@@ -980,7 +995,15 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
         }
 
         @Override
-        public void accept(Visitor v) { v.visitVarDef(this); }
+        public void accept(Visitor v) {
+            try {
+                v.visitVarDef(this);
+                //TODO: special case "safe" exceptions, like CompletionFailure and Inference?
+            } catch (Throwable t) {
+                CrashRecorder.instance(name).recordCrashingPath(t, this);
+                throw t;
+            }
+        }
 
         @DefinedBy(Api.COMPILER_TREE)
         public Kind getKind() { return Kind.VARIABLE; }

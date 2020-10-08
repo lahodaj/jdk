@@ -179,7 +179,7 @@ public class Main {
             if (fileManager != null)
                 fileManager.close();
         } catch (IOException ex) {
-            bugMessage(ex);
+            bugMessage(ex, null);
         }
         return result;
     }
@@ -342,7 +342,7 @@ public class Main {
             throw ex.getCause();
         } catch (IllegalAccessError iae) {
             if (twoClassLoadersInUse(iae)) {
-                bugMessage(iae);
+                bugMessage(iae, null);
             }
             printArgsToFile = true;
             return Result.ABNORMAL;
@@ -351,7 +351,7 @@ public class Main {
             // for buggy compiler error recovery by swallowing thrown
             // exceptions.
             if (comp == null || comp.errorCount() == 0 || options.isSet("dev"))
-                bugMessage(ex);
+                bugMessage(ex, CrashRecorder.instance(context));
             printArgsToFile = true;
             return Result.ABNORMAL;
         } finally {
@@ -421,9 +421,22 @@ public class Main {
 
     /** Print a message reporting an internal error.
      */
-    void bugMessage(Throwable ex) {
+    void bugMessage(Throwable ex, CrashRecorder crashRecorder) {
         log.printLines(PrefixKind.JAVAC, "msg.bug", JavaCompiler.version());
-        ex.printStackTrace(log.getWriter(WriterKind.NOTICE));
+        Throwable lastT = null;
+        if (crashRecorder != null) {
+            for (Pair<Throwable, Object> p : crashRecorder.getCrashElements()) {
+                if (lastT != p.fst) {
+                    p.fst.printStackTrace(log.getWriter(WriterKind.NOTICE));
+                    lastT = p.fst;
+                }
+                log.getWriter(WriterKind.NOTICE).write(String.valueOf(p.snd));
+                log.getWriter(WriterKind.NOTICE).write("\n");
+            }
+        }
+        if (lastT != ex) {
+            ex.printStackTrace(log.getWriter(WriterKind.NOTICE));
+        }
     }
 
     /** Print a message reporting a fatal error.

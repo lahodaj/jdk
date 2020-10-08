@@ -585,6 +585,10 @@ public class Flow {
         }
 
         public void visitVarDef(JCVariableDecl tree) {
+            if (tree.name.contentEquals("crash")) {
+                Object o = null;
+                o.toString();
+            }
             if (tree.init != null) {
                 Lint lintPrev = lint;
                 lint = lint.augment(tree.sym);

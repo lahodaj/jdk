@@ -114,6 +114,7 @@ public class TypeEnter implements Completer {
     private final Lint lint;
     private final TypeEnvs typeEnvs;
     private final Dependencies dependencies;
+    private final CrashRecorder crashRecorder;
 
     public static TypeEnter instance(Context context) {
         TypeEnter instance = context.get(typeEnterKey);
@@ -141,6 +142,7 @@ public class TypeEnter implements Completer {
         lint = Lint.instance(context);
         typeEnvs = TypeEnvs.instance(context);
         dependencies = Dependencies.instance(context);
+        crashRecorder = CrashRecorder.instance(context);
         Source source = Source.instance(context);
         allowTypeAnnos = Feature.TYPE_ANNOTATIONS.allowedInSource(source);
         allowDeprecationOnImport = Feature.DEPRECATION_ON_IMPORT.allowedInSource(source);
@@ -286,6 +288,9 @@ public class TypeEnter implements Completer {
                     runPhase(env);
                 } catch (CompletionFailure ex) {
                     chk.completionError(tree.pos(), ex);
+                } catch (Throwable t) {
+                    crashRecorder.recordCrashingPath(t, env);
+                    throw t;
                 } finally {
                     dependencies.pop();
                     deferredLintHandler.setPos(prevLintPos);
@@ -762,7 +767,12 @@ public class TypeEnter implements Completer {
                 env.enclClass.sym.completer = this;
             }
             for (Env<AttrContext> env : envs) {
-                env.enclClass.sym.complete();
+                try {
+                    env.enclClass.sym.complete();
+                } catch (Throwable t) {
+                    crashRecorder.recordCrashingPath(t, env);
+                    throw t;
+                }
             }
         }
 
