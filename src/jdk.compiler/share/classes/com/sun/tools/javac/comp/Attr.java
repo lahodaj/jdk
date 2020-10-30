@@ -3077,6 +3077,7 @@ public class Attr extends JCTree.Visitor {
                     }
                 }
             }
+            return ; //wrong
         }
     }
     //where
