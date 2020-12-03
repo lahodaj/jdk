@@ -2127,6 +2127,10 @@ JVM_ENTRY(jobjectArray, JVM_GetPermittedSubclasses(JNIEnv* env, jclass current))
     JvmtiVMObjectAllocEventCollector oam;
     Array<u2>* subclasses = ik->permitted_subclasses();
     int length = subclasses == NULL ? 0 : subclasses->length();
+    if (length == 0) {
+        //indicate the PermittedSubclasses attribute is not present by returning null:
+        return NULL;
+    }
     objArrayOop r = oopFactory::new_objArray(SystemDictionary::Class_klass(),
                                              length, CHECK_NULL);
     objArrayHandle result(THREAD, r);

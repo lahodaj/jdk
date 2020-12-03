@@ -4393,7 +4393,7 @@ public final class Class<T> implements java.io.Serializable,
      * implement this class or interface if it is sealed. The order of such elements
      * is unspecified. If this {@code Class} object represents a primitive type,
      * {@code void}, an array type, or a class or interface that is not sealed,
-     * an empty array is returned.
+     * null is returned.
      *
      * For each class or interface {@code C} which is recorded as a permitted
      * direct subinterface or subclass of this class or interface,
@@ -4406,7 +4406,8 @@ public final class Class<T> implements java.io.Serializable,
      * cannot be obtained, it is silently ignored, and not included in the result
      * array.
      *
-     * @return an array of {@code Class} objects of the permitted subclasses of this class or interface
+     * @return an array of {@code Class} objects of the permitted subclasses of this class or interface,
+     *         or null if this class or interface is not sealed
      *
      * @throws SecurityException
      *         If a security manager, <i>s</i>, is present and the caller's
@@ -4423,15 +4424,16 @@ public final class Class<T> implements java.io.Serializable,
     @CallerSensitive
     public Class<?>[] getPermittedSubclasses() {
         Class<?>[] subClasses;
-        if (isArray() || isPrimitive() || (subClasses = getPermittedSubclasses0()).length == 0) {
+        if (isArray() || isPrimitive() || (subClasses = getPermittedSubclasses0()) == null) {
+            return null;
+        }
+        if (subClasses.length == 0) {
             return EMPTY_CLASS_ARRAY;
         }
-        if (subClasses.length > 0) {
-            if (Arrays.stream(subClasses).anyMatch(c -> !isDirectSubType(c))) {
-                subClasses = Arrays.stream(subClasses)
-                                   .filter(this::isDirectSubType)
-                                   .toArray(s -> new Class<?>[s]);
-            }
+        if (Arrays.stream(subClasses).anyMatch(c -> !isDirectSubType(c))) {
+            subClasses = Arrays.stream(subClasses)
+                               .filter(this::isDirectSubType)
+                               .toArray(s -> new Class<?>[s]);
         }
         if (subClasses.length > 0) {
             // If we return some classes we need a security check:
@@ -4484,7 +4486,7 @@ public final class Class<T> implements java.io.Serializable,
         if (isArray() || isPrimitive()) {
             return false;
         }
-        return getPermittedSubclasses().length != 0;
+        return getPermittedSubclasses() != null;
     }
 
     private native Class<?>[] getPermittedSubclasses0();

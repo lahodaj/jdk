@@ -53,12 +53,16 @@ public class GetPermittedSubclassesTest {
     public static void testSealedInfo(Class<?> c, String[] expected) {
         var permitted = c.getPermittedSubclasses();
 
-        if (permitted.length != expected.length) {
-            throw new RuntimeException(
-                "Unexpected number of permitted subclasses for: " + c.toString() + "(" + java.util.Arrays.asList(permitted));
-        }
+        if (expected != null) {
+            if (permitted == null) {
+                throw new RuntimeException("Unexpected null permitted subclasses: " + c.toString());
+            }
 
-        if (permitted.length > 0) {
+            if (permitted.length != expected.length) {
+                throw new RuntimeException(
+                    "Unexpected number of permitted subclasses for: " + c.toString() + "(" + java.util.Arrays.asList(permitted));
+            }
+
             if (!c.isSealed()) {
                 throw new RuntimeException("Expected sealed class: " + c.toString());
             }
@@ -87,6 +91,9 @@ public class GetPermittedSubclassesTest {
             if (c.isSealed()) {
                 throw new RuntimeException("Unexpected sealed class: " + c.toString());
             }
+            if (permitted != null) {
+                throw new RuntimeException("Unexpected non-null permitted subclasses: " + c.toString());
+            }
         }
     }
 
@@ -108,11 +115,11 @@ public class GetPermittedSubclassesTest {
                                                      "GetPermittedSubclassesTest$Extender"});
 
         testSealedInfo(Sealed1.class, new String[] {"GetPermittedSubclassesTest$Sub1"});
-        testSealedInfo(Final4.class, new String[] { });
-        testSealedInfo(NotSealed.class, new String[] { });
+        testSealedInfo(Final4.class, null);
+        testSealedInfo(NotSealed.class, null);
 
         // Test class with PermittedSubclasses attribute but old class file version.
-        testSealedInfo(OldClassFile.class, new String[] { });
+        testSealedInfo(OldClassFile.class, null);
 
         // Test class with an empty PermittedSubclasses attribute.
         testBadSealedClass("NoSubclasses", "PermittedSubclasses attribute is empty");
@@ -141,5 +148,13 @@ public class GetPermittedSubclassesTest {
         //which are not direct subtypes of the current class are not returned:
         testSealedInfo(noSubclass.BaseC.class, new String[] {"noSubclass.ImplCIntermediate"});
         testSealedInfo(noSubclass.BaseI.class, new String[] {"noSubclass.ImplIIntermediateI", "noSubclass.ImplIIntermediateC"});
+
+        //SealedButNoLoadableSubclasses has a PermittedSubclasses attribute, but the class specified there is not loadable
+        //isSealed() should return null, getPermittedSubclasses() should return an empty array.
+        testSealedInfo(SealedButNoLoadableSubclasses.class, new String[] {});
+
+        //array class objects and primitive type class objects are final, and hence not sealed:
+        testSealedInfo(Object[].class, null);
+        testSealedInfo(int.class, null);
     }
 }
