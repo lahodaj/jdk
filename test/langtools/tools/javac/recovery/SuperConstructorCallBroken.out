@@ -1,0 +1,4 @@
+SuperConstructorCallBroken.java:7:49: compiler.err.cant.resolve: kindname.class, Undefined1, , 
+SuperConstructorCallBroken.java:9:14: compiler.err.cant.resolve.location: kindname.class, Undefined2, , , (compiler.misc.location: kindname.class, SuperConstructorCallBroken, null)
+SuperConstructorCallBroken.java:9:55: compiler.err.cant.resolve: kindname.class, Undefined3, , 
+3 errors

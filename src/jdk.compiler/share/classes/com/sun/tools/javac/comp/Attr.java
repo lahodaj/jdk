@@ -2378,32 +2378,31 @@ public class Attr extends JCTree.Visitor {
                 }
             }
 
-            if (site.hasTag(CLASS)) {
+            if (site.hasTag(CLASS) || site.hasTag(ERROR)) {
                 Type encl = site.getEnclosingType();
                 while (encl != null && encl.hasTag(TYPEVAR))
                     encl = encl.getUpperBound();
-                if (encl.hasTag(CLASS)) {
-                    // we are calling a nested class
+                if (tree.meth.hasTag(SELECT)) {
+                    JCTree qualifier = ((JCFieldAccess) tree.meth).selected;
 
-                    if (tree.meth.hasTag(SELECT)) {
-                        JCTree qualifier = ((JCFieldAccess) tree.meth).selected;
+                    // We are seeing a prefixed call, of the form
+                    //     <expr>.super(...).
+                    // Check that the prefix expression conforms
+                    // to the outer instance type of the class.
+                    chk.checkRefType(qualifier.pos(),
+                                     attribExpr(qualifier, localEnv,
+                                                encl));
 
-                        // We are seeing a prefixed call, of the form
-                        //     <expr>.super(...).
-                        // Check that the prefix expression conforms
-                        // to the outer instance type of the class.
-                        chk.checkRefType(qualifier.pos(),
-                                         attribExpr(qualifier, localEnv,
-                                                    encl));
-                    } else if (methName == names._super) {
-                        // qualifier omitted; check for existence
-                        // of an appropriate implicit qualifier.
-                        rs.resolveImplicitThis(tree.meth.pos(),
-                                               localEnv, site, true);
+                    // if the qualifier is unexpected, produce an error:
+                    if (encl.hasTag(NONE) && !site.hasTag(ERROR)) {
+                        log.error(tree.meth.pos(),
+                                  Errors.IllegalQualNotIcls(site.tsym));
                     }
-                } else if (tree.meth.hasTag(SELECT)) {
-                    log.error(tree.meth.pos(),
-                              Errors.IllegalQualNotIcls(site.tsym));
+                } else if (encl.hasTag(CLASS) && methName == names._super) {
+                    // we are calling a nested class and the qualifier is omitted;
+                    // check for existence of an appropriate implicit qualifier.
+                    rs.resolveImplicitThis(tree.meth.pos(),
+                                           localEnv, site, true);
                 }
 
                 // if we're calling a java.lang.Enum constructor,
