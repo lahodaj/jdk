@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -49,7 +49,7 @@ import com.sun.tools.javac.util.Context;
  * @author Jonathan Gibbons
  * @since 1.6
  */
-public abstract class JavacTask implements CompilationTask {
+public abstract class JavacTask implements CompilationTask, AutoCloseable {
     /**
      * Constructor for subclasses to call.
      */
@@ -186,4 +186,20 @@ public abstract class JavacTask implements CompilationTask {
      * @return the utility object for dealing with type mirrors
      */
     public abstract Types getTypes();
+
+    /**
+     * Close and release resources held by this {@code JavacTask}.
+     *
+     * Future calls to any of the methods of this {@code JavacTask}, or any method on any object
+     * returned from it, have undefined effects and may fail with an exception, unless specified
+     * differently.
+     *
+     * This method may be safely invoked multiple times without.
+     *
+     * @throws IllegalStateException if this {@code JavacTask} cannot be controlled.
+     * @implNote This method does nothing.
+     * @since 17
+     */
+    @Override
+    public void close() throws IllegalStateException { }
 }

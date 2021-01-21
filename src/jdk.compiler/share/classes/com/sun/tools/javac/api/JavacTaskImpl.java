@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -111,7 +111,7 @@ public class JavacTaskImpl extends BasicJavacTask {
             }
         } finally {
             try {
-                cleanup();
+                close();
             } catch (ClientCodeException e) {
                 throw new RuntimeException(e.getCause());
             }
@@ -229,7 +229,7 @@ public class JavacTaskImpl extends BasicJavacTask {
         return sb.toString();
     }
 
-    void cleanup() {
+    public void close() {
         if (compiler != null)
             compiler.close();
         if (fileManager instanceof BaseFileManager && ((BaseFileManager) fileManager).autoClose) {
@@ -240,6 +240,7 @@ public class JavacTaskImpl extends BasicJavacTask {
         }
         compiler = null;
         context = null;
+        genList = null;
         notYetEntered = null;
     }
 
@@ -479,7 +480,7 @@ public class JavacTaskImpl extends BasicJavacTask {
             }
             if (genList.isEmpty()) {
                 compiler.reportDeferredDiagnostics();
-                cleanup();
+                close();
             }
         }
         finally {

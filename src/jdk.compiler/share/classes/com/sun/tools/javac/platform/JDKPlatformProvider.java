@@ -49,7 +49,6 @@ import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import javax.annotation.processing.Processor;
@@ -91,6 +90,7 @@ public class JDKPlatformProvider implements PlatformProvider {
         return new PlatformDescriptionImpl(platformName);
     }
 
+    public static Runnable FILE_MANAGER_CLOSE_CALLBACK = null;
     private static final String[] symbolFileLocation = { "lib", "ct.sym" };
 
     private static final Set<String> SUPPORTED_JAVA_PLATFORM_VERSIONS;
@@ -143,6 +143,7 @@ public class JDKPlatformProvider implements PlatformProvider {
         private final Map<Path, FileSystem> ctSym2FileSystem = new HashMap<>();
         private final String sourceVersion;
         private final String ctSymVersion;
+        private JavaFileManager fileManager;
 
         PlatformDescriptionImpl(String sourceVersion) {
             this.sourceVersion = sourceVersion;
@@ -152,6 +153,13 @@ public class JDKPlatformProvider implements PlatformProvider {
 
         @Override
         public JavaFileManager getFileManager() {
+            if (fileManager == null) {
+                fileManager = createFileManager();
+            }
+            return fileManager;
+        }
+
+        private JavaFileManager createFileManager() {
             Context context = new Context();
             PrintWriter pw = new PrintWriter(System.err, true);
             context.put(Log.errKey, pw);
@@ -243,6 +251,14 @@ public class JDKPlatformProvider implements PlatformProvider {
                         file = ((SigJavaFileObject) file).getDelegate();
                     }
                     return super.inferBinaryName(location, file);
+                }
+
+                @Override
+                public void close() throws IOException {
+                    super.close();
+                    if (FILE_MANAGER_CLOSE_CALLBACK != null) {
+                        FILE_MANAGER_CLOSE_CALLBACK.run();
+                    }
                 }
 
             };
@@ -385,6 +401,9 @@ public class JDKPlatformProvider implements PlatformProvider {
 
         @Override
         public void close() throws IOException {
+            if (fileManager != null) {
+                fileManager.close();
+            }
             for (FileSystem fs : ctSym2FileSystem.values()) {
                 fs.close();
             }

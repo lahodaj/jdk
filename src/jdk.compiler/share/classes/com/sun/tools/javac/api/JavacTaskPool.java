@@ -198,7 +198,7 @@ public class JavacTaskPool {
         if (ctx.polluted) {
             statPolluted++;
         } else {
-            task.cleanup();
+            task.close();
             synchronized (this) {
                 while (cacheSize() + 1 > maxPoolSize) {
                     ReusableContext toRemove =
