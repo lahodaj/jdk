@@ -26,11 +26,11 @@ public class TestCaseSwitch {
         o = "return";
     }
 
-    @AliveRange(varName="o", bytecodeStart=95, bytecodeLength=18)
-    @AliveRange(varName="o", bytecodeStart=116, bytecodeLength=15)
-    @AliveRange(varName="o", bytecodeStart=134, bytecodeLength=1)
-    @AliveRange(varName="oo", bytecodeStart=104, bytecodeLength=9)
-    @AliveRange(varName="uu", bytecodeStart=125, bytecodeLength=6)
+    @AliveRange(varName="o", bytecodeStart=43, bytecodeLength=16)
+    @AliveRange(varName="o", bytecodeStart=62, bytecodeLength=15)
+    @AliveRange(varName="o", bytecodeStart=80, bytecodeLength=1)
+    @AliveRange(varName="oo", bytecodeStart=51, bytecodeLength=8)
+    @AliveRange(varName="uu", bytecodeStart=71, bytecodeLength=6)
     void m2(String[] args) {
         Object o;
         switch (args[0]) {

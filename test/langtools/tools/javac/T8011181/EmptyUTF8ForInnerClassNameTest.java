@@ -51,7 +51,7 @@ public class EmptyUTF8ForInnerClassNameTest {
         checkClassFile(Paths.get(System.getProperty("test.classes"),
                 this.getClass().getName() + "$1.class"));
         checkClassFile(Paths.get(System.getProperty("test.classes"),
-                this.getClass().getName() + "$EnumPlusSwitch.class"));
+                this.getClass().getName() + ".class"));
     }
 
     void checkClassFile(final Path path) throws Exception {
@@ -66,16 +66,10 @@ public class EmptyUTF8ForInnerClassNameTest {
         }
     }
 
-    static class EnumPlusSwitch {
-        enum E {E1}
-
-        public int m (E e) {
-            switch (e) {
-                case E1:
-                    return 0;
-            }
-            return -1;
-        }
+    static void test() {
+        var v = new Object() {
+            public void test() {}
+        };
+        v.test();
     }
-
 }

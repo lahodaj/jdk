@@ -178,13 +178,13 @@ public class CRT {
                 """
                 CharacterRangeTable:
                              0,  0,    c14,    c15,    8        //  0,  0,    3:20,    3:21, flow-controller
-                            20, 24,   1013,   102f,    1        // 20, 24,    4:19,    4:47, statement
-                            80, 83,   1419,   141e,   11        // 80, 83,    5:25,    5:30, statement, flow-target
-                            84, 93,   1818,   1843,   11        // 84, 93,    6:24,    6:67, statement, flow-target
-                            20, 96,   1013,   1c0b,   11        // 20, 96,    4:19,    7:11, statement, flow-target
-                            97, 106,   2014,   203f,   11       // 97, 106,    8:20,    8:63, statement, flow-target
-                             0, 107,    c05,   2407,    1       //  0, 107,    3:05,    9:07, statement
-                             0, 107,    820,   2802,    2       //  0, 107,    2:32,   10:02, block
+                            20, 33,   101a,   102f,    8        // 20, 33,    4:26,    4:47, flow-controller
+                            52, 55,   1419,   141e,   11        // 52, 55,    5:25,    5:30, statement, flow-target
+                            56, 65,   1818,   1843,   11        // 56, 65,    6:24,    6:67, statement, flow-target
+                            20, 65,   1013,   1c0b,   11        // 20, 65,    4:19,    7:11, statement, flow-target
+                            66, 75,   2014,   203f,   11        // 66, 75,    8:20,    8:63, statement, flow-target
+                             0, 76,    c05,   2407,    1        //  0, 76,    3:05,    9:07, statement
+                             0, 76,    820,   2802,    2        //  0, 76,    2:32,   10:02, block
                 """
         );
     }

@@ -16,7 +16,6 @@ jdk/jdeprusage/UseEnum$MethodParameter
 jdk/jdeprusage/UseEnum$ReturnValue
 jdk/jdeprusage/UseEnum$ValueOfMethod
 jdk/jdeprusage/UseEnum$ValuesMethod
-jdk/jdeprusage/UseEnumMembers$1
 jdk/jdeprusage/UseEnumMembers$MethodInEnum1
 jdk/jdeprusage/UseEnumMembers$MethodOnConstant1
 jdk/jdeprusage/UseEnumMembers$ReturnValue

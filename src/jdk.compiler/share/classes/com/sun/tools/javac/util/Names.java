@@ -214,6 +214,11 @@ public class Names {
     public final Name permits;
     public final Name sealed;
 
+    //switches:
+    public final Name switchBootstraps;
+    public final Name enumSwitch;
+    public final Name stringSwitch;
+
     public final Name.Table table;
 
     public Names(Context context) {
@@ -382,6 +387,10 @@ public class Names {
         // sealed types
         permits = fromString("permits");
         sealed = fromString("sealed");
+
+        switchBootstraps = fromString("java.lang.runtime.SwitchBootstraps");
+        enumSwitch = fromString("enumSwitch");
+        stringSwitch = fromString("stringSwitch");
     }
 
     protected Name.Table createTable(Options options) {

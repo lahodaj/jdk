@@ -97,6 +97,7 @@ public class Lower extends TreeTranslator {
     private final Types types;
     private final boolean debugLower;
     private final boolean disableProtectedAccessors; // experimental
+    private final boolean disableSwitchBootstraps; // for java.base
     private final PkgInfo pkginfoOpt;
 
     protected Lower(Context context) {
@@ -120,6 +121,7 @@ public class Lower extends TreeTranslator {
         debugLower = options.isSet("debuglower");
         pkginfoOpt = PkgInfo.get(options);
         disableProtectedAccessors = options.isSet("disableProtectedAccessors");
+        disableSwitchBootstraps = options.isSet("disableSwitchBootstraps");
     }
 
     /** The currently enclosing class.
@@ -457,19 +459,41 @@ public class Lower extends TreeTranslator {
             this.forEnum = forEnum;
             this.values = new LinkedHashMap<>();
             this.pos = pos;
-            Name varName = names
-                .fromString(target.syntheticNameChar() +
-                            "SwitchMap" +
-                            target.syntheticNameChar() +
-                            names.fromUtf(ClassWriter.externalize(forEnum.type.tsym.flatName())).toString()
-                            .replace('/', '.')
-                            .replace('.', target.syntheticNameChar()));
-            ClassSymbol outerCacheClass = outerCacheClass();
-            this.mapVar = new VarSymbol(STATIC | SYNTHETIC | FINAL,
-                                        varName,
-                                        new ArrayType(syms.intType, syms.arrayClass),
-                                        outerCacheClass);
-            enterSynthetic(pos, mapVar, outerCacheClass.members());
+            if (target.hasSwitchBoostraps() && !disableSwitchBootstraps) {
+                List<Type> boostrapArgs = List.of(syms.methodHandleLookupType,
+                                                  syms.stringType,
+                                                  types.erasure(syms.classType),
+                                                  types.erasure(syms.classType),
+                                                  types.makeArrayType(syms.stringType));
+                MethodSymbol enumBootstrap =
+                        rs.resolveInternalMethod(pos,
+                                                 attrEnv,
+                                                 syms.switchBootstrapsType,
+                                                 names.enumSwitch,
+                                                 boostrapArgs,
+                                                 List.nil());
+                Type intArray = new ArrayType(syms.intType, syms.arrayClass);
+
+                this.mapVar = new DynamicVarSymbol(names.enumSwitch,
+                        syms.switchBootstrapsType.tsym,
+                        enumBootstrap.asHandle(),
+                        intArray,
+                        new LoadableConstant[0]);
+            } else {
+                Name varName = names
+                    .fromString(target.syntheticNameChar() +
+                                "SwitchMap" +
+                                target.syntheticNameChar() +
+                                names.fromUtf(ClassWriter.externalize(forEnum.type.tsym.flatName())).toString()
+                                .replace('/', '.')
+                                .replace('.', target.syntheticNameChar()));
+                ClassSymbol outerCacheClass = outerCacheClass();
+                this.mapVar = new VarSymbol(STATIC | SYNTHETIC | FINAL,
+                                            varName,
+                                            new ArrayType(syms.intType, syms.arrayClass),
+                                            outerCacheClass);
+                enterSynthetic(pos, mapVar, outerCacheClass.members());
+            }
         }
 
         DiagnosticPosition pos = null;
@@ -495,6 +519,13 @@ public class Lower extends TreeTranslator {
 
         // generate the field initializer for the map
         void translate() {
+            if (this.mapVar instanceof DynamicVarSymbol) {
+                ListBuffer<LoadableConstant> constants = new ListBuffer<>();
+                constants.add((ClassType) forEnum.type);
+                values.keySet().forEach(c -> constants.add(LoadableConstant.String(c.name.toString())));
+                ((DynamicVarSymbol) mapVar).staticArgs = constants.toArray(s -> new LoadableConstant[s]);
+                return ;
+            }
             make.at(pos.getStartPosition());
             JCClassDecl owner = classDef((ClassSymbol)mapVar.owner);
 
@@ -3676,6 +3707,15 @@ public class Lower extends TreeTranslator {
         JCArrayAccess newSelector = make.Indexed(map.mapVar,
                                         make.App(make.Select(selector,
                                                              ordinalMethod)));
+        if (map.mapVar instanceof DynamicVarSymbol) {
+            //must have a constant type to get ldc instead of getfield:
+            newSelector.indexed.setType(new ArrayType((ArrayType) newSelector.indexed.type) {
+                @Override
+                public Object constValue() {
+                    return "any";
+                }
+            });
+        }
         ListBuffer<JCCase> newCases = new ListBuffer<>();
         for (JCCase c : cases) {
             if (c.pats.nonEmpty()) {
@@ -3749,110 +3789,154 @@ public class Lower extends TreeTranslator {
 
             ListBuffer<JCStatement> stmtList = new ListBuffer<>();
 
-            // Map from String case labels to their original position in
-            // the list of case labels.
-            Map<String, Integer> caseLabelToPosition = new LinkedHashMap<>(alternatives + 1, 1.0f);
-
-            // Map of hash codes to the string case labels having that hashCode.
-            Map<Integer, Set<String>> hashToString = new LinkedHashMap<>(alternatives + 1, 1.0f);
-
-            int casePosition = 0;
-
-            for(JCCase oneCase : caseList) {
-                if (oneCase.pats.nonEmpty()) { // pats is empty for a "default" case
-                    JCExpression expression = oneCase.pats.head;
-                    String labelExpr = (String) expression.type.constValue();
-                    Integer mapping = caseLabelToPosition.put(labelExpr, casePosition);
-                    Assert.checkNull(mapping);
-                    int hashCode = labelExpr.hashCode();
-
-                    Set<String> stringSet = hashToString.get(hashCode);
-                    if (stringSet == null) {
-                        stringSet = new LinkedHashSet<>(1, 1.0f);
-                        stringSet.add(labelExpr);
-                        hashToString.put(hashCode, stringSet);
-                    } else {
-                        boolean added = stringSet.add(labelExpr);
-                        Assert.check(added);
+            JCExpression mainSelector;
+            Map<String, Integer> caseLabelToPosition;
+            if (target.hasSwitchBoostraps() && !disableSwitchBootstraps) {
+                List<Type> bootstrapArgs = List.of(syms.methodHandleLookupType,
+                                                   syms.stringType,
+                                                   syms.methodTypeType,
+                                                   types.makeArrayType(syms.stringType));
+                MethodSymbol stringBootstrap =
+                        rs.resolveInternalMethod(tree.pos(),
+                                                 attrEnv,
+                                                 syms.switchBootstrapsType,
+                                                 names.stringSwitch,
+                                                 bootstrapArgs,
+                                                 List.nil());
+                caseLabelToPosition = new HashMap<>();
+                ListBuffer<LoadableConstant> staticArgs = new ListBuffer<>();
+                for(JCCase oneCase : caseList) {
+                    if (oneCase.pats.nonEmpty()) { // pats is empty for a "default" case
+                        JCExpression expression = oneCase.pats.head;
+                        String labelExpr = (String) expression.type.constValue();
+                        caseLabelToPosition.put(labelExpr, caseLabelToPosition.size());
+                        staticArgs.add(LoadableConstant.String(labelExpr));
                     }
                 }
-                casePosition++;
-            }
 
-            // Synthesize a switch statement that has the effect of
-            // mapping from a string to the integer position of that
-            // string in the list of case labels.  This is done by
-            // switching on the hashCode of the string followed by an
-            // if-then-else chain comparing the input for equality
-            // with all the case labels having that hash value.
+                MethodType indyType = new MethodType(
+                        List.of(syms.stringType),
+                        syms.intType,
+                        List.nil(),
+                        syms.methodClass
+                );
+                DynamicMethodSymbol dynSym = new DynamicMethodSymbol(names.stringSwitch,
+                        syms.noSymbol,
+                        stringBootstrap.asHandle(),
+                        indyType,
+                        staticArgs.toArray(s -> new LoadableConstant[s]));
+                JCFieldAccess qualifier = make.Select(make.QualIdent(syms.switchBootstrapsType.tsym),
+                                                      names.stringSwitch);
+                qualifier.sym = dynSym;
+                qualifier.type = dynSym.type.asMethodType();
+                mainSelector = make.Apply(List.nil(), qualifier, List.of(attr.makeNullCheck(selector))).setType(syms.intType);
+            } else {
+                // Map from String case labels to their original position in
+                // the list of case labels.
+                caseLabelToPosition = new LinkedHashMap<>(alternatives + 1, 1.0f);
 
-            /*
-             * s$ = top of stack;
-             * tmp$ = -1;
-             * switch($s.hashCode()) {
-             *     case caseLabel.hashCode:
-             *         if (s$.equals("caseLabel_1")
-             *           tmp$ = caseLabelToPosition("caseLabel_1");
-             *         else if (s$.equals("caseLabel_2"))
-             *           tmp$ = caseLabelToPosition("caseLabel_2");
-             *         ...
-             *         break;
-             * ...
-             * }
-             */
+                // Map of hash codes to the string case labels having that hashCode.
+                Map<Integer, Set<String>> hashToString = new LinkedHashMap<>(alternatives + 1, 1.0f);//TODO: computed the hashes only when needed!
 
-            VarSymbol dollar_s = new VarSymbol(FINAL|SYNTHETIC,
-                                               names.fromString("s" + tree.pos + target.syntheticNameChar()),
-                                               syms.stringType,
-                                               currentMethodSym);
-            stmtList.append(make.at(tree.pos()).VarDef(dollar_s, selector).setType(dollar_s.type));
+                int casePosition = 0;
 
-            VarSymbol dollar_tmp = new VarSymbol(SYNTHETIC,
-                                                 names.fromString("tmp" + tree.pos + target.syntheticNameChar()),
-                                                 syms.intType,
-                                                 currentMethodSym);
-            JCVariableDecl dollar_tmp_def =
-                (JCVariableDecl)make.VarDef(dollar_tmp, make.Literal(INT, -1)).setType(dollar_tmp.type);
-            dollar_tmp_def.init.type = dollar_tmp.type = syms.intType;
-            stmtList.append(dollar_tmp_def);
-            ListBuffer<JCCase> caseBuffer = new ListBuffer<>();
-            // hashCode will trigger nullcheck on original switch expression
-            JCMethodInvocation hashCodeCall = makeCall(make.Ident(dollar_s),
-                                                       names.hashCode,
-                                                       List.nil()).setType(syms.intType);
-            JCSwitch switch1 = make.Switch(hashCodeCall,
-                                        caseBuffer.toList());
-            for(Map.Entry<Integer, Set<String>> entry : hashToString.entrySet()) {
-                int hashCode = entry.getKey();
-                Set<String> stringsWithHashCode = entry.getValue();
-                Assert.check(stringsWithHashCode.size() >= 1);
+                for(JCCase oneCase : caseList) {
+                    if (oneCase.pats.nonEmpty()) { // pats is empty for a "default" case
+                        JCExpression expression = oneCase.pats.head;
+                        String labelExpr = (String) expression.type.constValue();
+                        Integer mapping = caseLabelToPosition.put(labelExpr, casePosition);
+                        Assert.checkNull(mapping);
+                        int hashCode = labelExpr.hashCode();
 
-                JCStatement elsepart = null;
-                for(String caseLabel : stringsWithHashCode ) {
-                    JCMethodInvocation stringEqualsCall = makeCall(make.Ident(dollar_s),
-                                                                   names.equals,
-                                                                   List.of(make.Literal(caseLabel)));
-                    elsepart = make.If(stringEqualsCall,
-                                       make.Exec(make.Assign(make.Ident(dollar_tmp),
-                                                             make.Literal(caseLabelToPosition.get(caseLabel))).
-                                                 setType(dollar_tmp.type)),
-                                       elsepart);
+                        Set<String> stringSet = hashToString.get(hashCode);
+                        if (stringSet == null) {
+                            stringSet = new LinkedHashSet<>(1, 1.0f);
+                            stringSet.add(labelExpr);
+                            hashToString.put(hashCode, stringSet);
+                        } else {
+                            boolean added = stringSet.add(labelExpr);
+                            Assert.check(added);
+                        }
+                    }
+                    casePosition++;
                 }
 
-                ListBuffer<JCStatement> lb = new ListBuffer<>();
-                JCBreak breakStmt = make.Break(null);
-                breakStmt.target = switch1;
-                lb.append(elsepart).append(breakStmt);
+                // Synthesize a switch statement that has the effect of
+                // mapping from a string to the integer position of that
+                // string in the list of case labels.  This is done by
+                // switching on the hashCode of the string followed by an
+                // if-then-else chain comparing the input for equality
+                // with all the case labels having that hash value.
 
-                caseBuffer.append(make.Case(JCCase.STATEMENT, List.of(make.Literal(hashCode)), lb.toList(), null));
+                /*
+                 * s$ = top of stack;
+                 * tmp$ = -1;
+                 * switch($s.hashCode()) {
+                 *     case caseLabel.hashCode:
+                 *         if (s$.equals("caseLabel_1")
+                 *           tmp$ = caseLabelToPosition("caseLabel_1");
+                 *         else if (s$.equals("caseLabel_2"))
+                 *           tmp$ = caseLabelToPosition("caseLabel_2");
+                 *         ...
+                 *         break;
+                 * ...
+                 * }
+                 */
+
+                VarSymbol dollar_s = new VarSymbol(FINAL|SYNTHETIC,
+                                                   names.fromString("s" + tree.pos + target.syntheticNameChar()),
+                                                   syms.stringType,
+                                                   currentMethodSym);
+                stmtList.append(make.at(tree.pos()).VarDef(dollar_s, selector).setType(dollar_s.type));
+
+                VarSymbol dollar_tmp = new VarSymbol(SYNTHETIC,
+                                                     names.fromString("tmp" + tree.pos + target.syntheticNameChar()),
+                                                     syms.intType,
+                                                     currentMethodSym);
+                JCVariableDecl dollar_tmp_def =
+                    (JCVariableDecl)make.VarDef(dollar_tmp, make.Literal(INT, -1)).setType(dollar_tmp.type);
+                dollar_tmp_def.init.type = dollar_tmp.type = syms.intType;
+                stmtList.append(dollar_tmp_def);
+                ListBuffer<JCCase> caseBuffer = new ListBuffer<>();
+                // hashCode will trigger nullcheck on original switch expression
+                JCMethodInvocation hashCodeCall = makeCall(make.Ident(dollar_s),
+                                                           names.hashCode,
+                                                           List.nil()).setType(syms.intType);
+                JCSwitch switch1 = make.Switch(hashCodeCall,
+                                            caseBuffer.toList());
+                for(Map.Entry<Integer, Set<String>> entry : hashToString.entrySet()) {
+                    int hashCode = entry.getKey();
+                    Set<String> stringsWithHashCode = entry.getValue();
+                    Assert.check(stringsWithHashCode.size() >= 1);
+
+                    JCStatement elsepart = null;
+                    for(String caseLabel : stringsWithHashCode ) {
+                        JCMethodInvocation stringEqualsCall = makeCall(make.Ident(dollar_s),
+                                                                       names.equals,
+                                                                       List.of(make.Literal(caseLabel)));
+                        elsepart = make.If(stringEqualsCall,
+                                           make.Exec(make.Assign(make.Ident(dollar_tmp),
+                                                                 make.Literal(caseLabelToPosition.get(caseLabel))).
+                                                     setType(dollar_tmp.type)),
+                                           elsepart);
+                    }
+
+                    ListBuffer<JCStatement> lb = new ListBuffer<>();
+                    JCBreak breakStmt = make.Break(null);
+                    breakStmt.target = switch1;
+                    lb.append(elsepart).append(breakStmt);
+
+                    caseBuffer.append(make.Case(JCCase.STATEMENT, List.of(make.Literal(hashCode)), lb.toList(), null));
+                }
+
+                switch1.cases = caseBuffer.toList();
+                stmtList.append(switch1);
+
+                // Make isomorphic switch tree replacing string labels
+                // with corresponding integer ones from the label to
+                // position map.
+                mainSelector = make.Ident(dollar_tmp);
             }
-
-            switch1.cases = caseBuffer.toList();
-            stmtList.append(switch1);
-
-            // Make isomorphic switch tree replacing string labels
-            // with corresponding integer ones from the label to
-            // position map.
 
             ListBuffer<JCCase> lb = new ListBuffer<>();
             for(JCCase oneCase : caseList ) {
@@ -3870,7 +3954,7 @@ public class Lower extends TreeTranslator {
             }
 
             if (tree.hasTag(SWITCH)) {
-                JCSwitch switch2 = make.Switch(make.Ident(dollar_tmp), lb.toList());
+                JCSwitch switch2 = make.Switch(mainSelector, lb.toList());
                 // Rewire up old unlabeled break statements to the
                 // replacement switch being created.
                 patchTargets(switch2, tree, switch2);
@@ -3879,7 +3963,7 @@ public class Lower extends TreeTranslator {
 
                 return make.Block(0L, stmtList.toList());
             } else {
-                JCSwitchExpression switch2 = make.SwitchExpression(make.Ident(dollar_tmp), lb.toList());
+                JCSwitchExpression switch2 = make.SwitchExpression(mainSelector, lb.toList());
 
                 // Rewire up old unlabeled break statements to the
                 // replacement switch being created.

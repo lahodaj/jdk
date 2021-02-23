@@ -194,4 +194,10 @@ public enum Target {
     public boolean hasSealedClasses() {
         return compareTo(JDK1_15) >= 0;
     }
+
+    /** Does the target VM support sealed types
+     */
+    public boolean hasSwitchBoostraps() {
+        return compareTo(JDK1_17) >= 0;
+    }
 }
