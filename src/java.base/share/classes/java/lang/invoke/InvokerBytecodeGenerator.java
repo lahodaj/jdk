@@ -874,6 +874,11 @@ class InvokerBytecodeGenerator {
                     onStack = emitTryFinally(i);
                     i += 2; // jump to the end of the TF idiom
                     continue;
+                case TABLE_SWITCH:
+                    assert lambdaForm.isTableSwitch(i);
+                    onStack = emitTableSwitch(i);
+                    i += 3; // jump to the end of the TS idiom
+                    continue;
                 case LOOP:
                     assert lambdaForm.isLoop(i);
                     onStack = emitLoop(i);
@@ -1445,6 +1450,15 @@ class InvokerBytecodeGenerator {
             default:
                 throw new InternalError("unknown type: " + type);
         }
+    }
+
+    private Name emitTableSwitch(int pos) {
+        Name cases   = lambdaForm.names[pos];
+        Name args    = lambdaForm.names[pos+1];
+        Name invoker = lambdaForm.names[pos+2];
+        Name result  = lambdaForm.names[pos+3];
+
+        throw new UnsupportedOperationException("NYI");
     }
 
     /**

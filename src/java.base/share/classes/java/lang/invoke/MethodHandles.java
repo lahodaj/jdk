@@ -7758,4 +7758,40 @@ assertEquals("boojum", (String) catTrace.invokeExact("boo", "jum"));
         }
     }
 
+    /**
+     * Takes a set of method handles and corresponding case labels.
+     * MethodHandles must have `int` as a leading parameter, this
+     * will represent the switche's input.
+     *
+     * Returns a MethodHandle with the same type that can be used to
+     * switch over the given method handles.
+     *
+     * @param defaultCase the default case
+     * @param caseActions array of case actions
+     * @return a switch method handle
+     */
+    public static MethodHandle tableSwitch(MethodHandle defaultCase, MethodHandle... caseActions) {
+        MethodType type = tableSwitchChecks(defaultCase, caseActions);
+        return MethodHandleImpl.makeTableSwitch(type, defaultCase, caseActions);
+    }
+
+    private static MethodType tableSwitchChecks(MethodHandle defaultCase, MethodHandle[] caseActions) 
+        if (caseActions.length < 2)
+            throw new IllegalArgumentException("Not enough cases: " + Arrays.toString(caseActions));
+
+        MethodType expectedType = defaultCase.type();
+
+        if (!(expectedType.parameterCount() >= 1) || expectedType.parameterType(0) != int.class)
+            throw new IllegalArgumentException(
+                "Case actions must have int as leading parameter: " + Arrays.toString(caseActions));
+
+        for (MethodHandle mh : caseActions) {
+            if (mh.type() != expectedType)
+                throw new IllegalArgumentException(
+                    "Case actions must have the same type: " + Arrays.toString(caseActions));
+        }
+
+        return expectedType;
+    }
+
 }

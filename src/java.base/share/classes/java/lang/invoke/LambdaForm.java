@@ -334,6 +334,7 @@ class LambdaForm {
         GET_DOUBLE_VOLATILE("getDoubleVolatile"),
         PUT_DOUBLE_VOLATILE("putDoubleVolatile"),
         TRY_FINALLY("tryFinally"),
+        TABLE_SWITCH("tableSwitch"),
         COLLECT("collect"),
         CONVERT("convert"),
         SPREAD("spread"),
@@ -748,6 +749,37 @@ class LambdaForm {
         //   t_{n+1}:L=MethodHandleImpl.tryFinally(*, *, t_{n})
         //   t_{n+2}:?=MethodHandle.invokeBasic(*, t_{n+1})
         return isMatchingIdiom(pos, "tryFinally", 2);
+    }
+
+    /**
+     * Check if i-th name is a start of the tryFinally idiom.
+     */
+    boolean isTableSwitch(int pos) {
+        // tableSwitch idiom:
+        //   t_{n}:I=getindex
+        //   t_{n+1}:L=MethodHandle.invokeBasic(...)
+        //   t_{n+2}:L=MethodHandle.invokeBasic(...)
+        //   t_{n+3}:L=MethodHandleImpl.tableSwitch(*, t_{n}, t_{n+1}, t_{n+2})
+        //   t_{n+4}:?=MethodHandle.invokeBasic(*, t_{n+3})
+        if (pos + 4 >= names.length)  return false;
+
+        Name getFirstIndex = names[pos];
+        Name collectCases = names[pos+1];
+        Name collectArgs  = names[pos+2];
+        Name tableSwitch  = names[pos+3];
+        Name unboxResult  = names[pos+4];
+        return collectArgs.refersTo(MethodHandleImpl.class, "tableSwitch") &&
+                collectCases.isInvokeBasic() &&
+                collectArgs.isInvokeBasic() &&
+                unboxResult.isInvokeBasic() &&
+                tableSwitch.lastUseIndex(getFirstIndex) == 1 && // t_{n+3}:L=MethodHandleImpl.<invoker>(<args>, t_{n});
+                tableSwitch.lastUseIndex(collectCases)  == 2 && // t_{n+3}:L=MethodHandleImpl.<invoker>(<args>, t_{n+1});
+                tableSwitch.lastUseIndex(collectArgs)   == 3 &&  // t_{n+3}:L=MethodHandleImpl.<invoker>(<args>, t_{n+2});
+                lastUseIndex(getFirstIndex) == pos+3 &&        // t_{n} is local: used only in t_{n+3}
+                lastUseIndex(collectCases) == pos+3 &&         // t_{n+1} is local: used only in t_{n+3}
+                lastUseIndex(collectArgs) == pos+3 &&          // t_{n+2} is local: used only in t_{n+3}
+                unboxResult.lastUseIndex(tableSwitch) == 1 &&  // t_{n+4}:?=MethodHandle.invokeBasic(*, t_{n+3})
+                lastUseIndex(tableSwitch) == pos+4;            // t_{n+2} is local: used only in t_{n+2}
     }
 
     /**
