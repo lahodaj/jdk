@@ -459,7 +459,7 @@ public class Lower extends TreeTranslator {
             this.forEnum = forEnum;
             this.values = new LinkedHashMap<>();
             this.pos = pos;
-            if (target.hasSwitchBoostraps() && !disableSwitchBootstraps) {
+            if (target.hasSwitchBoostraps() && !disableSwitchBootstraps && (currentMethodDef == null || !currentMethodDef.name.contentEquals("noSwitchBootstraps"))) {
                 List<Type> boostrapArgs = List.of(syms.methodHandleLookupType,
                                                   syms.stringType,
                                                   types.erasure(syms.classType),
@@ -3791,7 +3791,15 @@ public class Lower extends TreeTranslator {
 
             JCExpression mainSelector;
             Map<String, Integer> caseLabelToPosition;
-            if (target.hasSwitchBoostraps() && !disableSwitchBootstraps) {
+            String currentMethodName = currentMethodDef == null ? "" : currentMethodDef.name.toString();
+            String desugaringKey;
+            final String desugaringStrategyKeyName = "javacStringSwitchDesugaringStrategy_";
+            if (currentMethodName.startsWith(desugaringStrategyKeyName)) {
+                desugaringKey = currentMethodName.substring(desugaringStrategyKeyName.length());
+            } else {
+                desugaringKey = null;
+            }
+            if (target.hasSwitchBoostraps() && !disableSwitchBootstraps && !"legacy".equals(desugaringKey)) {
                 List<Type> bootstrapArgs = List.of(syms.methodHandleLookupType,
                                                    syms.stringType,
                                                    syms.methodTypeType,
@@ -3800,7 +3808,7 @@ public class Lower extends TreeTranslator {
                         rs.resolveInternalMethod(tree.pos(),
                                                  attrEnv,
                                                  syms.switchBootstrapsType,
-                                                 names.stringSwitch,
+                                                 desugaringKey != null ? names.fromString(desugaringKey) : names.stringSwitch,
                                                  bootstrapArgs,
                                                  List.nil());
                 caseLabelToPosition = new HashMap<>();
@@ -3820,13 +3828,13 @@ public class Lower extends TreeTranslator {
                         List.nil(),
                         syms.methodClass
                 );
-                DynamicMethodSymbol dynSym = new DynamicMethodSymbol(names.stringSwitch,
+                DynamicMethodSymbol dynSym = new DynamicMethodSymbol(desugaringKey != null ? names.fromString(desugaringKey) : names.stringSwitch,
                         syms.noSymbol,
                         stringBootstrap.asHandle(),
                         indyType,
                         staticArgs.toArray(s -> new LoadableConstant[s]));
                 JCFieldAccess qualifier = make.Select(make.QualIdent(syms.switchBootstrapsType.tsym),
-                                                      names.stringSwitch);
+                                                      desugaringKey != null ? names.fromString(desugaringKey) : names.stringSwitch);
                 qualifier.sym = dynSym;
                 qualifier.type = dynSym.type.asMethodType();
                 mainSelector = make.Apply(List.nil(), qualifier, List.of(attr.makeNullCheck(selector))).setType(syms.intType);
