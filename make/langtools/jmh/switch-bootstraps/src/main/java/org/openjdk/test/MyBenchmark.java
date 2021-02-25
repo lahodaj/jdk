@@ -46,7 +46,7 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 
 @Warmup(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
-@Measurement(iterations = 10, time = 2, timeUnit = TimeUnit.SECONDS)
+@Measurement(iterations = 10, time = 1, timeUnit = TimeUnit.SECONDS)
 @Fork(2)
 @State(Scope.Benchmark)
 public class MyBenchmark {
