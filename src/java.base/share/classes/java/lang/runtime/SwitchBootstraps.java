@@ -263,6 +263,12 @@ public class SwitchBootstraps {
             || (!invocationType.parameterType(0).equals(String.class)))
             throw new IllegalArgumentException("Illegal invocation type " + invocationType);
         requireNonNull(stringLabels);
+
+        if (stringLabels.length == 0) {
+            //TODO: should be handled in javac (instead or in addition to this)?
+            return new ConstantCallSite(MethodHandles.dropArguments(MethodHandles.constant(int.class, stringLabels.length), 0, String.class));
+        }
+
         if (Stream.of(stringLabels).anyMatch(Objects::isNull))
             throw new IllegalArgumentException("null label found");
 
