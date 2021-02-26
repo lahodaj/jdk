@@ -756,30 +756,31 @@ class LambdaForm {
      */
     boolean isTableSwitch(int pos) {
         // tableSwitch idiom:
-        //   t_{n}:I=getindex
+        //   t_{n}:L=MethodHandle.invokeBasic(...)
         //   t_{n+1}:L=MethodHandle.invokeBasic(...)
-        //   t_{n+2}:L=MethodHandle.invokeBasic(...)
-        //   t_{n+3}:L=MethodHandleImpl.tableSwitch(*, t_{n}, t_{n+1}, t_{n+2})
-        //   t_{n+4}:?=MethodHandle.invokeBasic(*, t_{n+3})
-        if (pos + 4 >= names.length)  return false;
+        //   t_{n+2}:L=MethodHandleImpl.tableSwitch(*, *, t_{n+1}, t_{n+2})
+        //   t_{n+3}:?=MethodHandle.invokeBasic(*, t_{n+2})
+        if (pos + 3 >= names.length)  return false;
 
-        Name getFirstIndex = names[pos];
-        Name collectCases = names[pos+1];
-        Name collectArgs  = names[pos+2];
-        Name tableSwitch  = names[pos+3];
-        Name unboxResult  = names[pos+4];
+        final int POS_COLLECT_CASES = pos;
+        final int POS_COLLECT_ARGS  = pos+1;
+        final int POS_TABLE_SWITCH  = pos+2;
+        final int POS_UNBOX_RESULT  = pos+3;
+
+        Name collectCases = names[POS_COLLECT_CASES];
+        Name collectArgs  = names[POS_COLLECT_ARGS];
+        Name tableSwitch  = names[POS_TABLE_SWITCH];
+        Name unboxResult  = names[POS_UNBOX_RESULT];
         return collectArgs.refersTo(MethodHandleImpl.class, "tableSwitch") &&
                 collectCases.isInvokeBasic() &&
                 collectArgs.isInvokeBasic() &&
                 unboxResult.isInvokeBasic() &&
-                tableSwitch.lastUseIndex(getFirstIndex) == 1 && // t_{n+3}:L=MethodHandleImpl.<invoker>(<args>, t_{n});
-                tableSwitch.lastUseIndex(collectCases)  == 2 && // t_{n+3}:L=MethodHandleImpl.<invoker>(<args>, t_{n+1});
-                tableSwitch.lastUseIndex(collectArgs)   == 3 &&  // t_{n+3}:L=MethodHandleImpl.<invoker>(<args>, t_{n+2});
-                lastUseIndex(getFirstIndex) == pos+3 &&        // t_{n} is local: used only in t_{n+3}
-                lastUseIndex(collectCases) == pos+3 &&         // t_{n+1} is local: used only in t_{n+3}
-                lastUseIndex(collectArgs) == pos+3 &&          // t_{n+2} is local: used only in t_{n+3}
-                unboxResult.lastUseIndex(tableSwitch) == 1 &&  // t_{n+4}:?=MethodHandle.invokeBasic(*, t_{n+3})
-                lastUseIndex(tableSwitch) == pos+4;            // t_{n+2} is local: used only in t_{n+2}
+                tableSwitch.lastUseIndex(collectCases)  == 2 && // t_{n+2}:L=MethodHandleImpl.<invoker>(*, *, t_{n+1}, t_{n+2});
+                tableSwitch.lastUseIndex(collectArgs)   == 3 && // t_{n+2}:L=MethodHandleImpl.<invoker>(*, *, t_{n+1}, t_{n+2});
+                lastUseIndex(collectCases) == POS_TABLE_SWITCH && // t_{n} is local: used only in t_{n+2}
+                lastUseIndex(collectArgs) == POS_TABLE_SWITCH &&  // t_{n+1} is local: used only in t_{n+2}
+                unboxResult.lastUseIndex(tableSwitch) == 1 &&  // t_{n+3}:?=MethodHandle.invokeBasic(*, t_{n+2})
+                lastUseIndex(tableSwitch) == POS_UNBOX_RESULT; // t_{n+2} is local: used only in t_{n+3}
     }
 
     /**

@@ -1458,7 +1458,40 @@ class InvokerBytecodeGenerator {
         Name invoker = lambdaForm.names[pos+2];
         Name result  = lambdaForm.names[pos+3];
 
-        throw new UnsupportedOperationException("NYI");
+        int numCases = cases.arguments.length - 1; // -1 drop collector
+
+        Class<?> returnType = result.function.resolvedHandle().type().returnType();
+        MethodType caseType = args.function.resolvedHandle().type()
+            .dropParameterTypes(0,1) // drop collector
+            .changeReturnType(returnType);
+        String caseDescriptor = caseType.basicType().toMethodDescriptorString();
+
+        Label endLabel = new Label();
+        Label defaultLabel = new Label();
+        Label[] caseLabels = new Label[numCases];
+        for (int i = 0; i < caseLabels.length; i++) {
+            caseLabels[i] = new Label();
+        }
+
+        emitPushArgument(invoker, 0); // push switch input
+        mv.visitTableSwitchInsn(0, numCases - 1, defaultLabel, caseLabels);
+
+        mv.visitLabel(defaultLabel);
+        emitPushArgument(invoker, 1); // push default handle
+        mv.visitJumpInsn(Opcodes.GOTO, endLabel);
+
+        for (int i = 0; i < numCases; i++) {
+            mv.visitLabel(caseLabels[i]);
+            emitPushArgument(cases, i + 1); // push case MH, +1 to skip collector
+            mv.visitJumpInsn(Opcodes.GOTO, endLabel);
+        }
+
+        mv.visitLabel(endLabel);
+        // receiver already on the stack
+        emitPushArguments(args, 1); // again, skip collector
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, MH, "invokeBasic", caseDescriptor, false);
+
+        return result;
     }
 
     /**

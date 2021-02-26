@@ -2287,7 +2287,7 @@ abstract class MethodHandleImpl {
             Object[] args = new Object[invokeBasic.type().parameterCount()];
             args[0] = names[GET_COLLECT_CASES];
             System.arraycopy(names, GET_CASE_BASE, args, 1, GET_CASE_LIMIT - GET_CASE_BASE);
-            names[BOXED_CASES] = new Name(new NamedFunction(invokeBasic /* , Intrinsic.TABLE_SWITCH */), args);
+            names[BOXED_CASES] = new Name(new NamedFunction(invokeBasic, Intrinsic.TABLE_SWITCH), args);
         }
 
         {
@@ -2313,7 +2313,8 @@ abstract class MethodHandleImpl {
 
         LambdaForm lform = new LambdaForm(lambdaType.parameterCount(), names, Kind.TABLE_SWITCH);
 
-        return basicType.form().setCachedLambdaForm(MethodTypeForm.LF_TS, lform);
+        return lform;
+        //return basicType.form().setCachedLambdaForm(MethodTypeForm.LF_TS, lform);
     }
 
     @Hidden

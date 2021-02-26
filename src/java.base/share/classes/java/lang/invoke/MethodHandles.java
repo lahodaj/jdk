@@ -7775,7 +7775,7 @@ assertEquals("boojum", (String) catTrace.invokeExact("boo", "jum"));
         return MethodHandleImpl.makeTableSwitch(type, defaultCase, caseActions);
     }
 
-    private static MethodType tableSwitchChecks(MethodHandle defaultCase, MethodHandle[] caseActions) 
+    private static MethodType tableSwitchChecks(MethodHandle defaultCase, MethodHandle[] caseActions) {
         if (caseActions.length < 2)
             throw new IllegalArgumentException("Not enough cases: " + Arrays.toString(caseActions));
 
