@@ -771,7 +771,7 @@ class LambdaForm {
         Name collectArgs  = names[POS_COLLECT_ARGS];
         Name tableSwitch  = names[POS_TABLE_SWITCH];
         Name unboxResult  = names[POS_UNBOX_RESULT];
-        return collectArgs.refersTo(MethodHandleImpl.class, "tableSwitch") &&
+        return tableSwitch.refersTo(MethodHandleImpl.class, "tableSwitch") &&
                 collectCases.isInvokeBasic() &&
                 collectArgs.isInvokeBasic() &&
                 unboxResult.isInvokeBasic() &&
