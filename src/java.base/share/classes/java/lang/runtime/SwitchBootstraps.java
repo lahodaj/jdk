@@ -27,8 +27,11 @@ package java.lang.runtime;
 
 import java.lang.invoke.CallSite;
 import java.lang.invoke.ConstantCallSite;
+import java.lang.invoke.LambdaConversionException;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import static java.lang.invoke.MethodHandles.Lookup.ClassOption.NESTMATE;
+import static java.lang.invoke.MethodHandles.Lookup.ClassOption.STRONG;
 import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -40,9 +43,17 @@ import java.util.Objects;
 
 import static java.util.Objects.requireNonNull;
 import java.util.TreeMap;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import jdk.internal.org.objectweb.asm.ClassWriter;
+import jdk.internal.org.objectweb.asm.MethodVisitor;
+import static jdk.internal.org.objectweb.asm.Opcodes.ACC_FINAL;
+import static jdk.internal.org.objectweb.asm.Opcodes.ACC_PUBLIC;
+import static jdk.internal.org.objectweb.asm.Opcodes.ACC_SUPER;
+import static jdk.internal.org.objectweb.asm.Opcodes.ACC_SYNTHETIC;
+
+import static jdk.internal.org.objectweb.asm.Opcodes.*;
+import jdk.internal.org.objectweb.asm.*;
 
 /**
  * Bootstrap methods for linking {@code invokedynamic} call sites that implement
@@ -114,8 +125,8 @@ public class SwitchBootstraps {
                                       String invocationName,
                                       MethodType invocationType,
                                       String... constants) throws Throwable {
-        return ifTree(lookup, invocationName, invocationType, constants);
-//        return hashMap(lookup, invocationName, invocationType, constants);
+//        return ifTree(lookup, invocationName, invocationType, constants);
+        return asmSwitch(lookup, invocationName, invocationType, constants);
     }
 
     /**
@@ -290,32 +301,32 @@ public class SwitchBootstraps {
         assert Stream.of(stringLabels).distinct().count() == stringLabels.length
                 : "switch labels are not distinct: " + Arrays.toString(stringLabels);
 
-        MethodHandle switchHandle = produceTests(byHashCode, hashCodes, 0, hashCodes.length - 1);
-        switchHandle = MethodHandles.insertArguments(switchHandle, 2, stringLabels.length);
-        switchHandle = MethodHandles.permuteArguments(switchHandle, MethodType.methodType(int.class, int.class, String.class), 1, 0);
-        MethodHandle hashCodeAdapted = MethodHandles.explicitCastArguments(STRING_HASHCODE, MethodType.methodType(int.class, String.class));
+        MethodHandle returnDefault = MethodHandles.dropArguments(MethodHandles.constant(int.class, stringLabels.length), 0, int.class, Object.class); 
+        MethodHandle switchHandle = produceTests(byHashCode, hashCodes, 0, hashCodes.length - 1, returnDefault);
+        MethodHandle hashCodeAdapted = STRING_HASHCODE;
         switchHandle = MethodHandles.foldArguments(switchHandle, hashCodeAdapted);
+        switchHandle = MethodHandles.explicitCastArguments(switchHandle, MethodType.methodType(int.class, String.class));
         return new ConstantCallSite(switchHandle);
     }
 
     record LabelAndCaseNumber(String label, int caseNumber) {}
 
-    private static MethodHandle produceTests(Map<Integer, List<LabelAndCaseNumber>> byHashCode, int[] hashCodes, int start, int end) {
+    private static MethodHandle produceTests(Map<Integer, List<LabelAndCaseNumber>> byHashCode, int[] hashCodes, int start, int end, MethodHandle returnDefault) {
         if (start == end) {
-            MethodHandle hashPredicate = MethodHandles.dropArguments(MethodHandles.dropArguments(MethodHandles.insertArguments(INT_EQUALS, 1, hashCodes[start]), 0, String.class), 2, int.class);
+            MethodHandle hashPredicate = MethodHandles.dropArguments(MethodHandles.insertArguments(INT_EQUALS, 1, hashCodes[start]), 1, Object.class);
             List<LabelAndCaseNumber> values = byHashCode.get(hashCodes[start]);
-            MethodHandle returnDefault = MethodHandles.dropArguments(MethodHandles.identity(int.class), 0, String.class, int.class);
             MethodHandle valueTest = returnDefault;
             for (LabelAndCaseNumber value : values) {
-                MethodHandle valuePredicate = MethodHandles.dropArguments(MethodHandles.explicitCastArguments(MethodHandles.insertArguments(STRING_EQUALS, 1, value.label), MethodType.methodType(boolean.class, String.class)), 1, int.class, int.class);
-                valueTest = MethodHandles.guardWithTest(valuePredicate, MethodHandles.dropArguments(MethodHandles.constant(int.class, value.caseNumber), 0, String.class, int.class, int.class), valueTest);
+                MethodHandle valuePredicate = MethodHandles.dropArguments(MethodHandles.insertArguments(STRING_EQUALS, 1, value.label), 0, int.class);
+                valueTest = MethodHandles.guardWithTest(valuePredicate, MethodHandles.dropArguments(MethodHandles.constant(int.class, value.caseNumber), 0, int.class, Object.class), valueTest);
                 
             }
+//            return valueTest;
             return MethodHandles.guardWithTest(hashPredicate, valueTest, returnDefault);
         }
         int middle = (start + end) / 2;
-        MethodHandle hashPredicate = MethodHandles.dropArguments(MethodHandles.dropArguments(MethodHandles.insertArguments(INT_GT, 1, hashCodes[middle]), 0, String.class), 2, int.class);
-        return MethodHandles.guardWithTest(hashPredicate, produceTests(byHashCode, hashCodes, middle + 1, end), produceTests(byHashCode, hashCodes, start, middle));
+        MethodHandle hashPredicate = MethodHandles.dropArguments(MethodHandles.insertArguments(INT_GT, 1, hashCodes[middle]), 1, Object.class);
+        return MethodHandles.guardWithTest(hashPredicate, produceTests(byHashCode, hashCodes, middle + 1, end, returnDefault), produceTests(byHashCode, hashCodes, start, middle, returnDefault));
     }
 
     private static boolean eq(int a, int b) { return a == b; }
@@ -347,4 +358,125 @@ public class SwitchBootstraps {
         }
         return result;
     }
+
+
+
+    private static final int CLASSFILE_VERSION = 59;
+    private static final String JAVA_LANG_OBJECT = "java/lang/Object";
+
+
+    /**
+     * TODO
+     * @param lookup TODO
+     * @param invocationName TODO
+     * @param invocationType TODO
+     * @param stringLabels TODO
+     * @return TODO
+     * @throws Throwable TODO
+     */
+    public static CallSite asmSwitch(MethodHandles.Lookup lookup,
+                                        String invocationName,
+                                        MethodType invocationType,
+                                        String... stringLabels) throws Throwable {
+        if (invocationType.parameterCount() != 1
+            || (!invocationType.returnType().equals(int.class))
+            || (!invocationType.parameterType(0).equals(String.class)))
+            throw new IllegalArgumentException("Illegal invocation type " + invocationType);
+        requireNonNull(stringLabels);
+
+        if (stringLabels.length == 0) {
+            //TODO: should be handled in javac (instead or in addition to this)?
+            return new ConstantCallSite(MethodHandles.dropArguments(MethodHandles.constant(int.class, stringLabels.length), 0, String.class));
+        }
+
+        if (Stream.of(stringLabels).anyMatch(Objects::isNull))
+            throw new IllegalArgumentException("null label found");
+
+        return new ConstantCallSite(generateInnerClass(lookup, stringLabels));
+    }
+
+    private static MethodHandle generateInnerClass(MethodHandles.Lookup caller, String... stringLabels) throws LambdaConversionException {
+        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
+
+        cw.visit(CLASSFILE_VERSION, ACC_SUPER + ACC_FINAL + ACC_SYNTHETIC,
+                 (caller.lookupClass().getPackageName().isEmpty() ? "" : caller.lookupClass().getPackageName().replace(".", "/") + "/") + "stringswitchtext", null,
+                 JAVA_LANG_OBJECT, new String[0]);
+
+        // Forward the SAM method
+        MethodVisitor mv = cw.visitMethod(ACC_PUBLIC | ACC_STATIC, "doSwitch",
+                                          "(Ljava/lang/String;)I", null, null);
+        mv.visitCode();
+
+        Map<Integer, List<LabelAndCaseNumber>> byHashCode = new TreeMap<>();
+        int labelIndex = 0;
+
+        for (String label : stringLabels) {
+            int hashCode = label.hashCode();
+            byHashCode.computeIfAbsent(hashCode, h -> new ArrayList<>()).add(new LabelAndCaseNumber(label, labelIndex++));
+        }
+        
+        int[] hashCodes = new int[byHashCode.size()];
+        Label[] hashCodeLabels = new Label[byHashCode.size()];
+        Label defaultLabel = new Label();
+        int hashIndex = 0;
+
+        for (Integer hashCode : byHashCode.keySet()) {
+            hashCodes[hashIndex] = hashCode;
+            hashCodeLabels[hashIndex] = new Label();
+            hashIndex++;
+        }
+
+        mv.visitIntInsn(Opcodes.ALOAD, 0);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, JAVA_LANG_OBJECT, "hashCode", "()I", false);
+        mv.visitLookupSwitchInsn(defaultLabel, hashCodes, hashCodeLabels);
+        mv.visitLabel(defaultLabel);
+        mv.visitLdcInsn(stringLabels.length);
+        mv.visitInsn(Opcodes.IRETURN);
+
+        for (int i = 0; i < hashCodes.length; i++) {
+            mv.visitLabel(hashCodeLabels[i]);
+
+            List<LabelAndCaseNumber> labels = byHashCode.get(hashCodes[i]);
+
+            for (int j = 0; j < labels.size(); j++) {
+                LabelAndCaseNumber labelAndCaseNumber = labels.get(j);
+                Label target = j + 1 < labels.size() ? new Label() : defaultLabel;
+                mv.visitLdcInsn(labelAndCaseNumber.label);
+                mv.visitIntInsn(Opcodes.ALOAD, 0);
+                mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, JAVA_LANG_OBJECT, "equals", "(Ljava/lang/Object;)Z", false);
+                mv.visitJumpInsn(Opcodes.IFEQ, target);
+                mv.visitLdcInsn(labelAndCaseNumber.caseNumber);
+                mv.visitInsn(Opcodes.IRETURN);
+                if (target != defaultLabel) {
+                    mv.visitLabel(target);
+                }
+            }
+        }
+
+        mv.visitMaxs(-1, -1);
+        mv.visitEnd();
+        cw.visitEnd();
+
+        // Define the generated class in this VM.
+
+        final byte[] classBytes = cw.toByteArray();
+        
+//        try (OutputStream dump = new FileOutputStream("/tmp/stringSwitch.class")) {
+//            dump.write(classBytes);
+//        } catch (IOException ex) {
+//            ex.printStackTrace();
+//        }
+
+        try {
+            // this class is linked at the indy callsite; so define a hidden nestmate
+            MethodHandles.Lookup lookup;
+            lookup = caller.defineHiddenClass(classBytes, true, NESTMATE, STRONG);
+            return lookup.findStatic(lookup.lookupClass(), "doSwitch", MethodType.methodType(int.class, String.class));
+        } catch (IllegalAccessException e) {
+            throw new LambdaConversionException("Exception defining lambda proxy class", e);
+        } catch (Throwable t) {
+            throw new InternalError(t);
+        }
+    }
+
 }
