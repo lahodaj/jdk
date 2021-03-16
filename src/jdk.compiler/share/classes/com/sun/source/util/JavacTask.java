@@ -194,7 +194,7 @@ public abstract class JavacTask implements CompilationTask, AutoCloseable {
      * returned from it, have undefined effects and may fail with an exception, unless specified
      * differently.
      *
-     * This method may be safely invoked multiple times without.
+     * This method is idempotent, and may be safely invoked multiple times with not consequences.
      *
      * @throws IllegalStateException if this {@code JavacTask} cannot be controlled.
      * @implNote This method does nothing.
