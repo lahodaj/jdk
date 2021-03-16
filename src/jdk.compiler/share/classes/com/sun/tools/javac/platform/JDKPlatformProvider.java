@@ -90,7 +90,9 @@ public class JDKPlatformProvider implements PlatformProvider {
         return new PlatformDescriptionImpl(platformName);
     }
 
-    public static Runnable FILE_MANAGER_CLOSE_CALLBACK = null;
+    //hook for tests:
+    private static Runnable FILE_MANAGER_CLOSE_CALLBACK = null;
+
     private static final String[] symbolFileLocation = { "lib", "ct.sym" };
 
     private static final Set<String> SUPPORTED_JAVA_PLATFORM_VERSIONS;

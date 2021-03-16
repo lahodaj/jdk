@@ -25,14 +25,14 @@
  * @test
  * @bug     8248449
  * @summary Verify that JavacTask.close works.
- * @modules jdk.compiler/com.sun.tools.javac.platform
+ * @modules jdk.compiler/com.sun.tools.javac.platform:open
  * @run main CloseJavacTask
  */
 
 import com.sun.source.util.JavacTask;
-import com.sun.tools.javac.platform.JDKPlatformProvider;
 import java.io.Closeable;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.net.URI;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -102,7 +102,11 @@ public class CloseJavacTask {
                 throw new AssertionError("Didn't close the provided ClassLoader!");
             }
             closed.set(false);
-            JDKPlatformProvider.FILE_MANAGER_CLOSE_CALLBACK = () -> closed.set(true);
+            Class<?> jdkPlatformProvider =
+                    Class.forName("com.sun.tools.javac.platform.JDKPlatformProvider");
+            Field callback = jdkPlatformProvider.getDeclaredField("FILE_MANAGER_CLOSE_CALLBACK");
+            callback.setAccessible(true);
+            callback.set(null, (Runnable) () -> closed.set(true));
             try (JavacTask task = (JavacTask) tool.getTask(null, null, null, List.of("--release", "11"),
                                                            null, List.of(new TestFO()))) {
                 task.analyze();
