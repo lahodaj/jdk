@@ -52,7 +52,7 @@ public class CloseJavacTask {
     }
 
     void test() throws Exception {
-        AtomicBoolean closed = new AtomicBoolean();
+        AtomicBoolean classLoaderClose = new AtomicBoolean();
         class TestFO extends SimpleJavaFileObject {
             TestFO() {
                 super(URI.create("myfo:///TestFO.java"), SOURCE);
@@ -70,10 +70,11 @@ public class CloseJavacTask {
 
             @Override
             public void close() throws IOException {
-                closed.set(true);
+                classLoaderClose.set(true);
             }
 
         }
+        AtomicBoolean testJFMClose = new AtomicBoolean();
         class TestJFM extends ForwardingJavaFileManager<JavaFileManager> {
 
             public TestJFM(JavaFileManager fileManager) {
@@ -88,6 +89,7 @@ public class CloseJavacTask {
 
             @Override
             public void close() throws IOException {
+                testJFMClose.set(true);
                 super.close();
             }
         }
@@ -98,20 +100,23 @@ public class CloseJavacTask {
                                                            null, List.of(new TestFO()))) {
                 task.analyze();
             }
-            if (!closed.get()) {
+            if (!classLoaderClose.get()) {
                 throw new AssertionError("Didn't close the provided ClassLoader!");
             }
-            closed.set(false);
+            if (testJFMClose.get()) {
+                throw new AssertionError("Should not close custom JavaFileManager!");
+            }
+            AtomicBoolean jdkPlatformProviderClose = new AtomicBoolean();
             Class<?> jdkPlatformProvider =
                     Class.forName("com.sun.tools.javac.platform.JDKPlatformProvider");
             Field callback = jdkPlatformProvider.getDeclaredField("FILE_MANAGER_CLOSE_CALLBACK");
             callback.setAccessible(true);
-            callback.set(null, (Runnable) () -> closed.set(true));
+            callback.set(null, (Runnable) () -> jdkPlatformProviderClose.set(true));
             try (JavacTask task = (JavacTask) tool.getTask(null, null, null, List.of("--release", "11"),
                                                            null, List.of(new TestFO()))) {
                 task.analyze();
             }
-            if (!closed.get()) {
+            if (!jdkPlatformProviderClose.get()) {
                 throw new AssertionError("Didn't close the --release JavaFileManager!");
             }
         }
