@@ -119,6 +119,13 @@ public class CloseJavacTask {
             if (!jdkPlatformProviderClose.get()) {
                 throw new AssertionError("Didn't close the --release JavaFileManager!");
             }
+            try (JavacTask task = (JavacTask) tool.getTask(null, testFM, null, List.of("--release", "11"),
+                                                           null, List.of(new TestFO()))) {
+                task.analyze();
+            }
+            if (testJFMClose.get()) {
+                throw new AssertionError("Should not close custom JavaFileManager!");
+            }
         }
     }
 
