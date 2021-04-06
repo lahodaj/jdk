@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -142,6 +142,7 @@ class AllocatedObj {
   f(mtSafepoint,      "Safepoint")                                                   \
   f(mtSynchronizer,   "Synchronization")                                             \
   f(mtServiceability, "Serviceability")                                              \
+  f(mtMetaspace,      "Metaspace")                                                   \
   f(mtNone,           "Unknown")                                                     \
   //end
 
@@ -151,14 +152,20 @@ class AllocatedObj {
 /*
  * Memory types
  */
-enum MemoryType {
+enum class MEMFLAGS {
   MEMORY_TYPES_DO(MEMORY_TYPE_DECLARE_ENUM)
   mt_number_of_types   // number of memory types (mtDontTrack
                        // is not included as validate type)
 };
 
-typedef MemoryType MEMFLAGS;
+#define MEMORY_TYPE_SHORTNAME(type, human_readable) \
+  constexpr MEMFLAGS type = MEMFLAGS::type;
 
+// Generate short aliases for the enum values. E.g. mtGC instead of MEMFLAGS::mtGC.
+MEMORY_TYPES_DO(MEMORY_TYPE_SHORTNAME)
+
+// Make an int version of the sentinel end value.
+constexpr int mt_number_of_types = static_cast<int>(MEMFLAGS::mt_number_of_types);
 
 #if INCLUDE_NMT
 
@@ -338,6 +345,9 @@ class MetaspaceObj {
                      size_t word_size,
                      Type type, Thread* thread) throw();
                      // can't use TRAPS from this header file.
+  void* operator new(size_t size, ClassLoaderData* loader_data,
+                     size_t word_size,
+                     Type type) throw();
   void operator delete(void* p) { ShouldNotCallThis(); }
 
   // Declare a *static* method with the same signature in any subclass of MetaspaceObj

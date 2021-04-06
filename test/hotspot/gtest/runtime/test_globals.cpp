@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,10 @@
  */
 
 #include "precompiled.hpp"
+#include "compiler/compiler_globals.hpp"
+#include "gc/shared/gc_globals.hpp"
 #include "runtime/globals.hpp"
+#include "runtime/globals_extension.hpp"
 #include "runtime/flags/flagSetting.hpp"
 #include "runtime/flags/jvmFlag.hpp"
 #include "unittest.hpp"
@@ -68,4 +71,26 @@ TEST_VM(FlagGuard, double_flag) {
 
 TEST_VM(FlagGuard, ccstr_flag) {
   TEST_FLAG(PerfDataSaveFile, ccstr, "/a/random/path");
+}
+
+
+// SharedArchiveConfigFile is used only during "java -Xshare:dump", so
+// it's safe to modify its value in gtest
+
+TEST_VM(FlagAccess, ccstr_flag) {
+  FLAG_SET_CMDLINE(SharedArchiveConfigFile, "");
+  ASSERT_EQ(FLAG_IS_CMDLINE(SharedArchiveConfigFile), true);
+  ASSERT_EQ(strcmp(SharedArchiveConfigFile, ""), 0);
+
+  FLAG_SET_ERGO(SharedArchiveConfigFile, "foobar");
+  ASSERT_EQ(FLAG_IS_ERGO(SharedArchiveConfigFile), true);
+  ASSERT_EQ(strcmp(SharedArchiveConfigFile, "foobar") , 0);
+
+  FLAG_SET_ERGO(SharedArchiveConfigFile, nullptr);
+  ASSERT_EQ(FLAG_IS_ERGO(SharedArchiveConfigFile), true);
+  ASSERT_EQ(SharedArchiveConfigFile, nullptr);
+
+  FLAG_SET_ERGO(SharedArchiveConfigFile, "xyz");
+  ASSERT_EQ(FLAG_IS_ERGO(SharedArchiveConfigFile), true);
+  ASSERT_EQ(strcmp(SharedArchiveConfigFile, "xyz"), 0);
 }

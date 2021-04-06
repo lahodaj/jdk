@@ -60,7 +60,7 @@ void G1BlockOffsetTable::check_index(size_t index, const char* msg) const {
   assert((index) < (_reserved.word_size() >> BOTConstants::LogN_words),
          "%s - index: " SIZE_FORMAT ", _vs.committed_size: " SIZE_FORMAT,
          msg, (index), (_reserved.word_size() >> BOTConstants::LogN_words));
-  assert(G1CollectedHeap::heap()->is_in_exact(address_for_index_raw(index)),
+  assert(G1CollectedHeap::heap()->is_in(address_for_index_raw(index)),
          "Index " SIZE_FORMAT " corresponding to " PTR_FORMAT
          " (%u) is not in committed area.",
          (index),
@@ -227,7 +227,7 @@ HeapWord* G1BlockOffsetTablePart::forward_to_block_containing_addr_slow(HeapWord
   while (next_boundary < addr) {
     while (n <= next_boundary) {
       q = n;
-      oop obj = oop(q);
+      oop obj = cast_to_oop(q);
       if (obj->klass_or_null_acquire() == NULL) return q;
       n += block_size(q);
     }

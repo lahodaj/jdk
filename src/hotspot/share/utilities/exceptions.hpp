@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -91,6 +91,9 @@ class ThreadShadow: public CHeapObj<mtThread> {
   // use CLEAR_PENDING_EXCEPTION whenever possible!
   void clear_pending_exception();
 
+  // use CLEAR_PENDING_NONASYNC_EXCEPTION to clear probable nonasync exception.
+  void clear_pending_nonasync_exception();
+
   ThreadShadow() : _pending_exception(NULL),
                    _exception_file(NULL), _exception_line(0) {}
 };
@@ -170,6 +173,8 @@ class Exceptions {
 
   static void throw_stack_overflow_exception(Thread* thread, const char* file, int line, const methodHandle& method);
 
+  static void throw_unsafe_access_internal_error(Thread* thread, const char* file, int line, const char* message);
+
   static void wrap_dynamic_exception(bool is_indy, Thread* thread);
 
   // Exception counting for error files of interesting exceptions that may have
@@ -226,12 +231,23 @@ class Exceptions {
 #define CHECK_false                              CHECK_(false)
 #define CHECK_JNI_ERR                            CHECK_(JNI_ERR)
 
+// CAUTION: These macros clears all exceptions including async exceptions, use it with caution.
 #define CHECK_AND_CLEAR                         THREAD); if (HAS_PENDING_EXCEPTION) { CLEAR_PENDING_EXCEPTION; return;        } (void)(0
 #define CHECK_AND_CLEAR_(result)                THREAD); if (HAS_PENDING_EXCEPTION) { CLEAR_PENDING_EXCEPTION; return result; } (void)(0
 #define CHECK_AND_CLEAR_0                       CHECK_AND_CLEAR_(0)
 #define CHECK_AND_CLEAR_NH                      CHECK_AND_CLEAR_(Handle())
 #define CHECK_AND_CLEAR_NULL                    CHECK_AND_CLEAR_(NULL)
 #define CHECK_AND_CLEAR_false                   CHECK_AND_CLEAR_(false)
+
+// CAUTION: These macros clears all exceptions except probable async exceptions j.l.InternalError and j.l.ThreadDeath.
+// So use it with caution.
+#define CLEAR_PENDING_NONASYNC_EXCEPTION        (((ThreadShadow*)THREAD)->clear_pending_nonasync_exception())
+#define CHECK_AND_CLEAR_NONASYNC                THREAD); if (HAS_PENDING_EXCEPTION) { CLEAR_PENDING_NONASYNC_EXCEPTION; return; } (void)(0
+#define CHECK_AND_CLEAR_NONASYNC_(result)       THREAD); if (HAS_PENDING_EXCEPTION) { CLEAR_PENDING_NONASYNC_EXCEPTION; return result; } (void)(0
+#define CHECK_AND_CLEAR_NONASYNC_0              CHECK_AND_CLEAR_NONASYNC_(0)
+#define CHECK_AND_CLEAR_NONASYNC_NH             CHECK_AND_CLEAR_NONASYNC_(Handle())
+#define CHECK_AND_CLEAR_NONASYNC_NULL           CHECK_AND_CLEAR_NONASYNC_(NULL)
+#define CHECK_AND_CLEAR_NONASYNC_false          CHECK_AND_CLEAR_NONASYNC_(false)
 
 // The THROW... macros should be used to throw an exception. They require a THREAD variable to be
 // visible within the scope containing the THROW. Usually this is achieved by declaring the function
@@ -305,8 +321,8 @@ class Exceptions {
   THREAD); if (HAS_PENDING_EXCEPTION) {    \
     oop ex = PENDING_EXCEPTION;            \
     CLEAR_PENDING_EXCEPTION;               \
-    ex->print();                           \
-    ShouldNotReachHere();                  \
+    DEBUG_ONLY(ex->print();)               \
+    assert(false, "CATCH");                \
   } (void)(0
 
 // ExceptionMark is a stack-allocated helper class for local exception handling.
@@ -315,22 +331,26 @@ class Exceptions {
 class ExceptionMark {
  private:
   Thread* _thread;
+  inline void check_no_pending_exception();
 
  public:
-  ExceptionMark(Thread*& thread);
+  ExceptionMark();
+  ExceptionMark(Thread* thread);
   ~ExceptionMark();
+
+  Thread* thread() {
+    return _thread;
+  }
 };
-
-
 
 // Use an EXCEPTION_MARK for 'local' exceptions. EXCEPTION_MARK makes sure that no
 // pending exception exists upon entering its scope and tests that no pending exception
 // exists when leaving the scope.
 
-// See also preserveException.hpp for PRESERVE_EXCEPTION_MARK macro,
+// See also preserveException.hpp for PreserveExceptionMark
 // which preserves pre-existing exceptions and does not allow new
 // exceptions.
 
-#define EXCEPTION_MARK                           Thread* THREAD = NULL; ExceptionMark __em(THREAD);
+#define EXCEPTION_MARK                           ExceptionMark __em; Thread* THREAD = __em.thread();
 
 #endif // SHARE_UTILITIES_EXCEPTIONS_HPP

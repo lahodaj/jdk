@@ -1063,10 +1063,10 @@ public class Types {
      * Is t a subtype of s?<br>
      * (not defined for Method and ForAll types)
      */
-    final public boolean isSubtype(Type t, Type s) {
+    public final boolean isSubtype(Type t, Type s) {
         return isSubtype(t, s, true);
     }
-    final public boolean isSubtypeNoCapture(Type t, Type s) {
+    public final boolean isSubtypeNoCapture(Type t, Type s) {
         return isSubtype(t, s, false);
     }
     public boolean isSubtype(Type t, Type s, boolean capture) {
@@ -1629,32 +1629,71 @@ public class Types {
     }
 
     /**
-     * Is t is castable to s?<br>
+     * Is t castable to s?<br>
      * s is assumed to be an erased type.<br>
      * (not defined for Method and ForAll types).
      */
     public boolean isCastable(Type t, Type s, Warner warn) {
+        // if same type
         if (t == s)
             return true;
+        // if one of the types is primitive
         if (t.isPrimitive() != s.isPrimitive()) {
             t = skipTypeVars(t, false);
             return (isConvertible(t, s, warn)
                     || (s.isPrimitive() &&
                         isSubtype(boxedClass(s).type, t)));
         }
+        boolean result;
         if (warn != warnStack.head) {
             try {
                 warnStack = warnStack.prepend(warn);
                 checkUnsafeVarargsConversion(t, s, warn);
-                return isCastable.visit(t,s);
+                result = isCastable.visit(t,s);
             } finally {
                 warnStack = warnStack.tail;
             }
         } else {
-            return isCastable.visit(t,s);
+            result = isCastable.visit(t,s);
         }
+        if (result && t.hasTag(CLASS) && t.tsym.kind.matches(Kinds.KindSelector.TYP)
+                && s.hasTag(CLASS) && s.tsym.kind.matches(Kinds.KindSelector.TYP)
+                && (t.tsym.isSealed() || s.tsym.isSealed())) {
+            return (t.isCompound() || s.isCompound()) ?
+                    false :
+                    !areDisjoint((ClassSymbol)t.tsym, (ClassSymbol)s.tsym);
+        }
+        return result;
     }
     // where
+        private boolean areDisjoint(ClassSymbol ts, ClassSymbol ss) {
+            if (isSubtype(erasure(ts.type), erasure(ss.type))) {
+                return false;
+            }
+            // if both are classes or both are interfaces, shortcut
+            if (ts.isInterface() == ss.isInterface() && isSubtype(erasure(ss.type), erasure(ts.type))) {
+                return false;
+            }
+            if (ts.isInterface() && !ss.isInterface()) {
+                /* so ts is interface but ss is a class
+                 * an interface is disjoint from a class if the class is disjoint form the interface
+                 */
+                return areDisjoint(ss, ts);
+            }
+            // a final class that is not subtype of ss is disjoint
+            if (!ts.isInterface() && ts.isFinal()) {
+                return true;
+            }
+            // if at least one is sealed
+            if (ts.isSealed() || ss.isSealed()) {
+                // permitted subtypes have to be disjoint with the other symbol
+                ClassSymbol sealedOne = ts.isSealed() ? ts : ss;
+                ClassSymbol other = sealedOne == ts ? ss : ts;
+                return sealedOne.permitted.stream().allMatch(sym -> areDisjoint((ClassSymbol)sym, other));
+            }
+            return false;
+        }
+
         private TypeRelation isCastable = new TypeRelation() {
 
             public Boolean visitType(Type t, Type s) {
@@ -4037,17 +4076,13 @@ public class Types {
             return buf.toList();
         }
 
-        private Type arraySuperType = null;
+        private Type arraySuperType;
         private Type arraySuperType() {
             // initialized lazily to avoid problems during compiler startup
             if (arraySuperType == null) {
-                synchronized (this) {
-                    if (arraySuperType == null) {
-                        // JLS 10.8: all arrays implement Cloneable and Serializable.
-                        arraySuperType = makeIntersectionType(List.of(syms.serializableType,
-                                syms.cloneableType), true);
-                    }
-                }
+                // JLS 10.8: all arrays implement Cloneable and Serializable.
+                arraySuperType = makeIntersectionType(List.of(syms.serializableType,
+                        syms.cloneableType), true);
             }
             return arraySuperType;
         }
@@ -4860,7 +4895,7 @@ public class Types {
      * Void if a second argument is not needed.
      */
     public static abstract class DefaultTypeVisitor<R,S> implements Type.Visitor<R,S> {
-        final public R visit(Type t, S s)               { return t.accept(this, s); }
+        public final R visit(Type t, S s)               { return t.accept(this, s); }
         public R visitClassType(ClassType t, S s)       { return visitType(t, s); }
         public R visitWildcardType(WildcardType t, S s) { return visitType(t, s); }
         public R visitArrayType(ArrayType t, S s)       { return visitType(t, s); }
@@ -4887,7 +4922,7 @@ public class Types {
      * Void if a second argument is not needed.
      */
     public static abstract class DefaultSymbolVisitor<R,S> implements Symbol.Visitor<R,S> {
-        final public R visit(Symbol s, S arg)                   { return s.accept(this, arg); }
+        public final R visit(Symbol s, S arg)                   { return s.accept(this, arg); }
         public R visitClassSymbol(ClassSymbol s, S arg)         { return visitSymbol(s, arg); }
         public R visitMethodSymbol(MethodSymbol s, S arg)       { return visitSymbol(s, arg); }
         public R visitOperatorSymbol(OperatorSymbol s, S arg)   { return visitSymbol(s, arg); }
@@ -4940,7 +4975,7 @@ public class Types {
      * visitor; use Void if no return type is needed.
      */
     public static abstract class UnaryVisitor<R> extends SimpleVisitor<R,Void> {
-        final public R visit(Type t) { return t.accept(this, null); }
+        public final R visit(Type t) { return t.accept(this, null); }
     }
 
     /**
@@ -4954,7 +4989,7 @@ public class Types {
      * not needed.
      */
     public static class MapVisitor<S> extends DefaultTypeVisitor<Type,S> {
-        final public Type visit(Type t) { return t.accept(this, null); }
+        public final Type visit(Type t) { return t.accept(this, null); }
         public Type visitType(Type t, S s) { return t; }
     }
 
