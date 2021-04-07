@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -279,11 +279,13 @@ public class DependTest {
         doOrdinaryTest("package test; public record Test (int x, int y) { }",
                        "package test; public record Test (int x, int y) {" +
                                "public Test { } }",  // compact ctr
-                       false);
+                       false,
+                       true);
         doOrdinaryTest("package test; public record Test (int x, int y) { }",
                        "package test; public record Test (int x, int y) {" +
                                "public Test (int x, int y) { this.x=x; this.y=y;} }",  // canonical ctr
-                       false);
+                       false,
+                       true);
         doOrdinaryTest("package test; public record Test (int x, int y) { }",
                        "package test; public record Test (int y, int x) { }",  // reverse
                        true);

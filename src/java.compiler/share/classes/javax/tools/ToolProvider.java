@@ -119,7 +119,7 @@ public class ToolProvider {
         try {
             ServiceLoader<T> sl = ServiceLoader.load(clazz, ClassLoader.getSystemClassLoader());
             for (T tool : sl) {
-//                if (matches(tool, moduleName))
+                if (matches(tool, moduleName))
                     return tool;
             }
         } catch (ServiceConfigurationError e) {

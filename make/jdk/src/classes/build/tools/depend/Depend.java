@@ -99,8 +99,10 @@ import com.sun.source.util.TreePath;
 import com.sun.source.util.TreeScanner;
 import com.sun.source.util.Trees;
 import com.sun.tools.javac.api.BasicJavacTask;
+import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.main.JavaCompiler;
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
+import com.sun.tools.javac.tree.JCTree.JCVariableDecl;
 import com.sun.tools.javac.util.Context;
 import com.sun.tools.javac.util.ListBuffer;
 import com.sun.tools.javac.util.Options;
@@ -690,9 +692,10 @@ public class Depend implements Plugin {
 
         @Override
         public Void visitCompilationUnit(CompilationUnitTree node, Void p) {
-            scan(node.getPackage(), p);
             seenIdentifiers.clear();
+            scan(node.getPackage(), p);
             scan(node.getTypeDecls(), p);
+            scan(((JCCompilationUnit) node).getModuleDecl(), p);
             List<ImportTree> importantImports = new ArrayList<>();
             for (ImportTree imp : node.getImports()) {
                 Tree t = imp.getQualifiedIdentifier();
@@ -766,7 +769,8 @@ public class Depend implements Plugin {
                 case METHOD ->
                     !isPrivate(((MethodTree) m).getModifiers());
                 case VARIABLE ->
-                    !isPrivate(((VariableTree) m).getModifiers());
+                    !isPrivate(((VariableTree) m).getModifiers()) ||
+                    isRecordComponent((VariableTree) m);
                 case BLOCK -> false;
                 default -> throw new IllegalStateException("Unexpected tree kind: " + m.getKind());
             };
@@ -774,6 +778,10 @@ public class Depend implements Plugin {
 
         private boolean isPrivate(ModifiersTree mt) {
             return mt.getFlags().contains(Modifier.PRIVATE);
+        }
+
+        private boolean isRecordComponent(VariableTree vt) {
+            return (((JCVariableDecl) vt).mods.flags & Flags.RECORD) != 0;
         }
 
         @Override
