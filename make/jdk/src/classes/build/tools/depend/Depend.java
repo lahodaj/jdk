@@ -168,6 +168,7 @@ public class Depend implements Plugin {
             JavaCompiler.class.getDeclaredField("doParseFiles").set(compiler, (Function<Iterable<JavaFileObject>, com.sun.tools.javac.util.List<JCCompilationUnit>>) fileObjects -> {
                 Map<JavaFileObject, JCCompilationUnit> files2CUT = new IdentityHashMap<>();
                 boolean fullRecompile = modified.stream().anyMatch(f -> !f.endsWith(".java")); //TODO: case sensitive!
+                ListBuffer<JCCompilationUnit> result = new ListBuffer<>();
                 for (JavaFileObject jfo : fileObjects) {
                     if (modified.contains(jfo.getName())) {
                         JCCompilationUnit parsed = compiler.parse(jfo);
@@ -177,18 +178,20 @@ public class Depend implements Plugin {
                             fullRecompile |= true;
                             internalAPI.put(jfo.getName(), currentSignature);
                         }
+                        result.add(parsed);
                     }
                 }
 
-                ListBuffer<JCCompilationUnit> result = new ListBuffer<>();
                 if (fullRecompile) {
                     for (JavaFileObject jfo : fileObjects) {
-                        JCCompilationUnit parsed = files2CUT.get(jfo);
-                        if (parsed == null) {
-                            parsed = compiler.parse(jfo);
-                            internalAPI.put(jfo.getName(), treeDigest(parsed));
+                        if (!modified.contains(jfo.getName())) {
+                            JCCompilationUnit parsed = files2CUT.get(jfo);
+                            if (parsed == null) {
+                                parsed = compiler.parse(jfo);
+                                internalAPI.put(jfo.getName(), treeDigest(parsed));
+                            }
+                            result.add(parsed);
                         }
-                        result.add(parsed);
                     }
                     try (OutputStream out = Files.newOutputStream(internalAPIDigestFile)) {
                         String hashes = internalAPI.entrySet()
@@ -200,7 +203,6 @@ public class Depend implements Plugin {
                         throw new IllegalStateException(ex);
                     }
                 } else {
-                    result.addAll(result);
                     noApiChange.set(true);
                 }
                 return result.toList();
