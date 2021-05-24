@@ -33,6 +33,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * File manager based on {@link File java.io.File} and {@link Path java.nio.file.Path}.
@@ -272,7 +273,7 @@ public interface StandardJavaFileManager extends JavaFileManager {
      * @since 9
      */
     default Iterable<? extends JavaFileObject> getJavaFileObjects(Path... paths) {
-        return getJavaFileObjectsFromPaths(Arrays.asList(paths));
+        return getJavaFileObjectsFromPaths(nullCheck(Arrays.asList(paths)));
     }
 
     /**
@@ -333,7 +334,7 @@ public interface StandardJavaFileManager extends JavaFileManager {
      *
      * @implSpec
      * The default implementation converts each path to a file and calls
-     * {@link #getJavaFileObjectsFromFiles getJavaObjectsFromFiles}.
+     * {@link #setLocation setLocation}.
      * {@linkplain IllegalArgumentException IllegalArgumentException}
      * will be thrown if any of the paths cannot be converted to a file.
      *
@@ -495,25 +496,16 @@ public interface StandardJavaFileManager extends JavaFileManager {
         };
     }
 
-    private static Iterable<File> asFiles(final Iterable<? extends Path> paths) {
-        return () -> new Iterator<>() {
-            final Iterator<? extends Path> iter = paths.iterator();
-
-            @Override
-            public boolean hasNext() {
-                return iter.hasNext();
-            }
-
-            @Override
-            public File next() {
-                Path p = iter.next();
-                try {
-                    return p.toFile();
-                } catch (UnsupportedOperationException e) {
-                    throw new IllegalArgumentException(p.toString(), e);
-                }
-            }
-        };
+    private static Iterable<File> asFiles(final Collection<? extends Path> paths) {
+        return paths.stream()
+                    .map(p -> {
+                        try {
+                            return p.toFile();
+                        } catch (UnsupportedOperationException e) {
+                            throw new IllegalArgumentException(p.toString(), e);
+                        }
+                    })
+                    .toList();
     }
 
     private static <T> Collection<T> asCollection(Iterable<T> iterable) {
@@ -523,5 +515,11 @@ public interface StandardJavaFileManager extends JavaFileManager {
         List<T> result = new ArrayList<>();
         for (T item : iterable) result.add(item);
         return result;
+    }
+
+    private static <T, I extends Iterable<T>> I nullCheck(I input) {
+        input.forEach(Objects::requireNonNull);
+
+        return input;
     }
 }
