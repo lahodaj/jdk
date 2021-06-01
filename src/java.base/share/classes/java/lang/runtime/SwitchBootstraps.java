@@ -26,12 +26,11 @@
 package java.lang.runtime;
 
 import java.lang.invoke.CallSite;
+import java.lang.invoke.ConstantBootstraps;
 import java.lang.invoke.ConstantCallSite;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.util.Arrays;
-import java.util.Objects;
 import java.util.stream.Stream;
 
 import jdk.internal.javac.PreviewFeature;
@@ -89,8 +88,8 @@ public class SwitchBootstraps {
      *                       used with {@code invokedynamic}, this is provided by
      *                       the {@code NameAndType} of the {@code InvokeDynamic}
      *                       structure and is stacked automatically by the VM.
-     * @param labels non-null case labels - {@code String} and {@code Integer} constants
-     *                        and {@code Class} instances, in any combination
+     * @param labels case labels - {@code String} and {@code Integer} constants,
+     *                        {@code Class} instances or {@code null}, in any combination
      * @return a {@code CallSite}, which accepts two parameters: one is an instance
      *         of the target type, and second is a restart index. It returns the
      *         index into {@code labels} of the target value, if the target
@@ -121,13 +120,11 @@ public class SwitchBootstraps {
     }
 
     private static void verifyLabel(Object label) {
-        if (label == null) {
-            throw new IllegalArgumentException("null label found");
-        }
         Class<?> labelClass = label.getClass();
         if (labelClass != Class.class &&
             labelClass != String.class &&
-            labelClass != Integer.class) {
+            labelClass != Integer.class &&
+            !labelClass.isEnum()) {
             throw new IllegalArgumentException("label with illegal type found: " + label.getClass());
         }
     }
@@ -140,7 +137,9 @@ public class SwitchBootstraps {
         Class<?> targetClass = target.getClass();
         for (int i = startIndex; i < labels.length; i++) {
             Object label = labels[i];
-            if (label instanceof Class<?> c) {
+            if (label == null) {
+                //ignore
+            } else if (label instanceof Class<?> c) {
                 if (c.isAssignableFrom(targetClass))
                     return i;
             } else {
@@ -149,6 +148,10 @@ public class SwitchBootstraps {
                         return i;
                     }
                     if (target instanceof Character input && constant.intValue() == input.charValue()) {
+                        return i;
+                    }
+                } else if (label instanceof Enum<?>) {
+                    if (label == target) {
                         return i;
                     }
                 } else if (label.equals(target)) {
@@ -160,4 +163,40 @@ public class SwitchBootstraps {
         return labels.length;
     }
 
+    /**
+     * Returns an {@code enum} constant of the type specified by {@code type}
+     * with the name specified by {@code name}.
+     *
+     * @param lookup Represents a lookup context with the accessibility
+     *               privileges of the caller.  When used with {@code invokedynamic},
+     *               this is stacked automatically by the VM.
+     * @param invocationName The invocation name, which is ignored.  When used with
+     *                       {@code invokedynamic}, this is provided by the
+     *                       {@code NameAndType} of the {@code InvokeDynamic}
+     *                       structure and is stacked automatically by the VM.
+     * @param invocationClass The invocation Class, which is ignored. When
+     *                       used with {@code invokedynamic}, this is stacked
+     *                       automatically by the VM.
+     * @param name the name of the constant to return, which must exactly match
+     * an enum constant in the specified type.
+     * @param type the {@code Class} object describing the enum type for which
+     * a constant is to be returned
+     * @param <E> The enum type for which a constant value is to be returned
+     * @return the enum constant of the specified enum type with the
+     * specified name, or null if not found
+     * @throws IllegalAccessError if the declaring class or the field is not
+     * accessible to the class performing the operation
+     * @see Enum#valueOf(Class, String)
+     */
+    public static <E extends Enum<E>> E enumConstant(MethodHandles.Lookup lookup,
+                                                     String invocationName,
+                                                     Class<?> invocationClass,
+                                                     String name,
+                                                     Class<E> type) {
+        try {
+            return ConstantBootstraps.enumConstant(lookup, name, type);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
 }
