@@ -667,6 +667,20 @@ public class SimpleTreeVisitor <R,P> implements TreeVisitor<R,P> {
      * @param node {@inheritDoc}
      * @param p {@inheritDoc}
      * @return  the result of {@code defaultAction}
+     * @since 17
+     */
+    @Override
+    @PreviewFeature(feature=PreviewFeature.Feature.SWITCH_PATTERN_MATCHING, reflective=true)
+    public R visitDefaultCaseLabel(DefaultCaseLabelTree node, P p) {
+        return defaultAction(node, p);
+    }
+
+    /**
+     * {@inheritDoc} This implementation calls {@code defaultAction}.
+     *
+     * @param node {@inheritDoc}
+     * @param p {@inheritDoc}
+     * @return  the result of {@code defaultAction}
      */
     @Override
     public R visitArrayAccess(ArrayAccessTree node, P p) {
@@ -723,6 +737,34 @@ public class SimpleTreeVisitor <R,P> implements TreeVisitor<R,P> {
      * {@inheritDoc}
      *
      * @implSpec This implementation calls {@code defaultAction}.
+     *
+     * @param node {@inheritDoc}
+     * @param p {@inheritDoc}
+     * @return  the result of {@code defaultAction}
+     * @since 17
+     */
+    @Override
+    @PreviewFeature(feature=PreviewFeature.Feature.SWITCH_PATTERN_MATCHING, reflective=true)
+    public R visitParenthesizedPattern(ParenthesizedPatternTree node, P p) {
+        return defaultAction(node, p);
+    }
+
+    /**
+     * {@inheritDoc} This implementation calls {@code defaultAction}.
+     *
+     * @param node {@inheritDoc}
+     * @param p {@inheritDoc}
+     * @return  the result of {@code defaultAction}
+     * @since 17
+     */
+    @Override
+    @PreviewFeature(feature=PreviewFeature.Feature.SWITCH_PATTERN_MATCHING, reflective=true)
+    public R visitGuardedPattern(GuardedPatternTree node, P p) {
+        return defaultAction(node, p);
+    }
+
+    /**
+     * {@inheritDoc} This implementation calls {@code defaultAction}.
      *
      * @param node {@inheritDoc}
      * @param p {@inheritDoc}
