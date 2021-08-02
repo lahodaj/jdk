@@ -207,6 +207,7 @@ public class JShellTool implements MessageHandler {
     private boolean regenerateOnDeath = true;
     private boolean live = false;
     private boolean interactiveModeBegun = false;
+    private boolean showContinuationPrompt = true;
     private Options options;
 
     SourceCodeAnalysis analysis;
@@ -1237,6 +1238,25 @@ public class JShellTool implements MessageHandler {
             // It is a snipet. Separate the source from the remaining. Evaluate
             // the source
             CompletionInfo an = analysis.analyzeCompletion(src);
+            if (!showContinuationPrompt && an.source() == null) {
+                String rest = an.remaining();
+                an = new CompletionInfo() {
+                    @Override
+                    public Completeness completeness() {
+                        return Completeness.COMPLETE;
+                    }
+
+                    @Override
+                    public String remaining() {
+                        return "";
+                    }
+
+                    @Override
+                    public String source() {
+                        return rest;
+                    }
+                };
+            }
             if (processSourceCatchingReset(trimEnd(an.source()))) {
                 // Snippet was successful use any leftover source
                 return an.remaining();
@@ -1257,7 +1277,7 @@ public class JShellTool implements MessageHandler {
     private String getInput(String initial) throws IOException{
         String src = initial;
         while (live) { // loop while incomplete (and live)
-            if (!src.isEmpty() && isComplete(src)) {
+            if (!src.isEmpty() && (!showContinuationPrompt || isComplete(src))) {
                 return src;
             }
             String firstLinePrompt = interactive()
@@ -1294,6 +1314,10 @@ public class JShellTool implements MessageHandler {
     }
 
     public boolean isComplete(String src) {
+        if (!showContinuationPrompt) {
+            return true;
+        }
+
         String check;
 
         if (isCommand(src)) {
@@ -1981,10 +2005,13 @@ public class JShellTool implements MessageHandler {
     private static final String[] SET_SUBCOMMANDS = new String[]{
         "format", "truncation", "feedback", "mode", "prompt", "editor", "start", "indent"};
 
+    private static final String[] ENHANCED_SET_SUBCOMMANDS = new String[]{
+        "format", "truncation", "feedback", "mode", "prompt", "editor", "start", "indent", "continuation-prompt"};
+
     final boolean cmdSet(String arg) {
         String cmd = "/set";
         ArgTokenizer at = new ArgTokenizer(cmd, arg.trim());
-        String which = subCommand(cmd, at, SET_SUBCOMMANDS);
+        String which = subCommand(cmd, at, ENHANCED_SET_SUBCOMMANDS);
         if (which == null) {
             return false;
         }
@@ -2017,7 +2044,7 @@ public class JShellTool implements MessageHandler {
                 return new SetEditor(at).set();
             case "start":
                 return setStart(at);
-            case "indent":
+            case "indent": {
                 String value = at.next();
                 if (value != null) {
                     try {
@@ -2034,6 +2061,12 @@ public class JShellTool implements MessageHandler {
                     showIndent();
                 }
                 return true;
+            }
+            case "continuation-prompt": {
+                String value = at.next();
+                showContinuationPrompt = !"disable".equals(value);
+                return true;
+            }
             default:
                 errormsg("jshell.err.arg", cmd, at.val());
                 return false;
