@@ -25,14 +25,18 @@
 
 package jdk.internal.jshell.tool;
 
+import java.io.Console;
 import java.io.InputStream;
+import java.io.OutputStreamWriter;
 import java.io.PrintStream;
+import java.nio.charset.Charset;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
+import jdk.internal.org.jline.utils.WriterOutputStream;
 import jdk.jshell.tool.JavaShellToolBuilder;
 
 /**
@@ -43,16 +47,28 @@ public class JShellToolBuilder implements JavaShellToolBuilder {
     private static final String PREFERENCES_NODE = "tool/JShell";
     private InputStream cmdIn = System.in;
     private InputStream userIn = null;
-    private PrintStream cmdOut = System.out;
-    private PrintStream console = System.out;
-    private PrintStream userOut = System.out;
-    private PrintStream cmdErr = System.err;
-    private PrintStream userErr = System.err;
+    private PrintStream cmdOut = new PrintStream(new WriterOutputStream(new OutputStreamWriter(System.out, NATIVE_CHARSET), Charset.defaultCharset()));
+    private PrintStream console = cmdOut;
+    private PrintStream userOut = cmdOut;
+    private PrintStream cmdErr = new PrintStream(new WriterOutputStream(new OutputStreamWriter(System.err, NATIVE_CHARSET), Charset.defaultCharset()));
+    private PrintStream userErr = cmdErr;
     private PersistentStorage prefs = null;
     private Map<String, String> vars = null;
     private Locale locale = Locale.getDefault();
     private boolean interactiveTerminal;
     private boolean capturePrompt = false;
+
+    private static final Charset NATIVE_CHARSET;
+
+    static {
+        Console console = System.console();
+        if (console != null) {
+            NATIVE_CHARSET = console.charset();
+        } else {
+            String nativeEncoding = System.getProperty("native.encoding", "UTF-8");
+            NATIVE_CHARSET = Charset.forName(nativeEncoding);
+        }
+    }
 
     /**
      * Set the input channels.
