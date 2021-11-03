@@ -780,8 +780,8 @@ public interface Elements {
      * <p>In the context of annotation processing, a non-{@code null}
      * value is returned if the element was included as part of the
      * initial inputs or the containing file was created during the
-     * run of the annotation processing tool. Otherwise, {@code null}
-     * is returned. In annotation processing, if a {@linkplain
+     * run of the annotation processing tool.
+     * In annotation processing, if a {@linkplain
      * javax.annotation.processing.Filer#createClassFile class file is
      * created}, that class file can serve as the reference
      * representation for elements.
@@ -795,10 +795,19 @@ public interface Elements {
      * <p>If it has a file object, the file object for a module will
      * be a {@code module-info} file.
      *
+     * <p>If it has a file object, the file object for a class or
+     * interface will either be the source or class file which
+     * which was used to construct the representation of the class
+     * or interface. If a source file is returned, then the same source
+     * file will be returned for all classes and interfaces, which where
+     * defined in the given source file. If a class file is returned,
+     * then the class file will be specific to the given class or interface.
+     *
      * <p>For other kinds of elements, if they have a file object, the
-     * file object will be the object associated with the {@linkplain
-     * #getOutermostTypeElement(Element) outermost class or interface
-     * of the element}. For top-level classes and interfaces, the name
+     * file object will be the object associated with the immediately
+     * enclosing class or interface.
+     *
+     * <p>For top-level classes and interfaces, the name
      * of the file object will commonly contain the name of the
      * top-level class or interface. For example, for class {@code
      * Foo}, its file name could contain "{@code Foo.java}". Note
