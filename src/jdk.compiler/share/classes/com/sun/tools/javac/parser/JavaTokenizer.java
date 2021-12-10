@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -416,9 +416,18 @@ public class JavaTokenizer extends UnicodeReader {
                 return;
             }
 
+            int suspiciousBiDiPoint = Position.NOPOS;
+
             // While characters are available.
             while (isAvailable()) {
+                if (isBiDiControl(get()) && suspiciousBiDiPoint == Position.NOPOS) {
+                    suspiciousBiDiPoint = position();
+                }
+
                 if (accept("\"\"\"")) {
+                    if (lint.isEnabled(LintCategory.UNICODE) && suspiciousBiDiPoint != Position.NOPOS) {
+                        lexWarning(LintCategory.UNICODE, suspiciousBiDiPoint, Warnings.SuspiciousBidiControl);
+                    }
                     return;
                 }
 
@@ -431,6 +440,8 @@ public class JavaTokenizer extends UnicodeReader {
                     if (firstEOLN == NOT_FOUND) {
                         firstEOLN = position();
                     }
+
+                    suspiciousBiDiPoint = Position.NOPOS;
                 } else {
                     // Add character to string buffer.
                     scanLitChar(pos);
@@ -440,8 +451,15 @@ public class JavaTokenizer extends UnicodeReader {
             // Skip first quote.
             next();
 
+            boolean warned = false;
+
             // While characters are available.
             while (isAvailable()) {
+                if (lint.isEnabled(LintCategory.UNICODE) && isBiDiControl(get()) && !warned) {
+                    lexWarning(LintCategory.UNICODE, position(), Warnings.SuspiciousBidiControl);
+                    warned = true;
+                }
+
                 if (accept('\"')) {
                     return;
                 }
@@ -756,6 +774,20 @@ public class JavaTokenizer extends UnicodeReader {
     }
 
     /**
+     * Checks whether the given character is a bi-directional Unicode control character.
+     *
+     * @param ch character to check.
+     *
+     * @return true if ch is a bi-directional Unicode control character.
+     */
+    private boolean isBiDiControl(char ch) {
+        return !wasUnicodeEscape() && switch (ch) {
+            case 0x061C, 0x200E, 0x200F, 0x2066, 0x2067, 0x2068,
+                 0x2069, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E -> true;
+            default -> false;
+        };
+    }
+    /**
      * Read longest possible sequence of special characters and convert to token.
      */
     private void scanOperator() {
@@ -932,7 +964,9 @@ public class JavaTokenizer extends UnicodeReader {
                         boolean isEmpty = false;
                         CommentStyle style;
 
-                        if (accept('*')) {
+                        if (is('*')) {
+                            next();
+
                             style = CommentStyle.JAVADOC;
 
                             if (is('/')) {
@@ -943,14 +977,29 @@ public class JavaTokenizer extends UnicodeReader {
                         }
 
                         if (!isEmpty) {
+                            int suspiciousBiDiPoint = Position.NOPOS;
                             while (isAvailable()) {
-                                if (accept('*')) {
+                                char ch = get();
+                                //TODO: switch here?
+                                if (is('\n')) {
+                                    next();
+                                    suspiciousBiDiPoint = Position.NOPOS;
+                                } else if (is('*')) {
+                                    next();
                                     if (is('/')) {
                                         break;
                                     }
+                                } else if (isBiDiControl(ch)) {
+                                    if (suspiciousBiDiPoint == Position.NOPOS) {
+                                        suspiciousBiDiPoint = position();
+                                    }
+                                    next();
                                 } else {
                                     next();
                                 }
+                            }
+                            if (suspiciousBiDiPoint != Position.NOPOS) {
+                                lexWarning(LintCategory.UNICODE, suspiciousBiDiPoint, Warnings.SuspiciousBidiControl);
                             }
                         }
 
@@ -973,6 +1022,9 @@ public class JavaTokenizer extends UnicodeReader {
                 case '\'': // (Spec. 3.10)
                     next();
 
+                    if (isBiDiControl(get())) {
+                        lexWarning(LintCategory.UNICODE, position(), Warnings.SuspiciousBidiControl);
+                    }
                     if (accept('\'')) {
                         lexError(pos, Errors.EmptyCharLit);
                     } else {

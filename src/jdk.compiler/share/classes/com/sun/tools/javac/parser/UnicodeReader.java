@@ -564,6 +564,10 @@ public class UnicodeReader {
         return Arrays.copyOfRange(buffer, beginIndex, endIndex);
     }
 
+    public boolean wasUnicodeEscape() {
+        return wasUnicodeEscape;
+    }
+
     /**
      * This is a specialized version of UnicodeReader that keeps track of the
      * column position within a given character stream. Used for Javadoc
