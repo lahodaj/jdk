@@ -724,7 +724,6 @@ public class JavacTrees extends DocTrees {
         }
 
         methodParamTypes = types.erasureRecursive(methodParamTypes);
-        paramTypes = types.erasureRecursive(paramTypes);
         return types.isSameTypes(paramTypes, methodParamTypes);
     }
 
