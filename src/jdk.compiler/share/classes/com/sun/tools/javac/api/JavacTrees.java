@@ -988,7 +988,7 @@ public class JavacTrees extends DocTrees {
                 }
             }.scan(env.enclClass);
             //revert changes done by the visitor:
-            toClear.stream().forEach(c -> {
+            toClear.forEach(c -> {
                 chk.clearLocalClassNameIndexes(c);
                 chk.removeCompiled(c);
             });
