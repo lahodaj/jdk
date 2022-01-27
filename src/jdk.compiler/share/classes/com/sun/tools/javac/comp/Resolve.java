@@ -2063,9 +2063,6 @@ public class Resolve {
      */
     Symbol loadClass(Env<AttrContext> env, Name name, RecoveryLoadClass recoveryLoadClass) {
         try {
-            if (name.toString().contains("JSON")) {
-                System.err.println("!!!!");
-            }
             ClassSymbol c = finder.loadClass(env.toplevel.modle, name);
             return isAccessible(env, c) ? c : new AccessError(env, null, c);
         } catch (ClassFinder.BadClassFile err) {
