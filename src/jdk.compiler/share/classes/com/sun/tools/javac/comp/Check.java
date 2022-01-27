@@ -3806,7 +3806,7 @@ public class Check {
             if (imp.importScope == null)
                 continue;
 
-            for (Symbol sym : imp.importScope.getSymbols(sym -> sym.kind == TYP)) {
+            for (Symbol sym : imp.importScope.getDelegate().getSymbols(sym -> sym.kind == TYP)) {
                 if (imp.isStatic()) {
                     checkUniqueImport(imp.pos(), ordinallyImportedSoFar, staticallyImportedSoFar, topLevelScope, sym, true);
                     staticallyImportedSoFar.enter(sym);

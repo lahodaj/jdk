@@ -45,6 +45,7 @@ import com.sun.tools.javac.code.Symbol.Completer;
 import com.sun.tools.javac.code.Symbol.CompletionFailure;
 import com.sun.tools.javac.code.Symbol.PackageSymbol;
 import com.sun.tools.javac.comp.Enter;
+import com.sun.tools.javac.comp.TypeEnter;
 import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.JCTree.JCClassDecl;
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
@@ -86,6 +87,7 @@ public class JavadocTool extends com.sun.tools.javac.main.JavaCompiler {
         javadocFinder = JavadocClassFinder.instance(context);
         dcfh = DeferredCompletionFailureHandler.instance(context);
         javadocEnter = JavadocEnter.instance(context);
+        TypeEnter.instance(context).finalizeImports = false;
         uniquefiles = new HashSet<>();
     }
 

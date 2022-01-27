@@ -218,15 +218,19 @@ public class TypeEnter implements Completer {
         }
     }
 
+    public boolean finalizeImports = true;
+
     void finishImports(JCCompilationUnit toplevel, Runnable resolve) {
         JavaFileObject prev = log.useSource(toplevel.sourcefile);
         try {
             resolve.run();
-            chk.checkImportsUnique(toplevel);
-            chk.checkImportsResolvable(toplevel);
-            chk.checkImportedPackagesObservable(toplevel);
-            toplevel.namedImportScope.finalizeScope();
-            toplevel.starImportScope.finalizeScope();
+            if (finalizeImports) {
+                chk.checkImportsUnique(toplevel);
+                chk.checkImportsResolvable(toplevel);
+                chk.checkImportedPackagesObservable(toplevel);
+                toplevel.namedImportScope.finalizeScope();
+                toplevel.starImportScope.finalizeScope();
+            }
         } catch (CompletionFailure cf) {
             chk.completionError(toplevel.pos(), cf);
         } finally {
@@ -427,27 +431,31 @@ public class TypeEnter implements Completer {
                     importNamedStatic(tree, p, name, localEnv);
                     chk.checkCanonical(imp.selected);
                 } else {
-                    Type importedType = attribImportType(imp, localEnv);
-                    Type originalType = importedType.getOriginalType();
-                    TypeSymbol c = originalType.hasTag(CLASS) ? originalType.tsym : importedType.tsym;
-                    chk.checkCanonical(imp);
-                    importNamed(tree.pos(), c, env, tree);
+                    tree.importScope = env.toplevel.namedImportScope.importType(name, () -> {
+                        Type importedType = attribImportType(imp, localEnv);
+                        Type originalType = importedType.getOriginalType();
+                        TypeSymbol c = originalType.hasTag(CLASS) ? originalType.tsym : importedType.tsym;
+                        chk.checkCanonical(imp);
+                        return c;
+                    });
                 }
             }
         }
 
         Type attribImportType(JCTree tree, Env<AttrContext> env) {
-            Assert.check(completionEnabled);
+            boolean prevCompletionEnabled = completionEnabled;
             Lint prevLint = chk.setLint(allowDeprecationOnImport ?
                     lint : lint.suppress(LintCategory.DEPRECATION, LintCategory.REMOVAL, LintCategory.PREVIEW));
+            DiagnosticPosition prevDeferredPos = deferredLintHandler.immediate();
             try {
                 // To prevent deep recursion, suppress completion of some
                 // types.
-                completionEnabled = false;
+//                completionEnabled = false;
                 return attr.attribType(tree, env);
             } finally {
-                completionEnabled = true;
+                completionEnabled = prevCompletionEnabled;
                 chk.setLint(prevLint);
+                deferredLintHandler.setPos(prevDeferredPos);
             }
         }
 
@@ -498,16 +506,14 @@ public class TypeEnter implements Completer {
             imp.importScope = toScope.importByName(types, originMembers, name, staticImportFilter, imp, cfHandler);
         }
 
-        /** Import given class.
-         *  @param pos           Position to be used for error reporting.
-         *  @param tsym          The class to be imported.
-         *  @param env           The environment containing the named import
-         *                  scope to add to.
-         */
-        private void importNamed(DiagnosticPosition pos, final Symbol tsym, Env<AttrContext> env, JCImport imp) {
-            if (tsym.kind == TYP)
-                imp.importScope = env.toplevel.namedImportScope.importType(tsym.owner.members(), tsym.owner.members(), tsym);
-        }
+//        /** Import given class.
+//         *  @param pos           Position to be used for error reporting.
+//         *  @param tsym          The class to be imported.
+//         *  @param env           The environment containing the named import
+//         *                  scope to add to.
+//         */
+//        private void importNamed(DiagnosticPosition pos, final Symbol tsym, Env<AttrContext> env, JCImport imp) {
+//        }
 
     }
 
@@ -1003,6 +1009,16 @@ public class TypeEnter implements Completer {
         public MembersPhase() {
             super(CompletionCause.MEMBERS_PHASE, null);
         }
+
+//        int i;
+//        @Override
+//        protected void doCompleteEnvs(List<Env<AttrContext>> envs) {
+//            if (i++ == 100) {
+//                Thread.dumpStack();
+//            }
+//            System.err.println("envs: " + envs.size());
+//            super.doCompleteEnvs(envs);
+//        }
 
         @Override
         protected void runPhase(Env<AttrContext> env) {

@@ -41,6 +41,7 @@ import static com.sun.tools.javac.code.Scope.LookupKind.NON_RECURSIVE;
 import static com.sun.tools.javac.code.Scope.LookupKind.RECURSIVE;
 import static com.sun.tools.javac.util.Iterators.createCompoundIterator;
 import static com.sun.tools.javac.util.Iterators.createFilterIterator;
+import java.util.function.Supplier;
 
 /** A scope represents an area of visibility in a Java program. The
  *  Scope class is a container for symbols which provides
@@ -53,7 +54,17 @@ import static com.sun.tools.javac.util.Iterators.createFilterIterator;
  *  This code and its internal interfaces are subject to change or
  *  deletion without notice.</b>
  */
-public abstract class Scope {
+public abstract class Scope extends CompoundDelegate {
+
+    @Override
+    public void addListener(ScopeListener l) {
+        listeners.add(l);
+    }
+
+    @Override
+    public Scope getDelegate() {
+        return this;
+    }
 
     /** The scope's owner.
      */
@@ -747,8 +758,8 @@ public abstract class Scope {
          * No further changes to class hierarchy or class content will be reflected.
          */
         public void finalizeScope() {
-            for (List<Scope> scopes = this.subScopes.toList(); scopes.nonEmpty(); scopes = scopes.tail) {
-                scopes.head = finalizeSingleScope(scopes.head);
+            for (List<CompoundDelegate> scopes = this.subScopes.toList(); scopes.nonEmpty(); scopes = scopes.tail) {
+                scopes.head = finalizeSingleScope(scopes.head.getDelegate());
             }
         }
 
@@ -790,27 +801,91 @@ public abstract class Scope {
           changes to the content of the Scopes is reflected when looking up the
           Symbols.
          */
-        private final Map<Name, Scope[]> name2Scopes = new HashMap<>();
+        private final Map<Name, CompoundDelegate[]> name2Scopes = new HashMap<>();
 
         public NamedImportScope(Symbol owner) {
             super(owner);
         }
 
-        public Scope importByName(Types types, Scope origin, Name name, ImportFilter filter, JCImport imp, BiConsumer<JCImport, CompletionFailure> cfHandler) {
-            return appendScope(new FilterImportScope(types, origin, name, filter, imp, cfHandler), name);
+        public CompoundDelegate importByName(Types types, Scope origin, Name name, ImportFilter filter, JCImport imp, BiConsumer<JCImport, CompletionFailure> cfHandler) {
+            Scope s = new FilterImportScope(types, origin, name, filter, imp, cfHandler);
+
+            return appendScope(s, name);
         }
 
-        public Scope importType(Scope delegate, Scope origin, Symbol sym) {
-            return appendScope(new SingleEntryScope(delegate.owner, sym, origin), sym.name);
+        public CompoundDelegate importType(Name name, Supplier<TypeSymbol> computeDelegate) {
+            return appendScope(new CompoundDelegate() {
+                private Scope result;
+                @Override
+                public Scope getDelegate() {
+                    if (result == null) {
+                        TypeSymbol delegate = computeDelegate.get();
+                        if (delegate.kind == Kind.TYP) {
+                            result = new SingleEntryScope(delegate.owner, delegate, delegate.owner.members());
+                            result.addListener(NamedImportScope.this);
+                        } else {
+                            result = new Scope(delegate) {
+                                @Override
+                                public Iterable<Symbol> getSymbols(Predicate<Symbol> sf, LookupKind lookupKind) {
+                                    return Collections.emptyList();
+                                }
+                                @Override
+                                public Iterable<Symbol> getSymbolsByName(Name name, Predicate<Symbol> sf, LookupKind lookupKind) {
+                                    return Collections.emptyList();
+                                }
+                                @Override
+                                public Scope getOrigin(Symbol byName) {
+                                    return null;
+                                }
+                                @Override
+                                public boolean isStaticallyImported(Symbol byName) {
+                                    return false;
+                                }
+                            };
+                        }
+                    }
+                    return result;
+                }
+
+                @Override
+                public void addListener(ScopeListener l) {
+                    Assert.check(l == NamedImportScope.this);
+                }
+
+                @Override
+                public Iterable<Symbol> getSymbols(Predicate<Symbol> sf, LookupKind lookupKind) {
+                    return getDelegate().getSymbols(sf, lookupKind);
+                }
+
+                @Override
+                public Iterable<Symbol> getSymbolsByName(Name name, Predicate<Symbol> sf, LookupKind lookupKind) {
+                    return getDelegate().getSymbolsByName(name, sf, lookupKind);
+                }
+
+                @Override
+                public boolean includes(Symbol sym) {
+                    return getDelegate().includes(sym);
+                }
+
+                @Override
+                public Scope getOrigin(Symbol sym) {
+                    return getDelegate().getOrigin(sym);
+                }
+
+                @Override
+                public boolean isStaticallyImported(Symbol sym) {
+                    return getDelegate().isStaticallyImported(sym);
+                }
+            }, name);
         }
 
-        private Scope appendScope(Scope newScope, Name name) {
+        private CompoundDelegate appendScope(CompoundDelegate newScope, Name name) {
             appendSubScope(newScope);
-            Scope[] existing = name2Scopes.get(name);
+            CompoundDelegate[] existing = name2Scopes.get(name);
             if (existing != null)
                 existing = Arrays.copyOf(existing, existing.length + 1);
             else
-                existing = new Scope[1];
+                existing = new CompoundDelegate[1];
             existing[existing.length - 1] = newScope;
             name2Scopes.put(name, existing);
             return newScope;
@@ -818,7 +893,7 @@ public abstract class Scope {
 
         @Override
         public Iterable<Symbol> getSymbolsByName(Name name, Predicate<Symbol> sf, LookupKind lookupKind) {
-            Scope[] scopes = name2Scopes.get(name);
+            CompoundDelegate[] scopes = name2Scopes.get(name);
             if (scopes == null)
                 return Collections.emptyList();
             return () -> Iterators.createCompoundIterator(Arrays.asList(scopes),
@@ -829,9 +904,9 @@ public abstract class Scope {
         }
         public void finalizeScope() {
             super.finalizeScope();
-            for (Scope[] scopes : name2Scopes.values()) {
+            for (CompoundDelegate[] scopes : name2Scopes.values()) {
                 for (int i = 0; i < scopes.length; i++) {
-                    scopes[i] = finalizeSingleScope(scopes[i]);
+                    scopes[i] = finalizeSingleScope(scopes[i].getDelegate());
                 }
             }
         }
@@ -885,7 +960,7 @@ public abstract class Scope {
                               ImportFilter filter,
                               JCImport imp,
                               BiConsumer<JCImport, CompletionFailure> cfHandler) {
-            for (Scope existing : subScopes) {
+            for (CompoundDelegate existing : subScopes) {
                 Assert.check(existing instanceof FilterImportScope);
                 FilterImportScope fis = (FilterImportScope) existing;
                 if (fis.origin == origin && fis.filter == filter &&
@@ -1023,26 +1098,26 @@ public abstract class Scope {
      */
     public static class CompoundScope extends Scope implements ScopeListener {
 
-        ListBuffer<Scope> subScopes = new ListBuffer<>();
+        ListBuffer<CompoundDelegate> subScopes = new ListBuffer<>();
         private int mark = 0;
 
         public CompoundScope(Symbol owner) {
             super(owner);
         }
 
-        public void prependSubScope(Scope that) {
+        public void prependSubScope(CompoundDelegate that) {
            if (that != null) {
                 subScopes.prepend(that);
-                that.listeners.add(this);
+                that.addListener(this);
                 mark++;
                 listeners.symbolAdded(null, this);
            }
         }
 
-        public void appendSubScope(Scope that) {
+        public void appendSubScope(CompoundDelegate that) {
            if (that != null) {
                 subScopes.append(that);
-                that.listeners.add(this);
+                that.addListener(this);
                 mark++;
                 listeners.symbolAdded(null, this);
            }
@@ -1067,7 +1142,7 @@ public abstract class Scope {
             StringBuilder buf = new StringBuilder();
             buf.append("CompoundScope{");
             String sep = "";
-            for (Scope s : subScopes) {
+            for (CompoundDelegate s : subScopes) {
                 buf.append(sep);
                 buf.append(s);
                 sep = ",";
@@ -1098,7 +1173,7 @@ public abstract class Scope {
 
         @Override
         public Scope getOrigin(Symbol sym) {
-            for (Scope delegate : subScopes) {
+            for (CompoundDelegate delegate : subScopes) {
                 if (delegate.includes(sym))
                     return delegate.getOrigin(sym);
             }
@@ -1108,7 +1183,7 @@ public abstract class Scope {
 
         @Override
         public boolean isStaticallyImported(Symbol sym) {
-            for (Scope delegate : subScopes) {
+            for (CompoundDelegate delegate : subScopes) {
                 if (delegate.includes(sym))
                     return delegate.isStaticallyImported(sym);
             }
