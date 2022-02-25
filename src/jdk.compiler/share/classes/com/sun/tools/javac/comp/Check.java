@@ -2141,7 +2141,7 @@ public class Check {
         // be treated "as if as they were annotated" with @Override.
         boolean mustOverride = explicitOverride ||
                 (env.info.isAnonymousDiamond && !m.isConstructor() && !m.isPrivate());
-        if (mustOverride && !isOverrider(m)) {
+        if (mustOverride && !isOverrider(m) && !hasErrorSuper(origin.type)) {
             DiagnosticPosition pos = tree.pos();
             for (JCAnnotation a : tree.getModifiers().annotations) {
                 if (a.annotationType.type.tsym == syms.overrideType.tsym) {
@@ -2153,6 +2153,16 @@ public class Check {
                       explicitOverride ? (m.isStatic() ? Errors.StaticMethodsCannotBeAnnotatedWithOverride : Errors.MethodDoesNotOverrideSuperclass) :
                                 Errors.AnonymousDiamondMethodDoesNotOverrideSuperclass(Fragments.DiamondAnonymousMethodsImplicitlyOverride));
         }
+    }
+
+    private boolean hasErrorSuper(Type t) {
+        if (!t.hasTag(CLASS)) {
+            return t.hasTag(ERROR);
+        }
+        Type supertype = types.supertype(t);
+
+        return hasErrorSuper(supertype) ||
+               ((ClassSymbol) t.tsym).getInterfaces().stream().anyMatch(this::hasErrorSuper);
     }
 
     void checkOverride(JCTree tree, Type site, ClassSymbol origin, MethodSymbol m) {

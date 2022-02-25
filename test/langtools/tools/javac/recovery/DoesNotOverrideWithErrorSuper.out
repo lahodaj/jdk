@@ -1,0 +1,6 @@
+DoesNotOverrideWithErrorSuper.java:8:48: compiler.err.cant.resolve.location: kindname.class, Unknown, , , (compiler.misc.location: kindname.class, DoesNotOverrideWithErrorSuper, null)
+DoesNotOverrideWithErrorSuper.java:12:54: compiler.err.cant.resolve.location: kindname.class, Unknown, , , (compiler.misc.location: kindname.class, DoesNotOverrideWithErrorSuper, null)
+DoesNotOverrideWithErrorSuper.java:16:59: compiler.err.cant.resolve.location: kindname.class, Unknown, , , (compiler.misc.location: kindname.class, DoesNotOverrideWithErrorSuper, null)
+DoesNotOverrideWithErrorSuper.java:19:52: compiler.err.cant.resolve.location: kindname.class, Unknown, , , (compiler.misc.location: kindname.class, DoesNotOverrideWithErrorSuper, null)
+DoesNotOverrideWithErrorSuper.java:24:59: compiler.err.cant.resolve.location: kindname.class, Unknown, , , (compiler.misc.location: kindname.class, DoesNotOverrideWithErrorSuper, null)
+5 errors
