@@ -27,6 +27,7 @@ package java.lang.reflect;
 import java.lang.annotation.*;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.Objects;
 import sun.reflect.annotation.AnnotationSupport;
 
@@ -162,6 +163,20 @@ public final class Parameter implements AnnotatedElement {
     }
 
     /**
+     * {@return an unmodifiable set of the {@linkplain AccessFlag
+     * access flags} for the parameter represented by this object,
+     * possibly empty}
+     *
+     * @see #getModifiers()
+     * @jvms 4.7.24 The MethodParameters Attribute
+     * @since 20
+     */
+    public Set<AccessFlag> accessFlags() {
+        return AccessFlag.maskToAccessFlags(getModifiers(),
+                                            AccessFlag.Location.METHOD_PARAMETER);
+    }
+
+    /**
      * Returns the name of the parameter.  If the parameter's name is
      * {@linkplain #isNamePresent() present}, then this method returns
      * the name provided by the class file. Otherwise, this method
@@ -257,10 +272,13 @@ public final class Parameter implements AnnotatedElement {
      * nor explicitly declared in source code; returns {@code false}
      * otherwise.
      *
-     * @jls 13.1 The Form of a Binary
      * @return true if and only if this parameter is a synthetic
      * construct as defined by
      * <cite>The Java Language Specification</cite>.
+     * @jls 13.1 The Form of a Binary
+     * @see <a
+     * href="{@docRoot}/java.base/java/lang/reflect/package-summary.html#LanguageJvmModel">Java
+     * programming language and JVM modeling in core reflection</a>
      */
     public boolean isSynthetic() {
         return Modifier.isSynthetic(getModifiers());

@@ -157,9 +157,9 @@ void OldGCTracer::send_old_gc_event() const {
 static JfrStructCopyFailed to_struct(const CopyFailedInfo& cf_info) {
   JfrStructCopyFailed failed_info;
   failed_info.set_objectCount(cf_info.failed_count());
-  failed_info.set_firstSize(cf_info.first_size());
-  failed_info.set_smallestSize(cf_info.smallest_size());
-  failed_info.set_totalSize(cf_info.total_size());
+  failed_info.set_firstSize(cf_info.first_size() * HeapWordSize);
+  failed_info.set_smallestSize(cf_info.smallest_size() * HeapWordSize);
+  failed_info.set_totalSize(cf_info.total_size() * HeapWordSize);
   return failed_info;
 }
 
@@ -265,13 +265,11 @@ void GCTracer::send_gc_heap_summary_event(GCWhen::Type when, const GCHeapSummary
   heap_summary.accept(&visitor);
 }
 
-static JfrStructMetaspaceSizes to_struct(const MetaspaceSizes& sizes) {
+static JfrStructMetaspaceSizes to_struct(const MetaspaceStats& sizes) {
   JfrStructMetaspaceSizes meta_sizes;
-
   meta_sizes.set_committed(sizes.committed());
   meta_sizes.set_used(sizes.used());
   meta_sizes.set_reserved(sizes.reserved());
-
   return meta_sizes;
 }
 
@@ -281,9 +279,9 @@ void GCTracer::send_meta_space_summary_event(GCWhen::Type when, const MetaspaceS
     e.set_gcId(GCId::current());
     e.set_when((u1) when);
     e.set_gcThreshold(meta_space_summary.capacity_until_GC());
-    e.set_metaspace(to_struct(meta_space_summary.meta_space()));
-    e.set_dataSpace(to_struct(meta_space_summary.data_space()));
-    e.set_classSpace(to_struct(meta_space_summary.class_space()));
+    e.set_metaspace(to_struct(meta_space_summary.stats())); // total stats (class + nonclass)
+    e.set_dataSpace(to_struct(meta_space_summary.stats().non_class_space_stats())); // "dataspace" aka non-class space
+    e.set_classSpace(to_struct(meta_space_summary.stats().class_space_stats()));
     e.commit();
   }
 }

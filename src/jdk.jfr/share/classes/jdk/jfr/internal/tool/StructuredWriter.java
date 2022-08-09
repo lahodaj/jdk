@@ -28,19 +28,22 @@ package jdk.jfr.internal.tool;
 import java.io.PrintWriter;
 
 abstract class StructuredWriter {
-    private static final String LINE_SEPARATOR = String.format("%n");
-
     private final PrintWriter out;
     private final StringBuilder builder = new StringBuilder(4000);
 
-    private char[] indentionArray = new char[0];
+    private String indention = "";
     private int indent = 0;
     private int column;
     // print first event immediately so tool feels responsive
     private boolean first = true;
+    private String lineSeparator = String.format("%n");
 
     StructuredWriter(PrintWriter p) {
         out = p;
+    }
+
+    public void setLineSeparator(String lineSeparator) {
+        this.lineSeparator = lineSeparator;
     }
 
     protected final int getColumn() {
@@ -62,12 +65,12 @@ abstract class StructuredWriter {
     }
 
     public final void printIndent() {
-        builder.append(indentionArray, 0, indent);
+        builder.append(indention, 0, indent);
         column += indent;
     }
 
     public final void println() {
-        builder.append(LINE_SEPARATOR);
+        builder.append(lineSeparator);
         column = 0;
     }
 
@@ -111,11 +114,8 @@ abstract class StructuredWriter {
     }
 
     private void updateIndent() {
-        if (indent > indentionArray.length) {
-            indentionArray = new char[indent];
-            for (int i = 0; i < indentionArray.length; i++) {
-                indentionArray[i] = ' ';
-            }
+        if (indent > indention.length()) {
+            indention = " ".repeat(2 * indent);
         }
     }
 }

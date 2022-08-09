@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,12 +30,10 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.ObjectStreamField;
 import java.io.Serializable;
-import java.net.InetAddress;
 import java.security.AccessController;
 import java.security.Permission;
 import java.security.PermissionCollection;
 import java.security.PrivilegedAction;
-import java.security.Security;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.Map;
@@ -245,6 +243,7 @@ public final class SocketPermission extends Permission
     };
 
     static {
+        @SuppressWarnings("removal")
         Boolean tmp = java.security.AccessController.doPrivileged(
                 new sun.security.action.GetBooleanAction("sun.net.trustNameService"));
         trustNameService = tmp.booleanValue();
@@ -332,7 +331,7 @@ public final class SocketPermission extends Permission
                         ind = host.lastIndexOf(':');
                         host = "[" + host.substring(0, ind) + "]" +
                             host.substring(ind);
-                    } else if (tokens == 8 && host.indexOf("::") == -1) {
+                    } else if (tokens == 8 && !host.contains("::")) {
                         // IPv6 address only, not followed by port
                         host = "[" + host + "]";
                     } else {
@@ -469,7 +468,7 @@ public final class SocketPermission extends Permission
             if (!host.isEmpty()) {
                 // see if we are being initialized with an IP address.
                 char ch = host.charAt(0);
-                if (ch == ':' || Character.digit(ch, 16) != -1) {
+                if (ch == ':' || IPAddressUtil.digit(ch, 16) != -1) {
                     byte ip[] = IPAddressUtil.textToNumericFormatV4(host);
                     if (ip == null) {
                         ip = IPAddressUtil.textToNumericFormatV6(host);
@@ -872,7 +871,7 @@ public final class SocketPermission extends Permission
 
     /**
      * Checks if the incoming Permission's action are a proper subset of
-     * the this object's actions.
+     * this object's actions.
      * <P>
      * Check, in the following order:
      * <ul>
@@ -1224,6 +1223,7 @@ public final class SocketPermission extends Permission
      * Check the system/security property for the ephemeral port range
      * for this system. The suffix is either "high" or "low"
      */
+    @SuppressWarnings("removal")
     private static int initEphemeralPorts(String suffix, int defval) {
         return AccessController.doPrivileged(
             new PrivilegedAction<>(){
@@ -1295,7 +1295,7 @@ public final class SocketPermission extends Permission
     /*
     public String toString()
     {
-        StringBuffer s = new StringBuffer(super.toString() + "\n" +
+        StringBuilder s = new StringBuilder(super.toString() + "\n" +
             "cname = " + cname + "\n" +
             "wildcard = " + wildcard + "\n" +
             "invalid = " + invalid + "\n" +

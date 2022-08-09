@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -180,6 +180,7 @@ class RevocationChecker extends PKIXRevocationChecker {
         }
     }
 
+    @SuppressWarnings("removal")
     private static RevocationProperties getRevocationProperties() {
         return AccessController.doPrivileged(
             new PrivilegedAction<RevocationProperties>() {
@@ -487,10 +488,10 @@ class RevocationChecker extends PKIXRevocationChecker {
                 }
                 break;
             case "SSLServer":
-                result = (t != null && t instanceof IOException);
+                result = (t instanceof IOException);
                 break;
             case "URI":
-                result = (t != null && t instanceof IOException);
+                result = (t instanceof IOException);
                 break;
             default:
                 // we don't know about any other remote CertStore types
@@ -585,7 +586,8 @@ class RevocationChecker extends PKIXRevocationChecker {
                     approvedCRLs.addAll(DistributionPointFetcher.getCRLs(
                                         sel, signFlag, prevKey, prevCert,
                                         params.sigProvider(), certStores,
-                                        reasonsMask, anchors, null, params.variant()));
+                                        reasonsMask, anchors, null,
+                                        params.variant(), anchor));
                 }
             } catch (CertStoreException e) {
                 if (e instanceof CertStoreTypeException) {
@@ -790,8 +792,7 @@ class RevocationChecker extends PKIXRevocationChecker {
                 e, null, -1, BasicReason.UNDETERMINED_REVOCATION_STATUS);
         }
 
-        RevocationStatus rs =
-            (RevocationStatus)response.getSingleResponse(certId);
+        RevocationStatus rs = response.getSingleResponse(certId);
         RevocationStatus.CertStatus certStatus = rs.getCertStatus();
         if (certStatus == RevocationStatus.CertStatus.REVOKED) {
             Date revocationTime = rs.getRevocationTime();
@@ -893,7 +894,7 @@ class RevocationChecker extends PKIXRevocationChecker {
                     if (DistributionPointFetcher.verifyCRL(
                             certImpl, point, crl, reasonsMask, signFlag,
                             prevKey, null, params.sigProvider(), anchors,
-                            certStores, params.date(), params.variant()))
+                            certStores, params.date(), params.variant(), anchor))
                     {
                         results.add(crl);
                     }

@@ -25,9 +25,10 @@
 #ifndef SHARE_GC_G1_HEAPREGIONMANAGER_INLINE_HPP
 #define SHARE_GC_G1_HEAPREGIONMANAGER_INLINE_HPP
 
+#include "gc/g1/heapRegionManager.hpp"
+
 #include "gc/g1/g1CommittedRegionMap.inline.hpp"
 #include "gc/g1/heapRegion.hpp"
-#include "gc/g1/heapRegionManager.hpp"
 #include "gc/g1/heapRegionSet.inline.hpp"
 
 inline bool HeapRegionManager::is_available(uint region) const {
@@ -39,9 +40,7 @@ inline HeapRegion* HeapRegionManager::addr_to_region(HeapWord* addr) const {
         "addr: " PTR_FORMAT " end: " PTR_FORMAT, p2i(addr), p2i(heap_end()));
   assert(addr >= heap_bottom(),
         "addr: " PTR_FORMAT " bottom: " PTR_FORMAT, p2i(addr), p2i(heap_bottom()));
-
-  HeapRegion* hr = _regions.get_by_address(addr);
-  return hr;
+  return _regions.get_by_address(addr);
 }
 
 inline HeapRegion* HeapRegionManager::at(uint index) const {

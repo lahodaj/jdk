@@ -35,9 +35,9 @@
 #include "oops/method.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/handles.inline.hpp"
+#include "runtime/javaThread.hpp"
 #include "runtime/mutexLocker.hpp"
 #include "runtime/stubRoutines.hpp"
-#include "runtime/thread.inline.hpp"
 #include "runtime/vmOperations.hpp"
 
 DEF_STUB_INTERFACE(ICStub);
@@ -157,17 +157,8 @@ void InlineCacheBuffer::refill_ic_stubs() {
 #endif
   // we ran out of inline cache buffer space; must enter safepoint.
   // We do this by forcing a safepoint
-  EXCEPTION_MARK;
-
   VM_ICBufferFull ibf;
   VMThread::execute(&ibf);
-  // We could potential get an async. exception at this point.
-  // In that case we will rethrow it to ourselvs.
-  if (HAS_PENDING_EXCEPTION) {
-    oop exception = PENDING_EXCEPTION;
-    CLEAR_PENDING_EXCEPTION;
-    JavaThread::current()->set_pending_async_exception(exception);
-  }
 }
 
 void InlineCacheBuffer::update_inline_caches() {

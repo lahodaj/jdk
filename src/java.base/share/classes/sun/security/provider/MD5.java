@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,6 +32,8 @@ import java.util.Arrays;
 import java.util.Objects;
 
 import static sun.security.provider.ByteArrayAccess.*;
+
+import jdk.internal.util.Preconditions;
 import jdk.internal.vm.annotation.IntrinsicCandidate;
 
 /**
@@ -118,22 +120,22 @@ public final class MD5 extends DigestBase {
 
     private static int FF(int a, int b, int c, int d, int x, int s, int ac) {
         a += ((b & c) | ((~b) & d)) + x + ac;
-        return ((a << s) | (a >>> (32 - s))) + b;
+        return Integer.rotateLeft(a, s) + b;
     }
 
     private static int GG(int a, int b, int c, int d, int x, int s, int ac) {
         a += ((b & d) | (c & (~d))) + x + ac;
-        return ((a << s) | (a >>> (32 - s))) + b;
+        return Integer.rotateLeft(a, s) + b;
     }
 
     private static int HH(int a, int b, int c, int d, int x, int s, int ac) {
         a += ((b ^ c) ^ d) + x + ac;
-        return ((a << s) | (a >>> (32 - s))) + b;
+        return Integer.rotateLeft(a, s) + b;
     }
 
     private static int II(int a, int b, int c, int d, int x, int s, int ac) {
         a += (c ^ (b | (~d))) + x + ac;
-        return ((a << s) | (a >>> (32 - s))) + b;
+        return Integer.rotateLeft(a, s) + b;
     }
 
     /**
@@ -152,9 +154,7 @@ public final class MD5 extends DigestBase {
         // These checks are sufficient for the case when the method
         // 'implCompressImpl' is replaced with a compiler
         // intrinsic.
-        if ((ofs < 0) || ((buf.length - ofs) < 64)) {
-            throw new ArrayIndexOutOfBoundsException();
-        }
+        Preconditions.checkFromIndexSize(ofs, 64, buf.length, Preconditions.AIOOBE_FORMATTER);
     }
 
     // The method 'implCompress0 seems not to use its parameters.

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
+* Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
 * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 *
 * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,7 @@
 
 #include "precompiled.hpp"
 #include "jvm.h"
+#include "cds/metaspaceShared.hpp"
 #include "classfile/classFileParser.hpp"
 #include "classfile/classLoader.hpp"
 #include "classfile/classLoaderData.inline.hpp"
@@ -41,7 +42,6 @@
 #include "classfile/vmSymbols.hpp"
 #include "logging/log.hpp"
 #include "logging/logStream.hpp"
-#include "memory/metaspaceShared.hpp"
 #include "memory/resourceArea.hpp"
 #include "prims/jvmtiExport.hpp"
 #include "runtime/globals_extension.hpp"
@@ -447,7 +447,7 @@ void Modules::define_module(Handle module, jboolean is_open, jstring version,
   }
 
   // If the module is defined to the boot loader and an exploded build is being
-  // used, prepend <java.home>/modules/modules_name to the system boot class path.
+  // used, prepend <java.home>/modules/modules_name to the boot class path.
   if (h_loader.is_null() && !ClassLoader::has_jrt_entry()) {
     ClassLoader::add_to_exploded_build_list(THREAD, module_symbol);
   }
@@ -464,9 +464,13 @@ void Modules::define_module(Handle module, jboolean is_open, jstring version,
     if (EnableVectorSupport && EnableVectorReboxing && FLAG_IS_DEFAULT(EnableVectorAggressiveReboxing)) {
       FLAG_SET_DEFAULT(EnableVectorAggressiveReboxing, true);
     }
+    if (EnableVectorSupport && FLAG_IS_DEFAULT(UseVectorStubs)) {
+      FLAG_SET_DEFAULT(UseVectorStubs, true);
+    }
     log_info(compilation)("EnableVectorSupport=%s",            (EnableVectorSupport            ? "true" : "false"));
     log_info(compilation)("EnableVectorReboxing=%s",           (EnableVectorReboxing           ? "true" : "false"));
     log_info(compilation)("EnableVectorAggressiveReboxing=%s", (EnableVectorAggressiveReboxing ? "true" : "false"));
+    log_info(compilation)("UseVectorStubs=%s",                 (UseVectorStubs                 ? "true" : "false"));
   }
 #endif // COMPILER2
 }
@@ -694,7 +698,7 @@ jobject Modules::get_module(jclass clazz, TRAPS) {
       ls.print("get_module(): module ");
       java_lang_String::print(module_name, tty);
     } else {
-      ls.print("get_module(): Unamed Module");
+      ls.print("get_module(): Unnamed Module");
     }
     if (klass != NULL) {
       ls.print_cr(" for class %s", klass->external_name());

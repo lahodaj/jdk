@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,6 +28,7 @@ package java.lang.reflect;
 import java.lang.annotation.*;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Set;
 import java.util.Objects;
 import java.util.StringJoiner;
 import java.util.stream.Stream;
@@ -47,11 +48,12 @@ import sun.reflect.generics.repository.ConstructorRepository;
  *
  * @since 1.8
  */
-public abstract class Executable extends AccessibleObject
-    implements Member, GenericDeclaration {
+public abstract sealed class Executable extends AccessibleObject
+    implements Member, GenericDeclaration permits Constructor, Method {
     /*
      * Only grant package-visibility to the constructor.
      */
+    @SuppressWarnings("deprecation")
     Executable() {}
 
     /**
@@ -203,8 +205,24 @@ public abstract class Executable extends AccessibleObject
     /**
      * {@return the Java language {@linkplain Modifier modifiers} for
      * the executable represented by this object}
+     * @see #accessFlags
      */
     public abstract int getModifiers();
+
+    /**
+     * {@return an unmodifiable set of the {@linkplain AccessFlag
+     * access flags} for the executable represented by this object,
+     * possibly empty}
+     *
+     * @see #getModifiers()
+     * @jvms 4.6 Methods
+     * @since 20
+     */
+    @Override
+    public Set<AccessFlag> accessFlags() {
+        return AccessFlag.maskToAccessFlags(getModifiers(),
+                                            AccessFlag.Location.METHOD);
+    }
 
     /**
      * Returns an array of {@code TypeVariable} objects that represent the
@@ -252,9 +270,7 @@ public abstract class Executable extends AccessibleObject
      * @return The number of formal parameters for the executable this
      * object represents
      */
-    public int getParameterCount() {
-        throw new AbstractMethodError();
-    }
+    public abstract int getParameterCount();
 
     /**
      * Returns an array of {@code Type} objects that represent the
@@ -566,17 +582,19 @@ public abstract class Executable extends AccessibleObject
         Annotation[][] result = parseParameterAnnotations(parameterAnnotations);
 
         if (result.length != numParameters &&
-            handleParameterNumberMismatch(result.length, numParameters)) {
-            Annotation[][] tmp = new Annotation[result.length+1][];
-            // Shift annotations down one to account for an implicit leading parameter
-            System.arraycopy(result, 0, tmp, 1, result.length);
-            tmp[0] = new Annotation[0];
+            handleParameterNumberMismatch(result.length, parameterTypes)) {
+            Annotation[][] tmp = new Annotation[numParameters][];
+            // Shift annotations down to account for any implicit leading parameters
+            System.arraycopy(result, 0, tmp, numParameters - result.length, result.length);
+            for (int i = 0; i < numParameters - result.length; i++) {
+                tmp[i] = new Annotation[0];
+            }
             result = tmp;
         }
         return result;
     }
 
-    abstract boolean handleParameterNumberMismatch(int resultLength, int numParameters);
+    abstract boolean handleParameterNumberMismatch(int resultLength, Class<?>[] parameterTypes);
 
     /**
      * {@inheritDoc}
