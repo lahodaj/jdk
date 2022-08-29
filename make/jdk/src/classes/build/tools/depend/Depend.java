@@ -105,8 +105,14 @@ import com.sun.tools.javac.main.JavaCompiler;
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
 import com.sun.tools.javac.tree.JCTree.JCVariableDecl;
 import com.sun.tools.javac.util.Context;
+import com.sun.tools.javac.util.Context.Key;
 import com.sun.tools.javac.util.ListBuffer;
 import com.sun.tools.javac.util.Options;
+import com.sun.tools.javac.util.StringUtils;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -115,7 +121,6 @@ import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.Name;
 import javax.tools.ForwardingJavaFileManager;
@@ -132,20 +137,7 @@ public class Depend implements Plugin {
 
     @Override
     public void init(JavacTask jt, String... args) {
-        try (JavaFileManager jfm = ToolProvider.getSystemJavaCompiler().getStandardFileManager(null, null, null)) {
-            JavaFileManager fm = new ForwardingJavaFileManager<JavaFileManager>(jfm) {
-                @Override
-                public ClassLoader getClassLoader(JavaFileManager.Location location) {
-                    if (location == StandardLocation.CLASS_PATH) {
-                        return Depend.class.getClassLoader();
-                    }
-                    return super.getClassLoader(location);
-                }
-            };
-            ((JavacTask) ToolProvider.getSystemJavaCompiler().getTask(null, fm, null, List.of("-proc:only", "-XDaccessInternalAPI=true"), List.of("java.lang.Object"), null)).analyze();
-        } catch (IOException ex) {
-            throw new IllegalStateException(ex);
-        }
+        addExports();
 
         AtomicBoolean noApiChange = new AtomicBoolean(); 
         try {
@@ -157,57 +149,20 @@ public class Depend implements Plugin {
             }
             Set<String> modified = new HashSet<>(Arrays.asList(modifiedInputs.split(" ")));
             Path internalAPIDigestFile = Paths.get(args[1]);
-            Map<String, String> internalAPI = new LinkedHashMap<>();
-            if (Files.isReadable(internalAPIDigestFile)) {
-                Files.readAllLines(internalAPIDigestFile, StandardCharsets.UTF_8)
-                     .forEach(line -> {
-                         String[] keyAndValue = line.split("=");
-                         internalAPI.put(keyAndValue[0], keyAndValue[1]);
-                     });
-            }
             JavaCompiler compiler = JavaCompiler.instance(context);
-            JavaCompiler.class.getDeclaredField("doParseFiles").set(compiler, (Function<Iterable<JavaFileObject>, com.sun.tools.javac.util.List<JCCompilationUnit>>) fileObjects -> {
-                Map<JavaFileObject, JCCompilationUnit> files2CUT = new IdentityHashMap<>();
-                boolean fullRecompile = modified.stream().anyMatch(f -> !f.endsWith(".java")); //TODO: case sensitive!
-                ListBuffer<JCCompilationUnit> result = new ListBuffer<>();
-                for (JavaFileObject jfo : fileObjects) {
-                    if (modified.contains(jfo.getName())) {
-                        JCCompilationUnit parsed = compiler.parse(jfo);
-                        files2CUT.put(jfo, parsed);
-                        String currentSignature = treeDigest(parsed);
-                        if (!currentSignature.equals(internalAPI.get(jfo.getName()))) {
-                            fullRecompile |= true;
-                            internalAPI.put(jfo.getName(), currentSignature);
-                        }
-                        result.add(parsed);
-                    }
-                }
-
-                if (fullRecompile) {
-                    for (JavaFileObject jfo : fileObjects) {
-                        if (!modified.contains(jfo.getName())) {
-                            JCCompilationUnit parsed = files2CUT.get(jfo);
-                            if (parsed == null) {
-                                parsed = compiler.parse(jfo);
-                                internalAPI.put(jfo.getName(), treeDigest(parsed));
-                            }
-                            result.add(parsed);
-                        }
-                    }
-                    try (OutputStream out = Files.newOutputStream(internalAPIDigestFile)) {
-                        String hashes = internalAPI.entrySet()
-                                                   .stream()
-                                                   .map(e -> e.getKey() + "=" + e.getValue())
-                                                   .collect(Collectors.joining("\n"));
-                        out.write(hashes.getBytes(StandardCharsets.UTF_8));
-                    } catch (IOException ex) {
-                        throw new IllegalStateException(ex);
-                    }
-                } else {
-                    noApiChange.set(true);
-                }
-                return result.toList();
-            });
+            Class<?> initialFileParserIntf = Class.forName("com.sun.tools.javac.main.JavaCompiler$InitialFileParserIntf");
+            Class<?> initialFileParser = Class.forName("com.sun.tools.javac.main.JavaCompiler$InitialFileParser");
+            Field initialParserKeyField = initialFileParser.getDeclaredField("initialParserKey");
+            @SuppressWarnings("unchecked")
+            Key<Object> key = (Key<Object>) initialParserKeyField.get(null);
+            Object initialParserInstance =
+                    Proxy.newProxyInstance(Depend.class.getClassLoader(),
+                                           new Class<?>[] {initialFileParserIntf},
+                                           new FilteredInitialFileParser(compiler,
+                                                                         modified,
+                                                                         internalAPIDigestFile,
+                                                                         noApiChange));
+            context.<Object>put(key, initialParserInstance);
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -268,6 +223,85 @@ public class Depend implements Plugin {
                 }
             }
         });
+    }
+
+    private void addExports() {
+        var systemCompiler = ToolProvider.getSystemJavaCompiler();
+        try (JavaFileManager jfm = systemCompiler.getStandardFileManager(null, null, null)) {
+            JavaFileManager fm = new ForwardingJavaFileManager<JavaFileManager>(jfm) {
+                @Override
+                public ClassLoader getClassLoader(JavaFileManager.Location location) {
+                    if (location == StandardLocation.CLASS_PATH) {
+                        return Depend.class.getClassLoader();
+                    }
+                    return super.getClassLoader(location);
+                }
+            };
+            ((JavacTask) systemCompiler.getTask(null, fm, null,
+                                                List.of("-proc:only", "-XDaccessInternalAPI=true"),
+                                                List.of("java.lang.Object"), null))
+                                       .analyze();
+        } catch (IOException ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    private com.sun.tools.javac.util.List<JCCompilationUnit> doFilteredParse(
+            JavaCompiler compiler, Iterable<JavaFileObject> fileObjects, Set<String> modified,
+            Path internalAPIDigestFile, AtomicBoolean noApiChange) {
+        Map<String, String> internalAPI = new LinkedHashMap<>();
+        if (Files.isReadable(internalAPIDigestFile)) {
+            try {
+                Files.readAllLines(internalAPIDigestFile, StandardCharsets.UTF_8)
+                     .forEach(line -> {
+                         String[] keyAndValue = line.split("=");
+                         internalAPI.put(keyAndValue[0], keyAndValue[1]);
+                     });
+            } catch (IOException ex) {
+                throw new IllegalStateException(ex);
+            }
+        }
+        Map<JavaFileObject, JCCompilationUnit> files2CUT = new IdentityHashMap<>();
+        boolean fullRecompile = modified.stream()
+                                        .anyMatch(f -> !StringUtils.toLowerCase(f).endsWith(".java"));
+        ListBuffer<JCCompilationUnit> result = new ListBuffer<>();
+        for (JavaFileObject jfo : fileObjects) {
+            if (modified.contains(jfo.getName())) {
+                JCCompilationUnit parsed = compiler.parse(jfo);
+                files2CUT.put(jfo, parsed);
+                String currentSignature = treeDigest(parsed);
+                if (!currentSignature.equals(internalAPI.get(jfo.getName()))) {
+                    fullRecompile |= true;
+                    internalAPI.put(jfo.getName(), currentSignature);
+                }
+                result.add(parsed);
+            }
+        }
+
+        if (fullRecompile) {
+            for (JavaFileObject jfo : fileObjects) {
+                if (!modified.contains(jfo.getName())) {
+                    JCCompilationUnit parsed = files2CUT.get(jfo);
+                    if (parsed == null) {
+                        parsed = compiler.parse(jfo);
+                        internalAPI.put(jfo.getName(), treeDigest(parsed));
+                    }
+                    result.add(parsed);
+                }
+            }
+            try (OutputStream out = Files.newOutputStream(internalAPIDigestFile)) {
+                String hashes = internalAPI.entrySet()
+                                           .stream()
+                                           .map(e -> e.getKey() + "=" + e.getValue())
+                                           .collect(Collectors.joining("\n"));
+                out.write(hashes.getBytes(StandardCharsets.UTF_8));
+            } catch (IOException ex) {
+                throw new IllegalStateException(ex);
+            }
+        } else {
+            noApiChange.set(true);
+        }
+        return result.toList();
     }
 
     private String treeDigest(JCCompilationUnit cu) {
@@ -812,5 +846,29 @@ public class Depend implements Plugin {
             return super.visitModifiers(node, p);
         }
 
+    }
+
+    private class FilteredInitialFileParser implements InvocationHandler {
+
+        private final JavaCompiler compiler;
+        private final Set<String> modified;
+        private final Path internalAPIDigestFile;
+        private final AtomicBoolean noApiChange;
+
+        public FilteredInitialFileParser(JavaCompiler compiler, Set<String> modified, Path internalAPIDigestFile, AtomicBoolean noApiChange) {
+            this.compiler = compiler;
+            this.modified = modified;
+            this.internalAPIDigestFile = internalAPIDigestFile;
+            this.noApiChange = noApiChange;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            return switch (method.getName()) {
+                case "parse" -> doFilteredParse(compiler, (Iterable<JavaFileObject>) args[0], modified, internalAPIDigestFile, noApiChange);
+                default -> throw new UnsupportedOperationException();
+            };
+        }
     }
 }
