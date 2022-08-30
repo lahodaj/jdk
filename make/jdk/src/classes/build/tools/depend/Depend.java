@@ -148,7 +148,7 @@ public class Depend implements Plugin {
                 throw new IllegalStateException("Expected modifiedInputs to be set using -XDmodifiedInputs=<list-of-files>");
             }
             Set<String> modified = new HashSet<>(Arrays.asList(modifiedInputs.split(" ")));
-            Path internalAPIDigestFile = Paths.get(args[1]);
+            Path internalAPIDigestFile = new File(args[1]).toPath();
             JavaCompiler compiler = JavaCompiler.instance(context);
             Class<?> initialFileParserIntf = Class.forName("com.sun.tools.javac.main.JavaCompiler$InitialFileParserIntf");
             Class<?> initialFileParser = Class.forName("com.sun.tools.javac.main.JavaCompiler$InitialFileParser");
@@ -855,7 +855,10 @@ public class Depend implements Plugin {
         private final Path internalAPIDigestFile;
         private final AtomicBoolean noApiChange;
 
-        public FilteredInitialFileParser(JavaCompiler compiler, Set<String> modified, Path internalAPIDigestFile, AtomicBoolean noApiChange) {
+        public FilteredInitialFileParser(JavaCompiler compiler,
+                                         Set<String> modified,
+                                         Path internalAPIDigestFile,
+                                         AtomicBoolean noApiChange) {
             this.compiler = compiler;
             this.modified = modified;
             this.internalAPIDigestFile = internalAPIDigestFile;
@@ -866,7 +869,11 @@ public class Depend implements Plugin {
         @SuppressWarnings("unchecked")
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
             return switch (method.getName()) {
-                case "parse" -> doFilteredParse(compiler, (Iterable<JavaFileObject>) args[0], modified, internalAPIDigestFile, noApiChange);
+                case "parse" -> doFilteredParse(compiler,
+                                                (Iterable<JavaFileObject>) args[0],
+                                                modified,
+                                                internalAPIDigestFile,
+                                                noApiChange);
                 default -> throw new UnsupportedOperationException();
             };
         }
