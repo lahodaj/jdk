@@ -405,10 +405,6 @@ define SetupJavaCompilationBody
 
     $1_API_TARGET := $$($1_BIN)$$($1_MODULE_SUBDIR)/_the.$1_pubapi
     $1_API_INTERNAL := $$($1_BIN)$$($1_MODULE_SUBDIR)/_the.$1_internalapi
-    $(ECHO) $1_COMPILE_TARGET
-    $(ECHO) $1_FILELIST
-    $(ECHO) $1_API_TARGET
-    $(ECHO) $1_API_INTERNAL
 
     # Put headers in a temp dir to filter out those that actually
     # changed before copying them to the real header dir.
@@ -453,6 +449,9 @@ define SetupJavaCompilationBody
     # list of files.
     $$($1_COMPILE_TARGET): $$($1_SRCS) $$($1_DEPENDS) \
         $$($1_VARDEPS_FILE) $$($1_EXTRA_DEPS) $$($1_JAVAC_SERVER_CONFIG)
+		$(ECHO) $$($1_API_TARGET)
+		$(ECHO) $$($1_API_INTERNAL)
+		$(ECHO) $$($1_BIN)
 		$$(call MakeDir, $$(@D))
 		$$(call LogWarn, Compiling up to $$(words $$($1_SRCS)) files for $1)
 		$$(eval $$(call ListPathsSafely, $1_SRCS, $$($1_FILELIST)))
