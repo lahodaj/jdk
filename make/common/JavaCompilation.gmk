@@ -405,6 +405,10 @@ define SetupJavaCompilationBody
 
     $1_API_TARGET := $$($1_BIN)$$($1_MODULE_SUBDIR)/_the.$1_pubapi
     $1_API_INTERNAL := $$($1_BIN)$$($1_MODULE_SUBDIR)/_the.$1_internalapi
+    $(ECHO) $1_COMPILE_TARGET
+    $(ECHO) $1_FILELIST
+    $(ECHO) $1_API_TARGET
+    $(ECHO) $1_API_INTERNAL
 
     # Put headers in a temp dir to filter out those that actually
     # changed before copying them to the real header dir.
