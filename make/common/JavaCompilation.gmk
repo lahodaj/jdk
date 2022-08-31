@@ -438,6 +438,7 @@ define SetupJavaCompilationBody
       $1_API_DIGEST_FLAGS := \
           -classpath $$(BUILDTOOLS_OUTPUTDIR)/depend \
           -Xplugin:"depend $$($1_API_TARGET) $$($1_API_INTERNAL)" \
+          "-XDinternalAPIPath="$$($1_API_INTERNAL)" \
           #
 
       $1_EXTRA_DEPS := $$(BUILDTOOLS_OUTPUTDIR)/depend/_the.COMPILE_DEPEND_batch
@@ -452,6 +453,7 @@ define SetupJavaCompilationBody
 		$(ECHO) $$($1_API_TARGET)
 		$(ECHO) $$($1_API_INTERNAL)
 		$(ECHO) $$($1_BIN)
+		$(ECHO) $$($1_API_DIGEST_FLAGS)
 		$$(call MakeDir, $$(@D))
 		$$(call LogWarn, Compiling up to $$(words $$($1_SRCS)) files for $1)
 		$$(eval $$(call ListPathsSafely, $1_SRCS, $$($1_FILELIST)))
