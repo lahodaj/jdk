@@ -404,6 +404,7 @@ define SetupJavaCompilationBody
     $1_FILELIST := $$($1_BIN)$$($1_MODULE_SUBDIR)/_the.$1_batch.filelist
 
     $1_API_TARGET := $$($1_BIN)$$($1_MODULE_SUBDIR)/_the.$1_pubapi
+    $1_API_INTERNAL := $$($1_BIN)$$($1_MODULE_SUBDIR)/_the.$1_internalapi
 
     # Put headers in a temp dir to filter out those that actually
     # changed before copying them to the real header dir.
@@ -434,7 +435,6 @@ define SetupJavaCompilationBody
         $$($1_BIN)$$($1_MODULE_SUBDIR)/_the.$1.vardeps)
 
     ifeq ($$($1_CREATE_API_DIGEST), true)
-      $1_API_INTERNAL := $$($1_BIN)$$($1_MODULE_SUBDIR)/_the.$1_internalapi
       $1_API_DIGEST_FLAGS := \
           -classpath $$(BUILDTOOLS_OUTPUTDIR)/depend \
           -Xplugin:"depend $$($1_API_TARGET) $$($1_API_INTERNAL)" \
