@@ -148,6 +148,9 @@ public class Depend implements Plugin {
                 throw new IllegalStateException("Expected modifiedInputs to be set using -XDmodifiedInputs=<list-of-files>");
             }
             Set<String> modified = new HashSet<>(Arrays.asList(modifiedInputs.split(" ")));
+            System.err.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+            System.err.println("args[0]: " + args[0]);
+            System.err.println("args[1]: " + args[1]);
             Path internalAPIDigestFile = new File(args[1]).toPath();
             JavaCompiler compiler = JavaCompiler.instance(context);
             Class<?> initialFileParserIntf = Class.forName("com.sun.tools.javac.main.JavaCompiler$InitialFileParserIntf");
@@ -164,7 +167,7 @@ public class Depend implements Plugin {
                                                                          noApiChange));
             context.<Object>put(key, initialParserInstance);
         } catch (Exception ex) {
-            ex.printStackTrace();
+            throw new IllegalStateException(ex);
         }
 
         jt.addTaskListener(new TaskListener() {
