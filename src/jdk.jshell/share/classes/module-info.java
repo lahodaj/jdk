@@ -88,4 +88,5 @@ module jdk.jshell {
         jdk.jshell.execution.JdiExecutionControlProvider,
         jdk.jshell.execution.LocalExecutionControlProvider,
         jdk.jshell.execution.FailOverExecutionControlProvider;
+    provides java.io.spi.ConsoleProvider with jdk.jshell.execution.impl.ConsoleProviderImpl;
 }

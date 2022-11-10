@@ -27,6 +27,7 @@ package jdk.internal.jshell.tool;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.Console;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -35,6 +36,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.StringReader;
 import java.lang.module.ModuleDescriptor;
@@ -117,6 +119,7 @@ import jdk.internal.jshell.tool.Selector.FormatUnresolved;
 import jdk.internal.jshell.tool.Selector.FormatWhen;
 import jdk.internal.editor.spi.BuildInEditorProvider;
 import jdk.internal.editor.external.ExternalEditor;
+import jdk.internal.org.jline.reader.UserInterruptException;
 import static java.util.Arrays.asList;
 import static java.util.Arrays.stream;
 import static java.util.Collections.singletonList;
@@ -1093,6 +1096,7 @@ public class JShellTool implements MessageHandler {
                 .in(userin)
                 .out(userout)
                 .err(usererr)
+                .console(new IOContextConsole())
                 .tempVariableNameGenerator(() -> "$" + currentNameSpace.tidNext())
                 .idGenerator((sn, i) -> (currentNameSpace == startNamespace || state.status(sn).isActive())
                         ? currentNameSpace.tid(sn)
@@ -4028,6 +4032,55 @@ public class JShellTool implements MessageHandler {
         public boolean matchesType() {
             return false;
         }
+    }
+
+    private final class IOContextConsole extends Console {
+
+        @Override
+        public PrintWriter writer() {
+            return new PrintWriter(input.userOutput());
+        }
+
+        @Override
+        public Reader reader() {
+            return new Reader() {
+                @Override
+                public int read(char[] cbuf, int off, int len) throws IOException {
+                    if (len == 0) return 0;
+                    try {
+                        cbuf[off] = input.readUserInputChar();
+                        return 1;
+                    } catch (UserInterruptException ex) {
+                        return -1;
+                    }
+                }
+
+                @Override
+                public void close() throws IOException {
+                }
+            };
+        }
+
+        @Override
+        public String readLine(String fmt, Object... args) {
+            try {
+                return input.readUserLine(fmt.formatted(args));
+            } catch (IOException ex) {
+                //XXX: error handling (should probably propagate the exception?)
+                return null; //XXX: null handling
+            }
+        }
+
+        @Override
+        public char[] readPassword(String fmt, Object... args) {
+            try {
+                return input.readPassword(fmt.formatted(args));
+            } catch (IOException ex) {
+                //XXX: error handling (should probably propagate the exception?)
+                return null; //XXX: null handling
+            }
+        }
+
     }
 }
 

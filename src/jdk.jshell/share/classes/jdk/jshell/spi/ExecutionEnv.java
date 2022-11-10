@@ -25,6 +25,7 @@
 
 package jdk.jshell.spi;
 
+import java.io.Console;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.util.List;
@@ -77,4 +78,11 @@ public interface ExecutionEnv {
      */
     void closeDown();
 
+    /**
+     * console.
+     * @return returns console
+     */
+    default Console console() {
+        return null;
+    }
 }
