@@ -45,8 +45,9 @@ public class ConsoleProviderImpl extends ConsoleProvider {
 
     private static InputStream remoteOutput;
     private static OutputStream remoteInput;
+
     @Override
-    public Console console() {
+    public Console console(boolean isTTY) {
         if (remoteOutput != null && remoteInput != null) {
             return new RemoteConsole(remoteOutput, remoteInput);
         }
