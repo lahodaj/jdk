@@ -63,7 +63,6 @@ public class ConsoleProviderImpl extends ConsoleProvider {
     }
 
     private static void sendChars(OutputStream remoteInput, char[] data, int off, int len) throws IOException {
-        if (len == 0) return ;
         sendInt(remoteInput, len);
         for (int i = 0; i < len; i++) {
             char c = data[off + i];
@@ -151,7 +150,6 @@ public class ConsoleProviderImpl extends ConsoleProvider {
             return new Reader() {
                 @Override
                 public int read(char[] cbuf, int off, int len) throws IOException {
-                    if (len == 0) return 0;
                     remoteInput.write(Task.READ_CHARS.ordinal());
                     return readChars(cbuf, off, len);
                 }
