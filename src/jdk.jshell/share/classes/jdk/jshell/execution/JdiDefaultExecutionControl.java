@@ -48,6 +48,9 @@ import com.sun.jdi.StackFrame;
 import com.sun.jdi.ThreadReference;
 import com.sun.jdi.VMDisconnectedException;
 import com.sun.jdi.VirtualMachine;
+import java.io.Console;
+import jdk.jshell.JShellConsole;
+import jdk.jshell.execution.impl.ConsoleProviderImpl.ConsoleOutputStream;
 import jdk.jshell.spi.ExecutionControl;
 import jdk.jshell.spi.ExecutionEnv;
 import static jdk.jshell.execution.Util.remoteInputOutput;
@@ -121,6 +124,12 @@ public class JdiDefaultExecutionControl extends JdiExecutionControl {
             outputs.put("err", env.userErr());
             Map<String, InputStream> input = new HashMap<>();
             input.put("in", env.userIn());
+            JShellConsole console = env.console();
+            if (console != null) {
+                ConsoleOutputStream consoleOutput = new ConsoleOutputStream(console);
+                outputs.put("consoleInput", consoleOutput);
+                input.put("consoleOutput", consoleOutput.sinkInput);
+            }
             return remoteInputOutput(socket.getInputStream(), out, outputs, input,
                     (objIn, objOut) -> new JdiDefaultExecutionControl(env,
                                         objOut, objIn, vm, process, remoteAgent, deathListeners));

@@ -24,6 +24,7 @@
  */
 package jdk.jshell.execution;
 
+import jdk.jshell.execution.impl.ConsoleProviderImpl;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
@@ -58,6 +59,7 @@ public class RemoteExecutionControl extends DirectExecutionControl implements Ex
      * @throws Exception any unexpected exception
      */
     public static void main(String[] args) throws Exception {
+        System.setProperty("jdk.console.usejline", "false");
         String loopBack = null;
         Socket socket = new Socket(loopBack, Integer.parseInt(args[0]));
         InputStream inStream = socket.getInputStream();
@@ -65,8 +67,10 @@ public class RemoteExecutionControl extends DirectExecutionControl implements Ex
         Map<String, Consumer<OutputStream>> outputs = new HashMap<>();
         outputs.put("out", st -> System.setOut(new PrintStream(st, true, System.out.charset())));
         outputs.put("err", st -> System.setErr(new PrintStream(st, true, System.err.charset())));
+        outputs.put("consoleInput", st -> ConsoleProviderImpl.setRemoteInput(st));
         Map<String, Consumer<InputStream>> input = new HashMap<>();
         input.put("in", System::setIn);
+        input.put("consoleOutput", in -> ConsoleProviderImpl.setRemoteOutput(in));
         forwardExecutionControlAndIO(new RemoteExecutionControl(), inStream, outStream, outputs, input);
     }
 

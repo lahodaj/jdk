@@ -92,6 +92,7 @@ public class JShell implements AutoCloseable {
     final InputStream in;
     final PrintStream out;
     final PrintStream err;
+    final JShellConsole console;
     final Supplier<String> tempVariableNameGenerator;
     final BiFunction<Snippet, Integer, String> idGenerator;
     final List<String> extraRemoteVMOptions;
@@ -116,6 +117,7 @@ public class JShell implements AutoCloseable {
         this.in = b.in;
         this.out = b.out;
         this.err = b.err;
+        this.console = b.console;
         this.tempVariableNameGenerator = b.tempVariableNameGenerator;
         this.idGenerator = b.idGenerator;
         this.extraRemoteVMOptions = b.extraRemoteVMOptions;
@@ -170,6 +172,7 @@ public class JShell implements AutoCloseable {
         InputStream in = new ByteArrayInputStream(new byte[0]);
         PrintStream out = System.out;
         PrintStream err = System.err;
+        JShellConsole console = null;
         Supplier<String> tempVariableNameGenerator = null;
         BiFunction<Snippet, Integer, String> idGenerator = null;
         List<String> extraRemoteVMOptions = new ArrayList<>();
@@ -235,6 +238,17 @@ public class JShell implements AutoCloseable {
          */
         public Builder err(PrintStream err) {
             this.err = err;
+            return this;
+        }
+
+        /**
+         * console.
+         * @param err console
+         * @return the {@code Builder} instance (for use in chained
+         * initialization)
+         */
+        public Builder console(JShellConsole console) {
+            this.console = console;
             return this;
         }
 
@@ -793,6 +807,11 @@ public class JShell implements AutoCloseable {
         @Override
         public void closeDown() {
             JShell.this.closeDown();
+        }
+
+        @Override
+        public JShellConsole console() {
+            return console;
         }
 
     }
