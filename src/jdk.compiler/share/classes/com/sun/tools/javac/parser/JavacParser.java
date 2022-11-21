@@ -3033,8 +3033,10 @@ public class JavacParser implements Parser {
                     break;
                 case LBRACKET:
                     if (peekToken(lookahead, RBRACKET)) {
-                        return ForInitResult.LocalVarDecl;
+                        return inSelectionAndParenthesis ? ForInitResult.RecordPattern
+                                                         : ForInitResult.LocalVarDecl;
                     }
+                    return ForInitResult.LocalVarDecl;
                 case LT:
                     depth++; break;
                 case GTGTGT:
