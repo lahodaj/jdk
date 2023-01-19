@@ -3608,6 +3608,31 @@ public class Check {
         }
     }
 
+    void checkUpcomingChanges(DiagnosticPosition pos, Symbol s) {
+        if (s.upcomingChanges != null) {
+            UpcomingChanges changes = s.upcomingChanges;
+            List<JCDiagnostic> changeDiags = List.nil();
+            if (changes.removedVersion() > source.sourceVersion()) {
+                Source source = Source.lookup("" + changes.removedVersion());
+
+                changeDiags = changeDiags.prepend(diags.fragment(Fragments.RemovedSince(source)));
+            }
+            if (changes.deprecatedForRemovalVersion()> source.sourceVersion()) {
+                Source source = Source.lookup("" + changes.deprecatedForRemovalVersion());
+
+                changeDiags = changeDiags.prepend(diags.fragment(Fragments.DeprecatedForRemovalSince(source)));
+            }
+            if (changes.deprecatedVersion()> source.sourceVersion()) {
+                Source source = Source.lookup("" + changes.deprecatedVersion());
+
+                changeDiags = changeDiags.prepend(diags.fragment(Fragments.DeprecatedSince(source)));
+            }
+            if (changeDiags.nonEmpty()) {
+                log.warning(pos, Warnings.UpcomingChanges(s, changeDiags));
+            }
+        }
+    }
+
     void checkSunAPI(final DiagnosticPosition pos, final Symbol s) {
         if ((s.flags() & PROPRIETARY) != 0) {
             deferredLintHandler.report(() -> {

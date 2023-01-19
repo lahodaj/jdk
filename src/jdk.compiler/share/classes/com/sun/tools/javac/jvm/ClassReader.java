@@ -1443,6 +1443,28 @@ public class ClassReader {
                         }
                     }
                 }
+            } else if (proxy.type.tsym.flatName() == syms.upcomingChangesType.tsym.flatName()) {
+                int deprecatedSince = -1;
+                int deprecatedForRemovalSince = -1;
+                int removedSince = -1;
+                for (Pair<Name, Attribute> v : proxy.values) {
+                    if (v.fst == names.fromString("firstDeprecated") && v.snd instanceof Attribute.Constant constant) {
+                        if (constant.type == syms.intType) {
+                            deprecatedSince = (Integer) constant.value;
+                        }
+                    }
+                    if (v.fst == names.fromString("firstDeprecatedForRemoval") && v.snd instanceof Attribute.Constant constant) {
+                        if (constant.type == syms.intType) {
+                            deprecatedForRemovalSince = (Integer) constant.value;
+                        }
+                    }
+                    if (v.fst == names.fromString("firstRemoved") && v.snd instanceof Attribute.Constant constant) {
+                        if (constant.type == syms.intType) {
+                            removedSince = (Integer) constant.value;
+                        }
+                    }
+                }
+                sym.upcomingChanges = new UpcomingChanges(deprecatedSince, deprecatedForRemovalSince, removedSince);
             } else if (proxy.type.tsym.flatName() == syms.previewFeatureInternalType.tsym.flatName()) {
                 sym.flags_field |= PREVIEW_API;
                 setFlagIfAttributeTrue(proxy, sym, names.reflective, PREVIEW_REFLECTIVE);

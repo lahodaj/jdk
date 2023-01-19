@@ -209,6 +209,7 @@ public class Symtab {
     public final Type inheritedType;
     public final Type profileType;
     public final Type proprietaryType;
+    public final Type upcomingChangesType;
     public final Type systemType;
     public final Type autoCloseableType;
     public final Type trustMeType;
@@ -628,8 +629,26 @@ public class Symtab {
         // Enter a synthetic class that is used to provide profile info for
         // classes in ct.sym.  This class does not have a class file.
         profileType = enterSyntheticAnnotation("jdk.Profile+Annotation");
-        MethodSymbol m = new MethodSymbol(PUBLIC | ABSTRACT, names.value, intType, profileType.tsym);
-        profileType.tsym.members().enter(m);
+        {
+            MethodSymbol m = new MethodSymbol(PUBLIC | ABSTRACT, names.value, intType, profileType.tsym);
+            profileType.tsym.members().enter(m);
+        }
+
+        // TODO: Enter a synthetic class that is used to provide profile info for
+        // classes in ct.sym.  This class does not have a class file.
+        upcomingChangesType = enterSyntheticAnnotation("jdk.Upcoming+Changes");
+        {
+            MethodSymbol m = new MethodSymbol(PUBLIC | ABSTRACT, names.fromString("firstDeprecated"), intType, upcomingChangesType.tsym);
+            upcomingChangesType.tsym.members().enter(m);
+        }
+        {
+            MethodSymbol m = new MethodSymbol(PUBLIC | ABSTRACT, names.fromString("firstDeprecatedForRemoval"), intType, upcomingChangesType.tsym);
+            upcomingChangesType.tsym.members().enter(m);
+        }
+        {
+            MethodSymbol m = new MethodSymbol(PUBLIC | ABSTRACT, names.fromString("firstRemoved"), intType, upcomingChangesType.tsym);
+            upcomingChangesType.tsym.members().enter(m);
+        }
 
         // Enter a class for arrays.
         // The class implements java.lang.Cloneable and java.io.Serializable.

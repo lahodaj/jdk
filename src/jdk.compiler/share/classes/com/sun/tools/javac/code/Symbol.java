@@ -2621,4 +2621,7 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
         R visitTypeSymbol(TypeSymbol s, P arg);
         R visitSymbol(Symbol s, P arg);
     }
+
+    public UpcomingChanges upcomingChanges;
+    public record UpcomingChanges(int deprecatedVersion, int deprecatedForRemovalVersion, int removedVersion) {}
 }

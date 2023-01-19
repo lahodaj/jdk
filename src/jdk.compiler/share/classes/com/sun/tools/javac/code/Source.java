@@ -322,4 +322,8 @@ public enum Source {
         default     -> null;
         };
     }
+
+    public int sourceVersion() {
+        return ordinal() + 1;
+    }
 }

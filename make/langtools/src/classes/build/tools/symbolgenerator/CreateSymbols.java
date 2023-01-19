@@ -235,6 +235,7 @@ public class CreateSymbols {
 
         stripNonExistentAnnotations(data);
         splitHeaders(data.classes);
+        injectUpcomingChange(data.classes);
 
         Map<String, Map<Character, String>> package2Version2Module = new HashMap<>();
         Map<String, Set<FileData>> directory2FileData = new TreeMap<>();
@@ -728,6 +729,81 @@ public class CreateSymbols {
         }
     }
 
+    /**XXX
+     */
+    static void injectUpcomingChange(ClassList classes) {
+        record NameAndDescriptor(String name, String descriptor) {}
+        char newestVersion = (char) classes.classes.stream().flatMap(cd -> cd.header.stream()).flatMapToInt(header -> header.versions.chars()).max().getAsInt();
+        for (ClassDescription cd : classes) {
+//            injectUpcomingChange(cd.name, cd.header, newestVersion);
+            Map<NameAndDescriptor, List<MethodDescription>> methods = new HashMap<>();
+            for (MethodDescription md : cd.methods) {
+                methods.computeIfAbsent(new NameAndDescriptor(md.name, md.descriptor), x -> new ArrayList<>()).add(md);
+            }
+            for (List<MethodDescription> val : methods.values()) {
+                injectUpcomingChange(cd.name + "." + val.get(0).name, val, newestVersion);
+            }
+        }
+    }
+
+    static void injectUpcomingChange(String name, Iterable<? extends FeatureDescription> descriptions, Character newestVersion) {
+        Character firstDeprecated = null;
+        Character firstDeprecatedForRemoval = null;
+        Character latestVersionSeen = null;
+        for (FeatureDescription description : descriptions) {
+            for (char c : description.versions.toCharArray()) {
+                if (description.deprecated) {
+                    if (firstDeprecated == null || c < firstDeprecated) {
+                        firstDeprecated = c;
+                    }
+                    if (description.runtimeAnnotations != null) {
+                        boolean forRemoval =
+                                description.runtimeAnnotations
+                                      .stream()
+                                      .filter(ad -> ad.annotationType.equals("Ljava/lang/Deprecated;"))
+                                      .anyMatch(ad -> Boolean.TRUE.equals(ad.values.get("forRemoval")));
+                        if (forRemoval && (firstDeprecatedForRemoval == null || c < firstDeprecatedForRemoval)) {
+                            firstDeprecatedForRemoval = c;
+                        }
+                    }
+                }
+                if (latestVersionSeen == null || c > latestVersionSeen) {
+                    latestVersionSeen = c;
+                }
+            }
+        }
+        Character firstRemoved = latestVersionSeen < newestVersion ? (char) (latestVersionSeen + 1) : null;
+        for (FeatureDescription description : descriptions) {
+            Character min = description.versions.charAt(0);
+            for (char c : description.versions.toCharArray()) {
+                if (c < min) min = c;
+            }
+            if ((firstDeprecated != null && min < firstDeprecated) ||
+                (firstDeprecatedForRemoval != null && min < firstDeprecatedForRemoval) ||
+                (firstRemoved != null && min < firstRemoved)) {
+                if (description.classAnnotations == null) {
+                    description.classAnnotations = new ArrayList<>();
+                }
+                Map<String, Object> attributes = new HashMap<>();
+                if (firstDeprecated != null) {
+                    attributes.put("firstDeprecated", char2Version(firstDeprecated));
+                }
+                if (firstDeprecatedForRemoval != null) {
+                    attributes.put("firstDeprecatedForRemoval", char2Version(firstDeprecatedForRemoval));
+                }
+                if (firstRemoved != null) {
+                    attributes.put("firstRemoved", char2Version(firstRemoved));
+                }
+                System.err.println("adding upcoming changes: " + name + ", firstDeprecated=" + firstDeprecated + ", firstDeprecatedForRemoval=" + firstDeprecatedForRemoval + ", firstRemoved=" + firstRemoved);
+                description.classAnnotations.add(new AnnotationDescription("Ljdk/Upcoming+Changes;", attributes));
+            }
+        }
+    }
+
+    static int char2Version(char c) {
+        return c <= '9' ? c - '9'
+                        : 10 + (c - 'A');
+    }
     void limitJointVersion(Set<String> jointVersions, List<? extends FeatureDescription> features) {
         for (FeatureDescription feature : features) {
             limitJointVersion(jointVersions, feature.versions);
