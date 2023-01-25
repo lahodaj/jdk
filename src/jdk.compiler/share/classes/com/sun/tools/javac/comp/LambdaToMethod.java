@@ -1174,6 +1174,13 @@ public class LambdaToMethod extends TreeTranslator {
                     make.at(kInfo.clazz);
                     addDeserializationCase(refSym, tree.type, samSym,
                             tree, staticArgs, indyType);
+                    if (context instanceof LambdaTranslationContext lambdaContext &&
+                        lambdaContext.methodReference != null) {
+                        MethodSymbol originalRefSym =
+                                (MethodSymbol) lambdaContext.methodReference.sym;
+                        addDeserializationCase(originalRefSym.asHandle(), tree.type, samSym,
+                                tree, staticArgs, indyType);
+                    }
                 } finally {
                     make.at(prevPos);
                 }
@@ -1406,13 +1413,14 @@ public class LambdaToMethod extends TreeTranslator {
             analyzeLambda(tree, "lambda.stat");
         }
 
-        private void analyzeLambda(JCLambda tree, JCExpression methodReferenceReceiver) {
+        private void analyzeLambda(JCLambda tree, JCExpression methodReferenceReceiver, JCMemberReference methodReference) {
             // Translation of the receiver expression must occur first
             JCExpression rcvr = translate(methodReferenceReceiver);
             LambdaTranslationContext context = analyzeLambda(tree, "mref.stat.1");
             if (rcvr != null) {
                 context.methodReferenceReceiver = rcvr;
             }
+            context.methodReference = methodReference;
         }
 
         private LambdaTranslationContext analyzeLambda(JCLambda tree, String statKey) {
@@ -1536,7 +1544,7 @@ public class LambdaToMethod extends TreeTranslator {
             if (rcontext.needsConversionToLambda()) {
                  // Convert to a lambda, and process as such
                 MemberReferenceToLambda conv = new MemberReferenceToLambda(tree, rcontext, owner());
-                analyzeLambda(conv.lambda(), conv.getReceiverExpression());
+                analyzeLambda(conv.lambda(), conv.getReceiverExpression(), tree);
             } else {
                 super.visitReference(tree);
                 if (dumpLambdaToMethodStats) {
@@ -1924,6 +1932,13 @@ public class LambdaToMethod extends TreeTranslator {
              * variable.
              */
             JCExpression methodReferenceReceiver;
+
+            /**
+             * For method references converted to lambdas. Contains
+             * the original metod references. Used to generate an alternate
+             * deserialization case.
+             */
+            JCMemberReference methodReference;
 
             LambdaTranslationContext(JCLambda tree) {
                 super(tree);
@@ -2341,7 +2356,8 @@ public class LambdaToMethod extends TreeTranslator {
                         !receiverAccessible() ||
                         (tree.getMode() == ReferenceMode.NEW &&
                           tree.kind != ReferenceKind.ARRAY_CTOR &&
-                          (tree.sym.owner.isDirectlyOrIndirectlyLocal() || tree.sym.owner.isInner()));
+                          (tree.sym.owner.isDirectlyOrIndirectlyLocal() || tree.sym.owner.isInner())) ||
+                        isSerializable();
             }
 
             Type generatedRefSig() {
