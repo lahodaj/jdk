@@ -299,7 +299,7 @@ public class Exhaustiveness extends TestRunner {
                        };
                    }
                }
-               """);
+               """);//TODO: this test passes because 'S' is unconditional, does not quite check exhaustiveness....
     }
 
     @Test

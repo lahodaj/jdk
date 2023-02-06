@@ -61,6 +61,7 @@ import com.sun.tools.javac.code.Types.UniqueType;
 import com.sun.tools.javac.resources.CompilerProperties.Fragments;
 import static com.sun.tools.javac.tree.JCTree.Tag.*;
 import com.sun.tools.javac.util.JCDiagnostic.Fragment;
+import java.util.AbstractMap.SimpleEntry;
 
 /** This pass implements dataflow analysis for Java programs though
  *  different AST visitor steps. Liveness analysis (see AliveAnalyzer) checks that
@@ -689,8 +690,15 @@ public class Flow {
             tree.isExhaustive = tree.hasUnconditionalPattern ||
                                 TreeInfo.isErrorEnumSwitch(tree.selector, tree.cases);
             if (exhaustiveSwitch) {
-                Set<Symbol> coveredSymbols = coveredSymbolsForCases(tree.pos(), tree.cases);
-                tree.isExhaustive |= isExhaustive(tree.selector.pos(), tree.selector.type, coveredSymbols);
+                List<RecordVariantNode> nodes = clearedSelectorTypes(tree.selector.type).map(cs -> new RecordVariantNode(0, List.of(cs)));
+                for (JCCase c : tree.cases) {
+                    for (JCCaseLabel l : c.labels) {
+                        if (l instanceof JCPatternCaseLabel p && TreeInfo.unguardedCaseLabel(p)) {
+                            nodes.forEach(n -> n.handle(p.pat));
+                        }
+                    }
+                }
+                tree.isExhaustive |= nodes.stream().anyMatch(n -> n.covered());
                 if (!tree.isExhaustive) {
                     log.error(tree, Errors.NotExhaustiveStatement);
                 }
@@ -724,10 +732,17 @@ public class Flow {
                     }
                 }
             }
-            Set<Symbol> coveredSymbols = coveredSymbolsForCases(tree.pos(), tree.cases);
+            List<RecordVariantNode> nodes = clearedSelectorTypes(tree.selector.type).map(cs -> new RecordVariantNode(0, List.of(cs)));
+            for (JCCase c : tree.cases) {
+                for (JCCaseLabel l : c.labels) {
+                    if (l instanceof JCPatternCaseLabel p && TreeInfo.unguardedCaseLabel(p)) {
+                        nodes.forEach(n -> n.handle(p.pat));
+                    }
+                }
+            }
             tree.isExhaustive = tree.hasUnconditionalPattern ||
                                 TreeInfo.isErrorEnumSwitch(tree.selector, tree.cases) ||
-                                isExhaustive(tree.selector.pos(), tree.selector.type, coveredSymbols);
+                                nodes.stream().anyMatch(n -> n.covered());
             if (!tree.isExhaustive) {
                 log.error(tree, Errors.NotExhaustive);
             }
@@ -735,209 +750,131 @@ public class Flow {
             alive = alive.or(resolveYields(tree, prevPendingExits));
         }
 
-        private Set<Symbol> coveredSymbolsForCases(DiagnosticPosition pos,
-                                                   List<JCCase> cases) {
-            HashSet<JCTree> labelValues = cases.stream()
-                                               .flatMap(c -> c.labels.stream())
-                                               .filter(TreeInfo::unguardedCaseLabel)
-                                               .filter(l -> !l.hasTag(DEFAULTCASELABEL))
-                                               .map(l -> l.hasTag(CONSTANTCASELABEL) ? ((JCConstantCaseLabel) l).expr
-                                                                                     : ((JCPatternCaseLabel) l).pat)
-                                               .collect(Collectors.toCollection(HashSet::new));
-            return coveredSymbols(pos, labelValues);
-        }
-
-        private Set<Symbol> coveredSymbols(DiagnosticPosition pos,
-                                           Iterable<? extends JCTree> labels) {
-            Set<Symbol> coveredSymbols = new HashSet<>();
-            Map<UniqueType, List<JCRecordPattern>> deconstructionPatternsByType = new HashMap<>();
-
-            for (JCTree labelValue : labels) {
-                switch (labelValue.getTag()) {
-                    case BINDINGPATTERN -> {
-                        Type primaryPatternType = TreeInfo.primaryPatternType((JCPattern) labelValue);
-                        if (!primaryPatternType.hasTag(NONE)) {
-                            coveredSymbols.add(primaryPatternType.tsym);
-                        }
-                    }
-                    case RECORDPATTERN -> {
-                        JCRecordPattern dpat = (JCRecordPattern) labelValue;
-                        UniqueType type = new UniqueType(dpat.type, types);
-                        List<JCRecordPattern> augmentedPatterns =
-                                deconstructionPatternsByType.getOrDefault(type, List.nil())
-                                                                 .prepend(dpat);
-
-                        deconstructionPatternsByType.put(type, augmentedPatterns);
-                    }
-
-                    default -> {
-                        Assert.check(labelValue instanceof JCExpression, labelValue.getTag().name());
-                        JCExpression expr = (JCExpression) labelValue;
-                        if (expr.hasTag(IDENT) && ((JCIdent) expr).sym.isEnum())
-                            coveredSymbols.add(((JCIdent) expr).sym);
-                    }
-                }
-            }
-            for (Entry<UniqueType, List<JCRecordPattern>> e : deconstructionPatternsByType.entrySet()) {
-                if (e.getValue().stream().anyMatch(r -> r.nested.size() != r.record.getRecordComponents().size())) {
-                    coveredSymbols.add(syms.errSymbol);
-                } else if (coversDeconstructionFromComponent(pos, e.getKey().type, e.getValue(), 0)) {
-                    coveredSymbols.add(e.getKey().type.tsym);
-                }
-            }
-            return coveredSymbols;
-        }
-
-        private boolean coversDeconstructionFromComponent(DiagnosticPosition pos,
-                                                          Type recordType,
-                                                          List<JCRecordPattern> deconstructionPatterns,
-                                                          int component) {
-            //Given a set of record patterns for the same record, and a starting component,
-            //this method checks, whether the nested patterns for the components are exhaustive,
-            //i.e. represent all possible combinations.
-            //This is done by categorizing the patterns based on the type covered by the given
-            //starting component.
-            //For each such category, it is then checked if the nested patterns starting at the next
-            //component are exhaustive, by recursivelly invoking this method. If these nested patterns
-            //are exhaustive, the given covered type is accepted.
-            //All such covered types are then checked whether they cover the declared type of
-            //the starting component's declaration. If yes, the given set of patterns starting at
-            //the given component cover the given record exhaustivelly, and true is returned.
-            List<? extends RecordComponent> components =
-                    deconstructionPatterns.head.record.getRecordComponents();
-
-            if (components.size() == component) {
-                //no components remain to be checked:
-                return true;
-            }
-
-            //for the first tested component, gather symbols covered by the nested patterns:
-            Type instantiatedComponentType = types.memberType(recordType, components.get(component));
-            List<JCPattern> nestedComponentPatterns = deconstructionPatterns.map(d -> d.nested.get(component));
-            Set<Symbol> coveredSymbolsForComponent = coveredSymbols(pos,
-                                                                    nestedComponentPatterns);
-
-            //for each of the symbols covered by the starting component, find all deconstruction patterns
-            //that have the given type, or its supertype, as a type of the starting nested pattern:
-            Map<Symbol, List<JCRecordPattern>> coveredSymbol2Patterns = new HashMap<>();
-
-            for (JCRecordPattern deconstructionPattern : deconstructionPatterns) {
-                JCPattern nestedPattern = deconstructionPattern.nested.get(component);
-                Symbol componentPatternType;
-                switch (nestedPattern.getTag()) {
-                    case BINDINGPATTERN -> {
-                        Type primaryPatternType =
-                                TreeInfo.primaryPatternType(nestedPattern);
-                        componentPatternType = primaryPatternType.tsym;
-                    }
-                    case RECORDPATTERN -> {
-                        componentPatternType = ((JCRecordPattern) nestedPattern).record;
-                    }
-                    default -> {
-                        throw Assert.error("Unexpected tree kind: " + nestedPattern.getTag());
-                    }
-                }
-                for (Symbol currentType : coveredSymbolsForComponent) {
-                    if (types.isSubtype(types.erasure(currentType.type),
-                                        types.erasure(componentPatternType.type))) {
-                        coveredSymbol2Patterns.put(currentType,
-                                                   coveredSymbol2Patterns.getOrDefault(currentType,
-                                                                                       List.nil())
-                                              .prepend(deconstructionPattern));
-                    }
-                }
-            }
-
-            //Check the components following the starting component, for each of the covered symbol,
-            //if they are exhaustive. If yes, the given covered symbol should be part of the following
-            //exhaustiveness check:
-            Set<Symbol> covered = new HashSet<>();
-
-            for (Entry<Symbol, List<JCRecordPattern>> e : coveredSymbol2Patterns.entrySet()) {
-                if (coversDeconstructionFromComponent(pos, recordType, e.getValue(), component + 1)) {
-                    covered.add(e.getKey());
-                }
-            }
-
-            //verify whether the filtered symbols cover the given record's declared type:
-            return isExhaustive(pos, instantiatedComponentType, covered);
-        }
-
-        private void transitiveCovers(DiagnosticPosition pos, Type seltype, Set<Symbol> covered) {
-            List<Symbol> todo = List.from(covered);
-            while (todo.nonEmpty()) {
-                Symbol sym = todo.head;
-                todo = todo.tail;
-                switch (sym.kind) {
-                    case VAR -> {
-                        Iterable<Symbol> constants = sym.owner
-                                                        .members()
-                                                        .getSymbols(s -> s.isEnum() &&
-                                                                         s.kind == VAR);
-                        boolean hasAll = StreamSupport.stream(constants.spliterator(), false)
-                                                      .allMatch(covered::contains);
-
-                        if (hasAll && covered.add(sym.owner)) {
-                            todo = todo.prepend(sym.owner);
-                        }
-                    }
-
-                    case TYP -> {
-                        for (Type sup : types.directSupertypes(sym.type)) {
-                            if (sup.tsym.kind == TYP) {
-                                if (isTransitivelyCovered(pos, seltype, sup.tsym, covered) &&
-                                    covered.add(sup.tsym)) {
-                                    todo = todo.prepend(sup.tsym);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        private boolean isTransitivelyCovered(DiagnosticPosition pos, Type seltype,
-                                              Symbol sealed, Set<Symbol> covered) {
-            try {
-                if (covered.stream().anyMatch(c -> sealed.isSubClass(c, types)))
-                    return true;
-                if (sealed.kind == TYP && sealed.isAbstract() && sealed.isSealed()) {
-                    return ((ClassSymbol) sealed).permitted
-                                                 .stream()
-                                                 .filter(s -> {
-                                                     return types.isCastable(seltype, s.type/*, types.noWarnings*/);
-                                                 })
-                                                 .allMatch(s -> isTransitivelyCovered(pos, seltype, s, covered));
-                }
-                return false;
-            } catch (CompletionFailure cf) {
-                chk.completionError(pos, cf);
-                return true;
-            }
-        }
-
-        private boolean isExhaustive(DiagnosticPosition pos, Type seltype, Set<Symbol> covered) {
-            transitiveCovers(pos, seltype, covered);
+        private List<ClassSymbol> clearedSelectorTypes(Type seltype) {
             return switch (seltype.getTag()) {
                 case CLASS -> {
                     if (seltype.isCompound()) {
                         if (seltype.isIntersection()) {
                             yield ((Type.IntersectionClassType) seltype).getComponents()
                                                                         .stream()
-                                                                        .anyMatch(t -> isExhaustive(pos, t, covered));
+                                                                        .flatMap(t -> clearedSelectorTypes(t).stream())
+                                                                        .collect(List.collector());
                         }
-                        yield false;
+                        yield List.nil();
                     }
-                    yield covered.stream()
-                                 .filter(coveredSym -> coveredSym.kind == TYP)
-                                 .anyMatch(coveredSym -> types.isSubtype(types.erasure(seltype),
-                                                                         types.erasure(coveredSym.type)));
+                    yield List.of((ClassSymbol) seltype.tsym);
                 }
-                case TYPEVAR -> isExhaustive(pos, ((TypeVar) seltype).getUpperBound(), covered);
+                case TYPEVAR -> clearedSelectorTypes(((TypeVar) seltype).getUpperBound());
                 default -> {
-                    yield covered.contains(types.erasure(seltype).tsym);
+                    yield List.of((ClassSymbol) types.erasure(seltype).tsym);
                 }
             };
+        }
+
+        class RecordVariantNode {
+            private final int componentNumber;
+            private final List<ClassSymbol> components;
+            private Map<ClassSymbol, LinkedNodes> thisComponent2LinkedNodes;
+
+            public RecordVariantNode(int componentNumber, List<ClassSymbol> components) {
+                this.componentNumber = componentNumber;
+                this.components = components;
+                thisComponent2LinkedNodes = new HashMap<>();
+                thisComponent2LinkedNodes.put(components.get(componentNumber), new LinkedNodes(false, null, componentNumber + 1 < components.size() ? new RecordVariantNode(componentNumber + 1, components) : null));
+            }
+
+            public RecordVariantNode(int componentNumber, List<ClassSymbol> components, Map<ClassSymbol, LinkedNodes> thisComponent2LinkedNodes) {
+                this.componentNumber = componentNumber;
+                this.components = components;
+                this.thisComponent2LinkedNodes = thisComponent2LinkedNodes;
+            }
+
+            public void handle(JCPattern pattern) {
+                Entry<ClassSymbol, LinkedNodes> found = find(pattern);
+                if (found == null) return ;
+
+                if (pattern instanceof JCBindingPattern) {
+                    found.setValue(new LinkedNodes(true, null, found.getValue().followingComponents));
+                } else if (pattern instanceof JCRecordPattern recordPattern) {
+                    if (found.getValue().nestedComponents() == null) {
+                        List<Type> fullComponentTypes = recordPattern.record.getRecordComponents()
+                                .map(rc -> types.memberType(recordPattern.type, rc));
+
+                        List<ClassSymbol> nestedComponents = fullComponentTypes.map(t -> (ClassSymbol) types.erasure(t).tsym);
+                        found.setValue(new LinkedNodes(false, new RecordVariantNode(0, nestedComponents), found.getValue().followingComponents()));
+                    }
+                    found.getValue().nestedComponents().handleNestedRecordPattern(recordPattern.nested);
+                } else {
+                    Assert.error();
+                }
+            }
+
+            private Entry<ClassSymbol, LinkedNodes> find(JCPattern pattern) {
+//                Symbol primaryType = types.skipTypeVars(TreeInfo.primaryPatternType(pattern), false).tsym;
+                Symbol primaryType = TreeInfo.primaryPatternType(pattern).tsym;
+
+                OUTER: while (true) {
+                    for (var e : thisComponent2LinkedNodes.entrySet()) {
+                        ClassSymbol current = e.getKey();
+                        if (current.isSubClass(primaryType, types)) {
+                            return e;
+                        } else if (primaryType.isSubClass(current, types) && current.isAbstract() && current.isSealed() && !e.getValue().currentComponentExhaustive()) {
+                            thisComponent2LinkedNodes.remove(current);
+                            for (Symbol s : current.permitted) {
+                                thisComponent2LinkedNodes.put((ClassSymbol) s, e.getValue().copy());
+                            }
+                            continue OUTER;
+                        }
+                    }
+                    return null; //???
+                }
+            }
+
+            private void handleNestedRecordPattern(List<JCPattern> nested) {
+                if (nested.isEmpty()) return ;
+                handle(nested.head);
+                Entry<ClassSymbol, LinkedNodes> found = find(nested.head);
+                if (found == null) return ;
+                if (found.getValue().followingComponents() != null) {
+                    found.getValue().followingComponents().handleNestedRecordPattern(nested.tail);
+                }
+            }
+
+            public boolean covered() {
+//                return thisComponent2LinkedNodes.values().stream().allMatch(l -> (l.currentComponentExhaustive() && (l.followingComponents() == null || l.followingComponents().covered())) || (l.nestedComponents() == null || l.nestedComponents().covered()));
+                for (var l : thisComponent2LinkedNodes.values()) {
+                    if (l.currentComponentExhaustive()) {
+                        if ((l.followingComponents() == null || l.followingComponents().covered())) {
+                            continue;
+                        }
+                        return false;
+                    }
+                    if (l.nestedComponents() != null && l.nestedComponents().covered()) {
+                        continue;
+                    }
+                    return false;
+                }
+                return true;
+            }
+
+            public static RecordVariantNode copy(RecordVariantNode orig) {
+                return orig != null ? orig.copy() : null;
+            }
+
+            public RecordVariantNode copy() {
+                return new RecordVariantNode(componentNumber, components, thisComponent2LinkedNodes.entrySet().stream().map(e -> new SimpleEntry<>(e.getKey(), LinkedNodes.copy(e.getValue()))).collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue())));
+            }
+
+            record LinkedNodes(boolean currentComponentExhaustive, RecordVariantNode nestedComponents, RecordVariantNode followingComponents) {
+                public static LinkedNodes copy(LinkedNodes orig) {
+                    return orig != null ? orig.copy() : null;
+                }
+                public LinkedNodes copy() {
+                    RecordVariantNode newNestedComponents = nestedComponents != null ? nestedComponents.copy() : null;
+                    RecordVariantNode newFollowingComponents = followingComponents != null ? followingComponents.copy() : null;
+                    return new LinkedNodes(currentComponentExhaustive, newNestedComponents, newFollowingComponents);
+                }
+            }
         }
 
         public void visitTry(JCTry tree) {
