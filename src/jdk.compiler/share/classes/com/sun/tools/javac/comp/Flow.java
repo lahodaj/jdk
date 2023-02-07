@@ -37,6 +37,7 @@ import java.util.stream.StreamSupport;
 
 import com.sun.source.tree.LambdaExpressionTree.BodyKind;
 import com.sun.tools.javac.code.*;
+import com.sun.tools.javac.code.Kinds.Kind;
 import com.sun.tools.javac.code.Scope.WriteableScope;
 import com.sun.tools.javac.code.Source.Feature;
 import com.sun.tools.javac.resources.CompilerProperties.Errors;
@@ -690,15 +691,7 @@ public class Flow {
             tree.isExhaustive = tree.hasUnconditionalPattern ||
                                 TreeInfo.isErrorEnumSwitch(tree.selector, tree.cases);
             if (exhaustiveSwitch) {
-                List<RecordVariantNode> nodes = clearedSelectorTypes(tree.selector.type).map(cs -> new RecordVariantNode(0, List.of(cs)));
-                for (JCCase c : tree.cases) {
-                    for (JCCaseLabel l : c.labels) {
-                        if (l instanceof JCPatternCaseLabel p && TreeInfo.unguardedCaseLabel(p)) {
-                            nodes.forEach(n -> n.handle(p.pat));
-                        }
-                    }
-                }
-                tree.isExhaustive |= nodes.stream().anyMatch(n -> n.covered());
+                tree.isExhaustive |= checkIsExhaustive(tree.selector, tree.cases);
                 if (!tree.isExhaustive) {
                     log.error(tree, Errors.NotExhaustiveStatement);
                 }
@@ -732,17 +725,9 @@ public class Flow {
                     }
                 }
             }
-            List<RecordVariantNode> nodes = clearedSelectorTypes(tree.selector.type).map(cs -> new RecordVariantNode(0, List.of(cs)));
-            for (JCCase c : tree.cases) {
-                for (JCCaseLabel l : c.labels) {
-                    if (l instanceof JCPatternCaseLabel p && TreeInfo.unguardedCaseLabel(p)) {
-                        nodes.forEach(n -> n.handle(p.pat));
-                    }
-                }
-            }
             tree.isExhaustive = tree.hasUnconditionalPattern ||
                                 TreeInfo.isErrorEnumSwitch(tree.selector, tree.cases) ||
-                                nodes.stream().anyMatch(n -> n.covered());
+                                checkIsExhaustive(tree.selector, tree.cases);
             if (!tree.isExhaustive) {
                 log.error(tree, Errors.NotExhaustive);
             }
@@ -750,7 +735,30 @@ public class Flow {
             alive = alive.or(resolveYields(tree, prevPendingExits));
         }
 
-        private List<ClassSymbol> clearedSelectorTypes(Type seltype) {
+        private boolean checkIsExhaustive(JCExpression selector, List<JCCase> cases) {
+            List<Type> clearedSelectorTypes = clearedSelectorTypes(selector.type);
+            List<RecordVariantNode> nodes = clearedSelectorTypes.map(cs -> new RecordVariantNode(0, List.of(cs)));
+            Set<Symbol> enumConstants = null;
+            for (Type cleared : clearedSelectorTypes) {
+                if (!cleared.tsym.isEnum()) {
+                    continue;
+                }
+                enumConstants = new HashSet<>();
+                cleared.tsym.members().getSymbols(s -> s.kind == Kind.VAR && s.isEnum()).forEach(enumConstants::add);
+            }
+            for (JCCase c : cases) {
+                for (JCCaseLabel l : c.labels) {
+                    if (l instanceof JCPatternCaseLabel p && TreeInfo.unguardedCaseLabel(p)) {
+                        nodes.forEach(n -> n.handle(p.pat));
+                    } else if (l instanceof JCConstantCaseLabel constant && enumConstants != null) {
+                        enumConstants.remove(TreeInfo.symbol(constant.expr));
+                    }
+                }
+            }
+            return (enumConstants != null && enumConstants.isEmpty()) || nodes.stream().anyMatch(n -> n.covered());
+        }
+
+        private List<Type> clearedSelectorTypes(Type seltype) {
             return switch (seltype.getTag()) {
                 case CLASS -> {
                     if (seltype.isCompound()) {
@@ -762,35 +770,38 @@ public class Flow {
                         }
                         yield List.nil();
                     }
-                    yield List.of((ClassSymbol) seltype.tsym);
+                    yield List.of(seltype);
                 }
                 case TYPEVAR -> clearedSelectorTypes(((TypeVar) seltype).getUpperBound());
                 default -> {
-                    yield List.of((ClassSymbol) types.erasure(seltype).tsym);
+                    yield List.of(types.erasure(seltype));
                 }
             };
         }
 
         class RecordVariantNode {
             private final int componentNumber;
-            private final List<ClassSymbol> components;
-            private Map<ClassSymbol, LinkedNodes> thisComponent2LinkedNodes;
+            private final List<Type> components;
+            private final Type targetType;
+            private Map<Type, LinkedNodes> thisComponent2LinkedNodes; //TODO: Type in Map, but actually a list of
 
-            public RecordVariantNode(int componentNumber, List<ClassSymbol> components) {
+            public RecordVariantNode(int componentNumber, List<Type> components) {
                 this.componentNumber = componentNumber;
                 this.components = components;
                 thisComponent2LinkedNodes = new HashMap<>();
-                thisComponent2LinkedNodes.put(components.get(componentNumber), new LinkedNodes(false, null, componentNumber + 1 < components.size() ? new RecordVariantNode(componentNumber + 1, components) : null));
+                targetType = components.get(componentNumber);
+                thisComponent2LinkedNodes.put(targetType, new LinkedNodes(false, null, componentNumber + 1 < components.size() ? new RecordVariantNode(componentNumber + 1, components) : null));
             }
 
-            public RecordVariantNode(int componentNumber, List<ClassSymbol> components, Map<ClassSymbol, LinkedNodes> thisComponent2LinkedNodes) {
+            public RecordVariantNode(int componentNumber, List<Type> components, Map<Type, LinkedNodes> thisComponent2LinkedNodes) {
                 this.componentNumber = componentNumber;
                 this.components = components;
+                targetType = components.get(componentNumber);
                 this.thisComponent2LinkedNodes = thisComponent2LinkedNodes;
             }
 
             public void handle(JCPattern pattern) {
-                Entry<ClassSymbol, LinkedNodes> found = find(pattern);
+                Entry<Type, LinkedNodes> found = find(targetType, pattern);
                 if (found == null) return ;
 
                 if (pattern instanceof JCBindingPattern) {
@@ -800,28 +811,35 @@ public class Flow {
                         List<Type> fullComponentTypes = recordPattern.record.getRecordComponents()
                                 .map(rc -> types.memberType(recordPattern.type, rc));
 
-                        List<ClassSymbol> nestedComponents = fullComponentTypes.map(t -> (ClassSymbol) types.erasure(t).tsym);
-                        found.setValue(new LinkedNodes(false, new RecordVariantNode(0, nestedComponents), found.getValue().followingComponents()));
+                        if (fullComponentTypes.isEmpty()) {
+                            found.setValue(new LinkedNodes(true, null, found.getValue().followingComponents()));
+                        } else {
+                            found.setValue(new LinkedNodes(false, new RecordVariantNode(0, fullComponentTypes), found.getValue().followingComponents()));
+                        }
                     }
-                    found.getValue().nestedComponents().handleNestedRecordPattern(recordPattern.nested);
+                    if (found.getValue().nestedComponents() != null) {
+                        found.getValue().nestedComponents().handleNestedRecordPattern(recordPattern.nested);
+                    }
                 } else {
                     Assert.error();
                 }
             }
 
-            private Entry<ClassSymbol, LinkedNodes> find(JCPattern pattern) {
-//                Symbol primaryType = types.skipTypeVars(TreeInfo.primaryPatternType(pattern), false).tsym;
+            private Entry<Type, LinkedNodes> find(Type targetType, JCPattern pattern) {
                 Symbol primaryType = TreeInfo.primaryPatternType(pattern).tsym;
 
                 OUTER: while (true) {
                     for (var e : thisComponent2LinkedNodes.entrySet()) {
-                        ClassSymbol current = e.getKey();
-                        if (current.isSubClass(primaryType, types)) {
+                        Type current = e.getKey();
+                        Type currentErasure = types.erasure(current);
+                        if (types.isSubtype(types.erasure(current), types.erasure(primaryType.type))) {
                             return e;
-                        } else if (primaryType.isSubClass(current, types) && current.isAbstract() && current.isSealed() && !e.getValue().currentComponentExhaustive()) {
+                        } else if (types.isSubtype(types.erasure(primaryType.type), currentErasure) && currentErasure.tsym.isAbstract() && currentErasure.tsym.isSealed() && !e.getValue().currentComponentExhaustive()) {
                             thisComponent2LinkedNodes.remove(current);
-                            for (Symbol s : current.permitted) {
-                                thisComponent2LinkedNodes.put((ClassSymbol) s, e.getValue().copy());
+                            for (Symbol s : ((ClassSymbol) currentErasure.tsym).permitted) {
+                                if (types.isCastable(targetType, s.type/*, types.noWarnings*/)) {
+                                    thisComponent2LinkedNodes.put(s.type, e.getValue().copy());
+                                }
                             }
                             continue OUTER;
                         }
@@ -833,7 +851,7 @@ public class Flow {
             private void handleNestedRecordPattern(List<JCPattern> nested) {
                 if (nested.isEmpty()) return ;
                 handle(nested.head);
-                Entry<ClassSymbol, LinkedNodes> found = find(nested.head);
+                Entry<Type, LinkedNodes> found = find(targetType, nested.head);
                 if (found == null) return ;
                 if (found.getValue().followingComponents() != null) {
                     found.getValue().followingComponents().handleNestedRecordPattern(nested.tail);
