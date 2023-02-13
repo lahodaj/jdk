@@ -55,16 +55,16 @@ SwitchErrors.java:276:18: compiler.err.flows.through.from.pattern
 SwitchErrors.java:292:49: compiler.err.cant.resolve.location.args: kindname.method, length, , , (compiler.misc.location: kindname.class, java.lang.Object, null)
 SwitchErrors.java:294:55: compiler.err.cant.resolve.location.args: kindname.method, length, , , (compiler.misc.location: kindname.class, java.lang.Object, null)
 SwitchErrors.java:300:26: compiler.err.pattern.type.cannot.infer
-SwitchErrors.java:10:9: compiler.err.not.exhaustive.statement
-SwitchErrors.java:16:9: compiler.err.not.exhaustive.statement
-SwitchErrors.java:22:9: compiler.err.not.exhaustive.statement
-SwitchErrors.java:28:9: compiler.err.not.exhaustive.statement
-SwitchErrors.java:76:9: compiler.err.not.exhaustive.statement
-SwitchErrors.java:82:9: compiler.err.not.exhaustive.statement
-SwitchErrors.java:87:9: compiler.err.not.exhaustive.statement
-SwitchErrors.java:92:9: compiler.err.not.exhaustive.statement
-SwitchErrors.java:98:9: compiler.err.not.exhaustive.statement
-SwitchErrors.java:105:9: compiler.err.not.exhaustive.statement
-SwitchErrors.java:159:9: compiler.err.not.exhaustive.statement
-SwitchErrors.java:232:9: compiler.err.not.exhaustive.statement
+SwitchErrors.java:10:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: java.lang.Object)
+SwitchErrors.java:16:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: java.lang.Object)
+SwitchErrors.java:22:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: java.lang.Integer)
+SwitchErrors.java:28:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: int)
+SwitchErrors.java:76:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: java.lang.Object)
+SwitchErrors.java:82:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: java.lang.Object)
+SwitchErrors.java:87:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: java.lang.Object)
+SwitchErrors.java:92:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: java.lang.Object)
+SwitchErrors.java:98:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: java.lang.Object)
+SwitchErrors.java:105:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: java.lang.Object)
+SwitchErrors.java:159:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: SwitchErrors.SealedNonAbstract)
+SwitchErrors.java:232:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: java.lang.String)
 69 errors
