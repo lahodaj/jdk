@@ -758,6 +758,42 @@ public class Exhaustiveness extends TestRunner {
                            case R(A a, A b) -> 0;
                            case R(A a, B b) -> 0;
                            case R(B a, A b) -> 0;
+                           case R(B(String s), B b) -> 0;
+                       };
+                   }
+               }
+               """,
+               "Test.java:5:16: compiler.err.not.exhaustive: " +
+                       "(compiler.misc.not.exhaustive.missing.record: lib.R, " +
+                       "(compiler.misc.not.exhaustive.missing.record.cont: lib.B, " +
+                       "(compiler.misc.not.exhaustive.missing.type: java.lang.Object)))",
+               "1 error");
+        doTest(base,
+               new String[]{"""
+                            package lib;
+                            public sealed interface S permits A, B {}
+                            """,
+                            """
+                            package lib;
+                            public final class A implements S {}
+                            """,
+                            """
+                            package lib;
+                            public record B(Object o) implements S {}
+                            """,
+                            """
+                            package lib;
+                            public record R(S a, S b) {}
+                            """},
+               """
+               package test;
+               import lib.*;
+               public class Test {
+                   private int test(R r) {
+                       return switch (r) {
+                           case R(A a, A b) -> 0;
+                           case R(A a, B b) -> 0;
+                           case R(B a, A b) -> 0;
                            case R(B a, B(var o)) -> 0;
                        };
                    }
