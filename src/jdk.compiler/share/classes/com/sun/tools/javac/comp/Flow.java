@@ -210,6 +210,7 @@ public class Flow {
     private final Check chk;
     private       TreeMaker make;
     private final Resolve rs;
+    private final Infer infer;
     private final JCDiagnostic.Factory diags;
     private Env<AttrContext> attrEnv;
     private       Lint lint;
@@ -335,6 +336,7 @@ public class Flow {
         chk = Check.instance(context);
         lint = Lint.instance(context);
         rs = Resolve.instance(context);
+        infer = Infer.instance(context);
         diags = JCDiagnostic.Factory.instance(context);
         Source source = Source.instance(context);
     }
@@ -691,9 +693,13 @@ public class Flow {
             tree.isExhaustive = tree.hasUnconditionalPattern ||
                                 TreeInfo.isErrorEnumSwitch(tree.selector, tree.cases);
             if (exhaustiveSwitch) {
-                tree.isExhaustive |= checkIsExhaustive(tree.selector, tree.cases);
                 if (!tree.isExhaustive) {
-                    log.error(tree, Errors.NotExhaustiveStatement);
+                    Fragment missingCombination = checkIsExhaustive(tree.selector, tree.cases);
+                    if (missingCombination != null) {
+                        log.error(tree, Errors.NotExhaustiveStatement(missingCombination));
+                    } else {
+                        tree.isExhaustive = true;
+                    }
                 }
             }
             if (!tree.hasUnconditionalPattern && !exhaustiveSwitch) {
@@ -726,16 +732,20 @@ public class Flow {
                 }
             }
             tree.isExhaustive = tree.hasUnconditionalPattern ||
-                                TreeInfo.isErrorEnumSwitch(tree.selector, tree.cases) ||
-                                checkIsExhaustive(tree.selector, tree.cases);
+                                TreeInfo.isErrorEnumSwitch(tree.selector, tree.cases);
             if (!tree.isExhaustive) {
-                log.error(tree, Errors.NotExhaustive);
+                Fragment missingCombination = checkIsExhaustive(tree.selector, tree.cases);
+                if (missingCombination != null) {
+                    log.error(tree, Errors.NotExhaustive(missingCombination));
+                } else {
+                    tree.isExhaustive = true;
+                }
             }
             alive = prevAlive;
             alive = alive.or(resolveYields(tree, prevPendingExits));
         }
 
-        private boolean checkIsExhaustive(JCExpression selector, List<JCCase> cases) {
+        private Fragment checkIsExhaustive(JCExpression selector, List<JCCase> cases) {
             List<Type> clearedSelectorTypes = clearedSelectorTypes(selector.type);
             List<RecordVariantNode> nodes = clearedSelectorTypes.map(cs -> new RecordVariantNode(0, List.of(cs)));
             Set<Symbol> enumConstants = null;
@@ -755,7 +765,14 @@ public class Flow {
                     }
                 }
             }
-            return (enumConstants != null && enumConstants.isEmpty()) || nodes.stream().anyMatch(n -> n.covered());
+            if (enumConstants != null && enumConstants.isEmpty()) {
+                return null;
+            }
+            List<Fragment> missing = nodes.stream().map(n -> n.findUncovered()).filter(f -> f != null).collect(List.collector());
+            if (missing.size() < nodes.size()) {
+                return null;
+            }
+            return missing.stream().filter(u -> u != null).findFirst().orElse(null);
         }
 
         private List<Type> clearedSelectorTypes(Type seltype) {
@@ -858,21 +875,43 @@ public class Flow {
                 }
             }
 
-            public boolean covered() {
-//                return thisComponent2LinkedNodes.values().stream().allMatch(l -> (l.currentComponentExhaustive() && (l.followingComponents() == null || l.followingComponents().covered())) || (l.nestedComponents() == null || l.nestedComponents().covered()));
-                for (var l : thisComponent2LinkedNodes.values()) {
-                    if (l.currentComponentExhaustive()) {
-                        if ((l.followingComponents() == null || l.followingComponents().covered())) {
+            public Fragment findUncovered() {
+                for (var e : thisComponent2LinkedNodes.entrySet()) {
+                    if (e.getValue().currentComponentExhaustive()) {
+                        if (e.getValue().followingComponents() == null) {
                             continue;
                         }
-                        return false;
+
+                        Fragment followingMissing = e.getValue().followingComponents().findUncovered();
+
+                        if (followingMissing == null) {
+                            continue;
+                        }
+
+                        return Fragments.NotExhaustiveMissingComponents(e.getKey(), followingMissing);
                     }
-                    if (l.nestedComponents() != null && l.nestedComponents().covered()) {
-                        continue;
+
+                    if (e.getValue().nestedComponents() != null) {
+                        Fragment nestedMissing = e.getValue().nestedComponents().findUncovered();
+
+                        if (nestedMissing == null) {
+                            continue;
+                        }
+
+                        if (e.getValue().followingComponents() != null) {
+                            return Fragments.NotExhaustiveMissingRecordCont(e.getKey(), nestedMissing);
+                        } else {
+                            return Fragments.NotExhaustiveMissingRecord(e.getKey(), nestedMissing);
+                        }
                     }
-                    return false;
+
+                    Type inferred = infer.instantiatePatternType(components.get(componentNumber), e.getKey().tsym);
+
+                    if (inferred == null) inferred = e.getKey();
+
+                    return Fragments.NotExhaustiveMissingType(inferred);
                 }
-                return true;
+                return null;
             }
 
             public static RecordVariantNode copy(RecordVariantNode orig) {
