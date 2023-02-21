@@ -118,7 +118,7 @@ public class Exhaustiveness extends TestRunner {
                    }
                }
                """,
-               "Test.java:5:16: compiler.err.not.exhaustive",
+               "Test.java:5:16: compiler.err.not.exhaustive: (compiler.misc.not.exhaustive.missing.type: lib.B)",
                "- compiler.note.preview.filename: Test.java, DEFAULT",
                "- compiler.note.preview.recompile",
                "1 error");
@@ -180,7 +180,7 @@ public class Exhaustiveness extends TestRunner {
                    }
                }
                """,
-               "Test.java:5:16: compiler.err.not.exhaustive",
+               "Test.java:5:16: compiler.err.not.exhaustive: (compiler.misc.not.exhaustive.missing.type: lib.S)",
                "- compiler.note.preview.filename: Test.java, DEFAULT",
                "- compiler.note.preview.recompile",
                "1 error");
@@ -213,7 +213,7 @@ public class Exhaustiveness extends TestRunner {
                    }
                }
                """,
-               "Test.java:5:16: compiler.err.not.exhaustive",
+               "Test.java:5:16: compiler.err.not.exhaustive: (compiler.misc.not.exhaustive.missing.type: lib.A)",
                "- compiler.note.preview.filename: Test.java, DEFAULT",
                "- compiler.note.preview.recompile",
                "1 error");
@@ -277,7 +277,7 @@ public class Exhaustiveness extends TestRunner {
                }
                """,
                "Test.java:6:27: compiler.err.guard.has.constant.expression.false",
-               "Test.java:5:16: compiler.err.not.exhaustive",
+               "Test.java:5:16: compiler.err.not.exhaustive: (compiler.misc.not.exhaustive.missing.type: lib.A)",
                "- compiler.note.preview.filename: Test.java, DEFAULT",
                "- compiler.note.preview.recompile",
                "2 errors");
@@ -309,7 +309,7 @@ public class Exhaustiveness extends TestRunner {
                        };
                    }
                }
-               """);
+               """);//TODO: this test passes because 'S' is unconditional, does not quite check exhaustiveness....
     }
 
     @Test
@@ -406,7 +406,7 @@ public class Exhaustiveness extends TestRunner {
                    }
                }
                """,
-               "Test.java:4:9: compiler.err.not.exhaustive.statement",
+               "Test.java:4:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: java.lang.Object)",
                "- compiler.note.preview.filename: Test.java, DEFAULT",
                "- compiler.note.preview.recompile",
                "1 error");
@@ -467,7 +467,7 @@ public class Exhaustiveness extends TestRunner {
                    }
                }
                """,
-               "Test.java:5:16: compiler.err.not.exhaustive",
+               "Test.java:5:16: compiler.err.not.exhaustive: (compiler.misc.not.exhaustive.missing.type: lib.B)",
                "- compiler.note.preview.filename: Test.java, DEFAULT",
                "- compiler.note.preview.recompile",
                "1 error");
@@ -577,7 +577,7 @@ public class Exhaustiveness extends TestRunner {
                    }
                }
                """,
-               "Test.java:5:16: compiler.err.not.exhaustive",
+               "Test.java:5:16: compiler.err.not.exhaustive: (compiler.misc.not.exhaustive.missing.type: lib.D)",
                "- compiler.note.preview.filename: Test.java, DEFAULT",
                "- compiler.note.preview.recompile",
                "1 error");
@@ -674,7 +674,7 @@ public class Exhaustiveness extends TestRunner {
                    }
                }
                """,
-               "Test.java:5:16: compiler.err.not.exhaustive",
+               "Test.java:5:16: compiler.err.not.exhaustive: (compiler.misc.not.exhaustive.missing.type: lib.Base)",
                "- compiler.note.preview.filename: Test.java, DEFAULT",
                "- compiler.note.preview.recompile",
                "1 error");
@@ -744,7 +744,11 @@ public class Exhaustiveness extends TestRunner {
                    }
                }
                """,
-               "Test.java:5:16: compiler.err.not.exhaustive",
+               "Test.java:5:16: compiler.err.not.exhaustive: " +
+                       "(compiler.misc.not.exhaustive.missing.record: lib.R, " +
+                       "(compiler.misc.not.exhaustive.missing.components: lib.B, " +
+                       "(compiler.misc.not.exhaustive.missing.record: lib.B, " +
+                       "(compiler.misc.not.exhaustive.missing.type: java.lang.Object))))",
                "- compiler.note.preview.filename: Test.java, DEFAULT",
                "- compiler.note.preview.recompile",
                "1 error");
@@ -779,7 +783,46 @@ public class Exhaustiveness extends TestRunner {
                    }
                }
                """);
+        doTest(base,
+               new String[]{"""
+                            package lib;
+                            public sealed interface S permits A, B {}
+                            """,
+                            """
+                            package lib;
+                            public final class A implements S {}
+                            """,
+                            """
+                            package lib;
+                            public record B(Object o) implements S {}
+                            """,
+                            """
+                            package lib;
+                            public record R(S a, S b) {}
+                            """},
+               """
+               package test;
+               import lib.*;
+               public class Test {
+                   private int test(R r) {
+                       return switch (r) {
+                           case R(A a, A b) -> 0;
+                           case R(A a, B b) -> 0;
+                           case R(B a, A b) -> 0;
+                           case R(B(String s), B b) -> 0;
+                       };
+                   }
+               }
+               """,
+               "Test.java:5:16: compiler.err.not.exhaustive: " +
+                       "(compiler.misc.not.exhaustive.missing.record: lib.R, " +
+                       "(compiler.misc.not.exhaustive.missing.record.cont: lib.B, " +
+                       "(compiler.misc.not.exhaustive.missing.type: java.lang.Object)))",
+               "- compiler.note.preview.filename: Test.java, DEFAULT",
+               "- compiler.note.preview.recompile",
+               "1 error");
     }
+
     public void testTransitiveSealed(Path base) throws Exception {
         doTest(base,
                new String[0],
@@ -816,7 +859,7 @@ public class Exhaustiveness extends TestRunner {
                                      case C5<Integer, ?> c -> {}
                                      case C6<?, Integer> c -> {}
                          """,
-                         "Test.java:11:9: compiler.err.not.exhaustive.statement",
+                         "Test.java:11:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: test.Test.C3<java.lang.Integer>)",
                          "- compiler.note.preview.filename: Test.java, DEFAULT",
                          "- compiler.note.preview.recompile",
                          "1 error"),
@@ -824,7 +867,7 @@ public class Exhaustiveness extends TestRunner {
                                      case C3<Integer> c -> {}
                                      case C6<?, Integer> c -> {}
                          """,
-                         "Test.java:11:9: compiler.err.not.exhaustive.statement",
+                         "Test.java:11:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: test.Test.C5<java.lang.Integer,?>)",
                          "- compiler.note.preview.filename: Test.java, DEFAULT",
                          "- compiler.note.preview.recompile",
                          "1 error"),
@@ -832,7 +875,7 @@ public class Exhaustiveness extends TestRunner {
                                      case C3<Integer> c -> {}
                                      case C5<Integer, ?> c -> {}
                          """,
-                         "Test.java:11:9: compiler.err.not.exhaustive.statement",
+                         "Test.java:11:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: test.Test.C6<?,java.lang.Integer>)",
                          "- compiler.note.preview.filename: Test.java, DEFAULT",
                          "- compiler.note.preview.recompile",
                          "1 error"),
@@ -960,8 +1003,8 @@ public class Exhaustiveness extends TestRunner {
                """,
                "Test.java:34:41: compiler.err.cant.resolve.location: kindname.class, E, , , (compiler.misc.location: kindname.class, test.Test, null)",
                "Test.java:42:42: compiler.err.cant.resolve.location: kindname.class, E, , , (compiler.misc.location: kindname.class, test.Test, null)",
-               "Test.java:22:9: compiler.err.not.exhaustive.statement",
-               "Test.java:29:17: compiler.err.not.exhaustive",
+               "Test.java:22:9: compiler.err.not.exhaustive.statement: (compiler.misc.not.exhaustive.missing.type: lib.B)",
+               "Test.java:29:17: compiler.err.not.exhaustive: (compiler.misc.not.exhaustive.missing.type: lib.B)",
                "- compiler.note.preview.filename: Test.java, DEFAULT",
                "- compiler.note.preview.recompile",
                "4 errors");
@@ -1029,7 +1072,7 @@ public class Exhaustiveness extends TestRunner {
                    }
                }
                """,
-               "Test.java:8:17: compiler.err.not.exhaustive",
+               "Test.java:8:17: compiler.err.not.exhaustive: (compiler.misc.not.exhaustive.missing.type: test.Test.B1)",
                "- compiler.note.preview.filename: Test.java, DEFAULT",
                "- compiler.note.preview.recompile",
                "1 error");
@@ -1051,7 +1094,7 @@ public class Exhaustiveness extends TestRunner {
                }
                """,
                "Test.java:9:29: compiler.err.cant.resolve.location.args: kindname.method, undefined, , , (compiler.misc.location: kindname.class, test.Test, null)",
-               "Test.java:8:17: compiler.err.not.exhaustive",
+               "Test.java:8:17: compiler.err.not.exhaustive: (compiler.misc.not.exhaustive.missing.type: test.Test.B1)",
                "- compiler.note.preview.filename: Test.java, DEFAULT",
                "- compiler.note.preview.recompile",
                "2 errors");
