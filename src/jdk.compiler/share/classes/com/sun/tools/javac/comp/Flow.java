@@ -655,7 +655,7 @@ public class Flow {
             } else if (tree.varOrRecordPattern instanceof JCRecordPattern jcRecordPattern) {
                 visitRecordPattern(jcRecordPattern);
 
-                Fragment missingCombination = checkIsExhaustive(make.Type(tree.elementType), List.of(make.Case(CaseTree.CaseKind.STATEMENT, List.of(make.PatternCaseLabel(jcRecordPattern, null)), List.nil(), null)));
+                Fragment missingCombination = checkIsExhaustive(make.at(tree.varOrRecordPattern).Type(tree.elementType), List.of(make.Case(CaseTree.CaseKind.STATEMENT, List.of(make.PatternCaseLabel(jcRecordPattern, null)), List.nil(), null)));
 
                 if (missingCombination != null) {
                     log.error(tree, Errors.ForeachNotExhaustiveOnType(jcRecordPattern.type, tree.elementType));
@@ -757,33 +757,38 @@ public class Flow {
         }
 
         private Fragment checkIsExhaustive(JCExpression selector, List<JCCase> cases) {
-            List<Type> clearedSelectorTypes = clearedSelectorTypes(selector.type);
-            List<RecordVariantNode> nodes = clearedSelectorTypes.map(cs -> new RecordVariantNode(0, List.of(cs)));
-            Set<Symbol> enumConstants = null;
-            for (Type cleared : clearedSelectorTypes) {
-                if (!cleared.tsym.isEnum()) {
-                    continue;
+            try {
+                List<Type> clearedSelectorTypes = clearedSelectorTypes(selector.type);
+                List<RecordVariantNode> nodes = clearedSelectorTypes.map(cs -> new RecordVariantNode(0, List.of(cs)));
+                Set<Symbol> enumConstants = null;
+                for (Type cleared : clearedSelectorTypes) {
+                    if (!cleared.tsym.isEnum()) {
+                        continue;
+                    }
+                    enumConstants = new HashSet<>();
+                    cleared.tsym.members().getSymbols(s -> s.kind == Kind.VAR && s.isEnum()).forEach(enumConstants::add);
                 }
-                enumConstants = new HashSet<>();
-                cleared.tsym.members().getSymbols(s -> s.kind == Kind.VAR && s.isEnum()).forEach(enumConstants::add);
-            }
-            for (JCCase c : cases) {
-                for (JCCaseLabel l : c.labels) {
-                    if (l instanceof JCPatternCaseLabel p && TreeInfo.unguardedCaseLabel(p)) {
-                        nodes.forEach(n -> n.handle(p.pat));
-                    } else if (l instanceof JCConstantCaseLabel constant && enumConstants != null) {
-                        enumConstants.remove(TreeInfo.symbol(constant.expr));
+                for (JCCase c : cases) {
+                    for (JCCaseLabel l : c.labels) {
+                        if (l instanceof JCPatternCaseLabel p && TreeInfo.unguardedCaseLabel(p)) {
+                            nodes.forEach(n -> n.handle(p.pat));
+                        } else if (l instanceof JCConstantCaseLabel constant && enumConstants != null) {
+                            enumConstants.remove(TreeInfo.symbol(constant.expr));
+                        }
                     }
                 }
-            }
-            if (enumConstants != null && enumConstants.isEmpty()) {
+                if (enumConstants != null && enumConstants.isEmpty()) {
+                    return null;
+                }
+                List<Fragment> missing = nodes.stream().map(n -> n.findUncovered()).filter(f -> f != null).collect(List.collector());
+                if (missing.size() < nodes.size()) {
+                    return null;
+                }
+                return missing.stream().filter(u -> u != null).findFirst().orElse(null);
+            } catch (CompletionFailure cf) {
+                chk.completionError(selector.pos(), cf);
                 return null;
             }
-            List<Fragment> missing = nodes.stream().map(n -> n.findUncovered()).filter(f -> f != null).collect(List.collector());
-            if (missing.size() < nodes.size()) {
-                return null;
-            }
-            return missing.stream().filter(u -> u != null).findFirst().orElse(null);
         }
 
         private List<Type> clearedSelectorTypes(Type seltype) {
@@ -854,15 +859,15 @@ public class Flow {
             }
 
             private Entry<Type, LinkedNodes> find(Type targetType, JCPattern pattern) {
-                Symbol primaryType = TreeInfo.primaryPatternType(pattern).tsym;
+                Type primaryType = types.erasure(TreeInfo.primaryPatternType(pattern));
 
                 OUTER: while (true) {
                     for (var e : thisComponent2LinkedNodes.entrySet()) {
                         Type current = e.getKey();
                         Type currentErasure = types.erasure(current);
-                        if (types.isSubtype(types.erasure(current), types.erasure(primaryType.type))) {
+                        if (types.isSubtype(types.erasure(current), primaryType)) {
                             return e;
-                        } else if (types.isSubtype(types.erasure(primaryType.type), currentErasure) && currentErasure.tsym.isAbstract() && currentErasure.tsym.isSealed() && !e.getValue().currentComponentExhaustive()) {
+                        } else if (types.isSubtype(primaryType, currentErasure) && currentErasure.tsym.isAbstract() && currentErasure.tsym.isSealed() && !e.getValue().currentComponentExhaustive()) {
                             thisComponent2LinkedNodes.remove(current);
                             for (Symbol s : ((ClassSymbol) currentErasure.tsym).permitted) {
                                 if (types.isCastable(targetType, s.type/*, types.noWarnings*/)) {
@@ -887,6 +892,10 @@ public class Flow {
             }
 
             public Fragment findUncovered() {
+                return findUncovered(false);
+            }
+
+            private Fragment findUncovered(boolean hasContinuation) {
                 for (var e : thisComponent2LinkedNodes.entrySet()) {
                     if (e.getValue().currentComponentExhaustive()) {
                         if (e.getValue().followingComponents() == null) {
@@ -903,24 +912,24 @@ public class Flow {
                     }
 
                     if (e.getValue().nestedComponents() != null) {
-                        Fragment nestedMissing = e.getValue().nestedComponents().findUncovered();
+                        Fragment nestedMissing = e.getValue().nestedComponents().findUncovered(e.getValue().followingComponents() != null);
 
                         if (nestedMissing == null) {
                             continue;
                         }
 
-                        if (e.getValue().followingComponents() != null) {
-                            return Fragments.NotExhaustiveMissingRecordCont(e.getKey(), nestedMissing);
-                        } else {
-                            return Fragments.NotExhaustiveMissingRecord(e.getKey(), nestedMissing);
-                        }
+                        return Fragments.NotExhaustiveMissingRecord(e.getKey(), nestedMissing);
                     }
 
                     Type inferred = infer.instantiatePatternType(components.get(componentNumber), e.getKey().tsym);
 
                     if (inferred == null) inferred = e.getKey();
 
-                    return Fragments.NotExhaustiveMissingType(inferred);
+                    if (hasContinuation || componentNumber + 1 < components.size()) {
+                        return Fragments.NotExhaustiveMissingTypeCont(inferred);
+                    } else {
+                        return Fragments.NotExhaustiveMissingType(inferred);
+                    }
                 }
                 return null;
             }

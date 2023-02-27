@@ -22,6 +22,7 @@
  */
 
 // key: compiler.err.not.exhaustive.statement
+// key: compiler.misc.not.exhaustive.missing.type
 // key: compiler.note.preview.filename
 // key: compiler.note.preview.recompile
 // options: --enable-preview --source ${jdk.version}

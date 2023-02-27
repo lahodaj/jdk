@@ -816,8 +816,30 @@ public class Exhaustiveness extends TestRunner {
                """,
                "Test.java:5:16: compiler.err.not.exhaustive: " +
                        "(compiler.misc.not.exhaustive.missing.record: lib.R, " +
-                       "(compiler.misc.not.exhaustive.missing.record.cont: lib.B, " +
-                       "(compiler.misc.not.exhaustive.missing.type: java.lang.Object)))",
+                       "(compiler.misc.not.exhaustive.missing.record: lib.B, " +
+                       "(compiler.misc.not.exhaustive.missing.type.cont: java.lang.Object)))",
+               "- compiler.note.preview.filename: Test.java, DEFAULT",
+               "- compiler.note.preview.recompile",
+               "1 error");
+        doTest(base,
+               new String[]{"""
+                            package lib;
+                            public record R(Object o1, Object o2) {}
+                            """},
+               """
+               package test;
+               import lib.*;
+               public class Test {
+                   private int test(R r) {
+                       return switch (r) {
+                           case R(String s, Object o) -> 0;
+                       };
+                   }
+               }
+               """,
+               "Test.java:5:16: compiler.err.not.exhaustive: " +
+                       "(compiler.misc.not.exhaustive.missing.record: lib.R, " +
+                       "(compiler.misc.not.exhaustive.missing.type.cont: java.lang.Object))",
                "- compiler.note.preview.filename: Test.java, DEFAULT",
                "- compiler.note.preview.recompile",
                "1 error");
