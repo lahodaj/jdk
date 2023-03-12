@@ -40,6 +40,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -529,6 +530,7 @@ public class KullaTesting {
             }
         }
         assertTrue(events.size() >= 1, "Expected at least one event, got none.");
+        /*if (false) */{
         List<STEInfo> all = getInfos(eventChains);
         if (events.size() != all.size()) {
             StringBuilder sb = new StringBuilder();
@@ -616,6 +618,7 @@ public class KullaTesting {
                     }
                 }
             }
+        }
         }
         return events;
     }
@@ -1106,13 +1109,13 @@ public class KullaTesting {
         return new EventChain(mainInfo, value, exceptionClass, updates);
     }
 
-    public static STEInfo ste(Snippet key, Status previousStatus, Status status,
+    public STEInfo ste(Snippet key, Status previousStatus, Status status,
                 Boolean isSignatureChange, Snippet causeKey) {
-        return new STEInfo(key, previousStatus, status, isSignatureChange, causeKey);
+        return new STEInfo(state, key, previousStatus, status, isSignatureChange, causeKey);
     }
 
-    public static STEInfo added(Status status) {
-        return new STEInfo(MAIN_SNIPPET, NONEXISTENT, status, status.isDefined(), null);
+    public STEInfo added(Status status) {
+        return new STEInfo(state, MAIN_SNIPPET, NONEXISTENT, status, status.isDefined(), null);
     }
 
     public static class EventChain {
@@ -1131,8 +1134,10 @@ public class KullaTesting {
 
     public static class STEInfo {
 
-        STEInfo(Snippet snippet, Status previousStatus, Status status,
+        private final JShell state;
+        STEInfo(JShell state, Snippet snippet, Status previousStatus, Status status,
                 Boolean isSignatureChange, Snippet causeSnippet) {
+            this.state = state;
             this.snippet = snippet;
             this.previousStatus = previousStatus;
             this.status = status;
@@ -1230,7 +1235,7 @@ public class KullaTesting {
         private String toString(SnippetEvent ste) {
             return "key: " + (ste.snippet()==MAIN_SNIPPET? "MAIN_SNIPPET" : ste.snippet().id()) + " before: " + ste.previousStatus()
                     + " status: " + ste.status() + " sig: " + ste.isSignatureChange()
-                    + " cause: " + ste.causeSnippet();
+                    + " cause: " + ste.causeSnippet() + ";; " + state.diagnostics(ste.snippet()).map(d -> d.getMessage(null)).collect(Collectors.joining());
         }
     }
 }

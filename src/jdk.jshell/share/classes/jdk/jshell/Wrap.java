@@ -139,6 +139,25 @@ abstract class Wrap implements GeneralWrap {
         return new CompoundWrap(components.toArray());
     }
 
+    /**Create a stub of a compilable representation of a variable snippet, when the
+     * variable is a compile-time constant.
+     *
+     * @param source the snippet's masked source code
+     * @param wtype variable's denotable type suitable for field declaration
+     * @param brackets any [] that should be appended to the type
+     * @param name the variable name
+     * @param wnameAndInit wrap containing the variable name and initializer
+     * @return a Wrap that declares the given constant
+     */
+    public static Wrap constWrap(String source, Wrap finalModifier, Wrap wtype, String name, Wrap wnameAndInit) {
+        Wrap returnWrap = new CompoundWrap(
+                        "        return ", name, ";\n"
+                );
+        Wrap result = new CompoundWrap(new ConstWrap(finalModifier, wtype, wnameAndInit),
+                                       new DoitMethodWrap(returnWrap));
+        return result;
+    }
+
     public static Wrap tempVarWrap(String source, String typename, String name, Wrap anonDeclareWrap) {
         RangeWrap winit = new NoWrap(source);
         // y
@@ -560,6 +579,13 @@ abstract class Wrap implements GeneralWrap {
 
         VarDeclareWrap(Wrap wtype, String brackets, Wrap wname) {
             super("    public static ", wtype, brackets + " ", wname, semi(wname));
+        }
+    }
+
+    private static class ConstWrap extends CompoundWrap {
+
+        ConstWrap(Wrap finalModifier, Wrap wtype, Wrap wnameAndinit) {
+            super("    public static ", finalModifier, " ", wtype, " ", wnameAndinit, semi(wnameAndinit));
         }
     }
 

@@ -58,15 +58,20 @@ public class VarSnippet extends DeclarationSnippet {
      */
     final Set<String> anonymousClasses;
 
+    /**The constant value of this variable, if any.
+     */
+    final Object constantValue;
+
      VarSnippet(VarKey key, String userSource, Wrap guts,
             String name, SubKind subkind, String typeName, String fullTypeName,
-            Set<String> anonymousClasses, Collection<String> declareReferences,
-            DiagList syntheticDiags) {
+            Set<String> anonymousClasses, Object constantValue,
+            Collection<String> declareReferences, DiagList syntheticDiags) {
         super(key, userSource, guts, name, subkind, null, declareReferences,
                 null, syntheticDiags);
         this.typeName = typeName;
         this.fullTypeName = fullTypeName;
         this.anonymousClasses = anonymousClasses;
+        this.constantValue = constantValue;
     }
 
     /**

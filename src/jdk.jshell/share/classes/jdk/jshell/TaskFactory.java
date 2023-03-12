@@ -181,6 +181,7 @@ class TaskFactory {
 
     public <Z> Z compile(Collection<OuterWrap> wraps,
                          Worker<CompileTask, Z> worker) {
+        wraps.forEach(ow -> System.err.println(ow.wrapped()));
         WrapSourceHandler sh = new WrapSourceHandler();
 
         return runTask(wraps.stream(),

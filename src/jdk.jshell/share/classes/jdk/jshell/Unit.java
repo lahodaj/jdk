@@ -30,6 +30,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
 import jdk.jshell.ClassTracker.ClassInfo;
@@ -402,6 +403,18 @@ final class Unit {
             Status overwrittenStatus = overwriteMatchingMethod(msi);
             if (overwrittenStatus != null) {
                 prevStatus = overwrittenStatus;
+                signatureChanged = true;
+            }
+        }
+
+        if (si.kind() == Kind.VAR && status.isDefined() && siOld != null) {
+            System.err.println("verifying constant value:");
+            VarSnippet nueVar = (VarSnippet) si;
+            VarSnippet oldVar = (VarSnippet) siOld;
+            System.err.println("new value: " + nueVar.constantValue);
+            System.err.println("old value: " + oldVar.constantValue);
+            if (!Objects.equals(nueVar.constantValue, oldVar.constantValue)) {
+                prevStatus = Status.OVERWRITTEN; //XXX
                 signatureChanged = true;
             }
         }

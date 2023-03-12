@@ -118,6 +118,8 @@ class ExpressionToTypeInfo {
          */
         List<AnonymousDescription> anonymousClasses = List.nil();
 
+        Object constantValue;
+
         /* A description of an anonymous class. */
         static class AnonymousDescription {
             /* Parameter types of the invoked super constructor.*/
@@ -469,6 +471,8 @@ class ExpressionToTypeInfo {
                         ei.anonymousClasses = ei.anonymousClasses.prepend(desc);
                     }
                     ei.anonymousClasses = ei.anonymousClasses.reverse();
+                    Type initType = pathToType(new TreePath(tp, init));
+                    ei.constantValue = initType != null ? initType.constValue() : null;
                 }
                 return ei;
             }

@@ -140,6 +140,7 @@ class Eval {
                 allEvents.addAll(declare(snip, snip.syntheticDiags()));
             }
         }
+        System.err.println("allEvents: " + allEvents);
         return allEvents;
     }
 
@@ -315,6 +316,9 @@ class Eval {
             Set<String> anonymousClasses = Collections.emptySet();
             StringBuilder sbBrackets = new StringBuilder();
             Tree baseType = vt.getType();
+            boolean constCandidate = vt.getModifiers().getFlags().contains(Modifier.FINAL);
+            Object constantValue = null; //TODO: only fill for final variables!!!!!
+            Tree init = vt.getInitializer();
             if (baseType != null) {
                 tds.scan(baseType); // Not dependent on initializer
                 fullTypeName = displayType = typeName = EvalPretty.prettyExpr((JCTree) vt.getType(), false);
@@ -325,12 +329,18 @@ class Eval {
                 }
                 Range rtype = dis.treeToRange(baseType);
                 typeWrap = Wrap.rangeWrap(compileSource, rtype);
+                if (init != null && constCandidate) {
+                    Range rinit = dis.treeToRange(init);
+                    String initCode = rinit.part(compileSource);
+                    ExpressionInfo ei =
+                            ExpressionToTypeInfo.localVariableTypeForInitializer(initCode, state, false);
+                    constantValue = ei != null ? ei.constantValue : null;
+                }
             } else {
                 DiagList dl = trialCompile(Wrap.methodWrap(compileSource));
                 if (dl.hasErrors()) {
                     return compileFailResult(dl, userSource, kindOfTree(unitTree));
                 }
-                Tree init = vt.getInitializer();
                 if (init != null) {
                     Range rinit = dis.treeToRange(init);
                     String initCode = rinit.part(compileSource);
@@ -350,6 +360,9 @@ class Eval {
                         anonDeclareWrap = anonymous2Member.first;
                         winit = anonymous2Member.second;
                         anonymousClasses = ei.anonymousClasses.stream().map(ad -> ad.declareTypeName).collect(Collectors.toSet());
+                        if (constCandidate) {
+                            constantValue = ei.constantValue;
+                        }
                     } else {
                         displayType = fullTypeName = typeName = "java.lang.Object";
                     }
@@ -394,13 +407,25 @@ class Eval {
                 int nameEnd = nameStart + name.length();
                 Range rname = new Range(nameStart, nameEnd);
                 wname = new Wrap.RangeWrap(compileSource, rname);
+                }
+            Wrap guts;
+            if (constantValue != null) {
+                Wrap wnameAndInit;
+                if (nameStart < 0) {
+                    wnameAndInit = new CompoundWrap(name, " = ", winit);
+                } else {
+                    wnameAndInit = Wrap.rangeWrap(compileSource, new Range(nameStart, runit.end));
+                }
+                guts = Wrap.constWrap(compileSource, Wrap.simpleWrap(" final "), typeWrap, name, wnameAndInit);
+            } else {
+                guts = Wrap.varWrap(compileSource, typeWrap, sbBrackets.toString(), wname,
+                                    winit, enhancedDesugaring, anonDeclareWrap);
             }
-            Wrap guts = Wrap.varWrap(compileSource, typeWrap, sbBrackets.toString(), wname,
-                                     winit, enhancedDesugaring, anonDeclareWrap);
+            System.err.println("guts: "+ guts.wrapped());
             DiagList modDiag = modifierDiagnostics(vt.getModifiers(), dis, true);
             Snippet snip = new VarSnippet(state.keyMap.keyForVariable(name), userSource, guts,
                     name, subkind, displayType, hasEnhancedType ? fullTypeName : null, anonymousClasses,
-                    tds.declareReferences(), modDiag);
+                    constantValue, tds.declareReferences(), modDiag);
             snippets.add(snip);
         }
         return snippets;
@@ -659,7 +684,7 @@ class Eval {
                 }
                 Collection<String> declareReferences = null; //TODO
                 snip = new VarSnippet(state.keyMap.keyForVariable(name), userSource, guts,
-                        name, SubKind.TEMP_VAR_EXPRESSION_SUBKIND, displayTypeName, fullTypeName, anonymousClasses, declareReferences, null);
+                        name, SubKind.TEMP_VAR_EXPRESSION_SUBKIND, displayTypeName, fullTypeName, anonymousClasses, null, declareReferences, null);
             } else {
                 guts = Wrap.methodReturnWrap(compileSource);
                 snip = new ExpressionSnippet(state.keyMap.keyForExpression(name, typeName), userSource, guts,
