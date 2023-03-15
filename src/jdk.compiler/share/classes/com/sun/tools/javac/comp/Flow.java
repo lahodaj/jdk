@@ -859,20 +859,21 @@ public class Flow {
 
             private List<Entry<Type, LinkedNodes>> find(Type targetType, JCPattern pattern) {
                 ListBuffer<Entry<Type, LinkedNodes>> result = new ListBuffer<>();
-                Type primaryType = types.erasure(TreeInfo.primaryPatternType(pattern));
+                Type primaryType = TreeInfo.primaryPatternType(pattern);
 
                 OUTER: while (true) {
                     for (var e : thisComponent2LinkedNodes.entrySet()) {
                         Type current = e.getKey();
-                        Type currentErasure = types.erasure(current);
-                        if (types.isSubtype(types.erasure(current), primaryType)) {
+                        if (types.isSubtype(current, primaryType)) {
                             result.append(e);
                         } else if (!e.getValue().currentComponentExhaustive() &&
                                    needsExpand(current, primaryType)) {
                             thisComponent2LinkedNodes.remove(current);
-                            for (Symbol s : ((ClassSymbol) currentErasure.tsym).permitted) {
-                                if (types.isCastable(targetType, s.type/*, types.noWarnings*/)) {
-                                    thisComponent2LinkedNodes.put(s.type, e.getValue().copy());
+                            for (Symbol s : ((ClassSymbol) current.tsym).permitted) {
+                                Type permittedType = infer.instantiatePatternType(targetType, s.type.tsym);
+
+                                if (permittedType != null) {
+                                    thisComponent2LinkedNodes.put(permittedType, e.getValue().copy());
                                 }
                             }
                             continue OUTER;
