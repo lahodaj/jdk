@@ -1258,6 +1258,86 @@ public class Exhaustiveness extends TestRunner {
                """);
     }
 
+    @Test
+    public void testComplexSubTypes1(Path base) throws Exception {
+        doTest(base,
+               new String[0],
+               """
+               package test;
+               public class Test {
+                   sealed interface I permits I1, I2, I3 {}
+                   sealed interface I1 extends I permits C1 {}
+                   sealed interface I2 extends I {}
+                   sealed interface I3 extends I {}
+                   final class C1 implements I1, I2 {}
+                   final class C2 implements I3 {}
+
+                   void test(I i) {
+                       switch (i) {
+                           case I2 i2 ->
+                               System.out.println("I2");
+                           case I3 i3 ->
+                               System.out.println("I3");
+                       }
+                   }
+               }
+               """);
+    }
+
+    @Test
+    public void testComplexSubTypes2(Path base) throws Exception {
+        doTest(base,
+               new String[0],
+               """
+               package test;
+               public class Test {
+                   sealed interface I permits I1, I2, I3 {}
+                   sealed interface I1 extends I permits C1 {}
+                   sealed interface I2 extends I {}
+                   sealed interface I3 extends I {}
+                   sealed abstract class C1 implements I1 {}
+                   final class C2 extends C1 implements I2 {}
+                   final class C3 extends C1 implements I3 {}
+
+                   void test(I i) {
+                       switch (i) {
+                           case I2 i2 ->
+                               System.out.println("I2");
+                           case I3 i3 ->
+                               System.out.println("I3");
+                       }
+                   }
+               }
+               """);
+    }
+
+    @Test
+    public void testComplexSubTypes3(Path base) throws Exception {
+        doTest(base,
+               new String[0],
+               """
+               package test;
+               public class Test {
+                   sealed interface I {}
+                   sealed interface I1 extends I {}
+                   final class I2 implements I1 {}
+
+                   void test(I i) {
+                       switch (i) {
+                           case I1 i1 ->
+                               System.out.println("I1");
+                           case I2 i2 ->
+                               System.out.println("I2");
+                       }
+                   }
+               }
+               """,
+               "Test.java:11:18: compiler.err.pattern.dominated",
+               "- compiler.note.preview.filename: Test.java, DEFAULT",
+               "- compiler.note.preview.recompile",
+               "1 error");
+    }
+
     private void doTest(Path base, String[] libraryCode, String testCode, String... expectedErrors) throws IOException {
         Path current = base.resolve(".");
         Path libClasses = current.resolve("libClasses");

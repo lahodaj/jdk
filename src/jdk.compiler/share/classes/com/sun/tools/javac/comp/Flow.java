@@ -807,7 +807,7 @@ public class Flow {
                 }
                 case TYPEVAR -> clearedSelectorTypes(((TypeVar) seltype).getUpperBound());
                 default -> {
-                    yield List.of(types.erasure(seltype));
+                    yield List.of(types.erasure(seltype)); //TODO: erasure
                 }
             };
         }
@@ -834,31 +834,31 @@ public class Flow {
             }
 
             public void handle(JCPattern pattern) {
-                Entry<Type, LinkedNodes> found = find(targetType, pattern);
-                if (found == null) return ;
+                for (Entry<Type, LinkedNodes> found : find(targetType, pattern)) {
+                    if (pattern instanceof JCBindingPattern) {
+                        found.setValue(new LinkedNodes(true, null, found.getValue().followingComponents));
+                    } else if (pattern instanceof JCRecordPattern recordPattern) {
+                        if (found.getValue().nestedComponents() == null) {
+                            List<Type> fullComponentTypes = recordPattern.record.getRecordComponents()
+                                    .map(rc -> types.memberType(recordPattern.type, rc));
 
-                if (pattern instanceof JCBindingPattern) {
-                    found.setValue(new LinkedNodes(true, null, found.getValue().followingComponents));
-                } else if (pattern instanceof JCRecordPattern recordPattern) {
-                    if (found.getValue().nestedComponents() == null) {
-                        List<Type> fullComponentTypes = recordPattern.record.getRecordComponents()
-                                .map(rc -> types.memberType(recordPattern.type, rc));
-
-                        if (fullComponentTypes.isEmpty()) {
-                            found.setValue(new LinkedNodes(true, null, found.getValue().followingComponents()));
-                        } else {
-                            found.setValue(new LinkedNodes(false, new RecordVariantNode(0, fullComponentTypes), found.getValue().followingComponents()));
+                            if (fullComponentTypes.isEmpty()) {
+                                found.setValue(new LinkedNodes(true, null, found.getValue().followingComponents()));
+                            } else {
+                                found.setValue(new LinkedNodes(false, new RecordVariantNode(0, fullComponentTypes), found.getValue().followingComponents()));
+                            }
                         }
+                        if (found.getValue().nestedComponents() != null) {
+                            found.getValue().nestedComponents().handleNestedRecordPattern(recordPattern.nested);
+                        }
+                    } else {
+                        Assert.error();
                     }
-                    if (found.getValue().nestedComponents() != null) {
-                        found.getValue().nestedComponents().handleNestedRecordPattern(recordPattern.nested);
-                    }
-                } else {
-                    Assert.error();
                 }
             }
 
-            private Entry<Type, LinkedNodes> find(Type targetType, JCPattern pattern) {
+            private List<Entry<Type, LinkedNodes>> find(Type targetType, JCPattern pattern) {
+                ListBuffer<Entry<Type, LinkedNodes>> result = new ListBuffer<>();
                 Type primaryType = types.erasure(TreeInfo.primaryPatternType(pattern));
 
                 OUTER: while (true) {
@@ -866,8 +866,9 @@ public class Flow {
                         Type current = e.getKey();
                         Type currentErasure = types.erasure(current);
                         if (types.isSubtype(types.erasure(current), primaryType)) {
-                            return e;
-                        } else if (types.isSubtype(primaryType, currentErasure) && currentErasure.tsym.isAbstract() && currentErasure.tsym.isSealed() && !e.getValue().currentComponentExhaustive()) {
+                            result.append(e);
+                        } else if (!e.getValue().currentComponentExhaustive() &&
+                                   needsExpand(current, primaryType)) {
                             thisComponent2LinkedNodes.remove(current);
                             for (Symbol s : ((ClassSymbol) currentErasure.tsym).permitted) {
                                 if (types.isCastable(targetType, s.type/*, types.noWarnings*/)) {
@@ -877,17 +878,30 @@ public class Flow {
                             continue OUTER;
                         }
                     }
-                    return null; //???
+                    return result.toList();
                 }
+            }
+
+            private boolean needsExpand(Type todoType, Type patternType) {
+                Type todoTypeErased = types.erasure(todoType);
+                if (todoTypeErased.tsym.isAbstract() && todoTypeErased.tsym.isSealed()) {
+                    if (types.isSubtype(patternType, todoTypeErased)) {
+                        return true;
+                    }
+                    for (Symbol s : ((ClassSymbol) todoTypeErased.tsym).permitted) {
+                        if (needsExpand(s.type, patternType) || types.isSubtype(types.erasure(s.type), patternType)) return true;
+                    }
+                }
+                return false;
             }
 
             private void handleNestedRecordPattern(List<JCPattern> nested) {
                 if (nested.isEmpty()) return ;
                 handle(nested.head);
-                Entry<Type, LinkedNodes> found = find(targetType, nested.head);
-                if (found == null) return ;
-                if (found.getValue().followingComponents() != null) {
-                    found.getValue().followingComponents().handleNestedRecordPattern(nested.tail);
+                for (Entry<Type, LinkedNodes> found : find(targetType, nested.head)) {
+                    if (found.getValue().followingComponents() != null) {
+                        found.getValue().followingComponents().handleNestedRecordPattern(nested.tail);
+                    }
                 }
             }
 
