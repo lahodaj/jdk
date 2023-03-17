@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,18 @@
  */
 
 // key: compiler.err.not.exhaustive
+// key: compiler.misc.not.exhaustive.missing.record
+// key: compiler.misc.not.exhaustive.missing.components
 // key: compiler.misc.not.exhaustive.missing.type
+// key: compiler.note.preview.filename
+// key:  compiler.note.preview.recompile
+// options: --enable-preview --release ${jdk.version}
 
-class NotExhaustive {
-    int t(int i) {
-        return switch (i) {
-            case 0 -> -1;
+class NotExhaustiveMissingRecord {
+    int t(R r) {
+        return switch (r) {
+            case R(Object o, String s) -> 0;
         };
     }
+    record R(Object o1, Object o2) {}
 }
