@@ -391,9 +391,6 @@ public class Enter extends JCTree.Visitor {
                 tree.packge.package_info = c;
                 tree.packge.sourcefile = tree.sourcefile;
             }
-            if (tree.isAnonymousMainClass() && tree.getAnonymousMainClass() == null) {
-                constructAnonymousMainClass(tree, source, preview, make, log, names);
-            }
             classEnter(tree.defs, topEnv);
             if (addEnv) {
                 todo.append(packageEnv);
@@ -427,54 +424,6 @@ public class Enter extends JCTree.Visitor {
                 scan(tree.pid);
             }
         };
-
-    // Restructure top level to be an top level anonymous class.
-    public static void constructAnonymousMainClass(JCCompilationUnit tree,
-                                                   Source source, Preview preview,
-                                                   TreeMaker make, Log log, Names names) {
-        Feature feature = Feature.ANONYMOUS_MAIN_CLASSES;
-        if (preview.isPreview(feature) && !preview.isEnabled()) {
-            //preview feature without --preview flag, error
-            log.error(DiagnosticFlag.SOURCE_LEVEL, tree.pos, preview.disabledError(feature));
-        } else if (!feature.allowedInSource(source)) {
-            //incompatible source level, error
-            log.error(DiagnosticFlag.SOURCE_LEVEL, tree.pos, feature.error(source.name));
-        } else if (preview.isPreview(feature)) {
-            //use of preview feature, warn
-            preview.warnPreview(tree.pos, feature);
-        }
-
-        make.at(tree.pos);
-        String simplename = PathFileObject.getSimpleName(tree.sourcefile);
-        if (simplename.endsWith(".java")) {
-            simplename = simplename.substring(0, simplename.length() - ".java".length());
-        }
-        if (!SourceVersion.isIdentifier(simplename) || SourceVersion.isKeyword(simplename)) {
-            log.error(null, Errors.BadFileName(simplename));
-        }
-        Name name = names.fromString(simplename);
-
-        ListBuffer<JCTree> topDefs = new ListBuffer<>();
-        ListBuffer<JCTree> defs = new ListBuffer<>();
-
-        for (JCTree def : tree.defs) {
-            if (def.hasTag(Tag.PACKAGEDEF)) {
-                log.error(null, Errors.AnonymousMainClassShouldNotHavePackageDeclaration);
-            } else if (def.hasTag(Tag.IMPORT)) {
-                topDefs.append(def);
-            } else {
-                defs.append(def);
-            }
-        }
-
-        JCModifiers anonMods = make.at(tree.pos)
-                .Modifiers(FINAL|MANDATED|SYNTHETIC|ANONYMOUS_MAIN_CLASS, List.nil());
-        JCClassDecl anon = make.at(tree.pos).ClassDef(
-                anonMods, name, List.nil(), null, List.nil(), List.nil(),
-                defs.toList());
-        topDefs.append(anon);
-        tree.defs = topDefs.toList();
-    }
 
     @Override
     public void visitClassDef(JCClassDecl tree) {
