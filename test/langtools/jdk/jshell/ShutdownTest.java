@@ -25,18 +25,17 @@
  * @test
  * @summary Shutdown tests
  * @build KullaTesting TestingInputStream
- * @run testng ShutdownTest
+ * @run junit ShutdownTest
  */
 
 import java.util.function.Consumer;
 
 import jdk.jshell.JShell;
 import jdk.jshell.JShell.Subscription;
-import org.testng.annotations.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
-import static org.testng.Assert.assertEquals;
-
-@Test
 public class ShutdownTest extends KullaTesting {
 
     int shutdownCount;
@@ -45,29 +44,33 @@ public class ShutdownTest extends KullaTesting {
         ++shutdownCount;
     }
 
-    @Test(enabled = false) //TODO 8139873
+    @Test() 
+    @Disabled
     public void testExit() {
         shutdownCount = 0;
         getState().onShutdown(this::shutdownCounter);
         assertEval("System.exit(1);");
-        assertEquals(shutdownCount, 1);
+        Assertions.assertEquals(1, shutdownCount);
     }
 
+    @Test
     public void testCloseCallback() {
         shutdownCount = 0;
         getState().onShutdown(this::shutdownCounter);
         getState().close();
-        assertEquals(shutdownCount, 1);
+        Assertions.assertEquals(1, shutdownCount);
     }
 
+    @Test
     public void testCloseUnsubscribe() {
         shutdownCount = 0;
         Subscription token = getState().onShutdown(this::shutdownCounter);
         getState().unsubscribe(token);
         getState().close();
-        assertEquals(shutdownCount, 0);
+        Assertions.assertEquals(0, shutdownCount);
     }
 
+    @Test
     public void testTwoShutdownListeners() {
         ShutdownListener listener1 = new ShutdownListener();
         ShutdownListener listener2 = new ShutdownListener();
@@ -76,46 +79,56 @@ public class ShutdownTest extends KullaTesting {
         getState().unsubscribe(subscription1);
         getState().close();
 
-        assertEquals(listener1.getEvents(), 0, "Checking got events");
-        assertEquals(listener2.getEvents(), 1, "Checking got events");
+        Assertions.assertEquals(0, listener1.getEvents(), "Checking got events");
+        Assertions.assertEquals(1, listener2.getEvents(), "Checking got events");
 
         getState().close();
 
-        assertEquals(listener1.getEvents(), 0, "Checking got events");
-        assertEquals(listener2.getEvents(), 1, "Checking got events");
+        Assertions.assertEquals(0, listener1.getEvents(), "Checking got events");
+        Assertions.assertEquals(1, listener2.getEvents(), "Checking got events");
 
         getState().unsubscribe(subscription2);
     }
 
-    @Test(expectedExceptions = IllegalStateException.class)
+    @Test()
     public void testCloseException() {
-        getState().close();
-        getState().eval("45");
+        Assertions.assertThrows(IllegalStateException.class, () -> {
+            getState().close();
+            getState().eval("45");
+        });
     }
 
-    @Test(expectedExceptions = IllegalStateException.class,
-          enabled = false) //TODO 8139873
+    @Test() 
+    @Disabled
     public void testShutdownException() {
-        assertEval("System.exit(0);");
-        getState().eval("45");
+        Assertions.assertThrows(IllegalStateException.class, () -> {
+            assertEval("System.exit(0);");
+            getState().eval("45");
+        });
     }
 
-    @Test(expectedExceptions = NullPointerException.class)
+    @Test()
     public void testNullCallback() {
-        getState().onShutdown(null);
+        Assertions.assertThrows(NullPointerException.class, () -> {
+            getState().onShutdown(null);
+        });
     }
 
-    @Test(expectedExceptions = IllegalStateException.class)
+    @Test()
     public void testSubscriptionAfterClose() {
-        getState().close();
-        getState().onShutdown(e -> {});
+        Assertions.assertThrows(IllegalStateException.class, () -> {
+            getState().close();
+            getState().onShutdown(e -> {});
+        });
     }
 
-    @Test(expectedExceptions = IllegalStateException.class,
-          enabled = false) //TODO 8139873
+    @Test() 
+    @Disabled
     public void testSubscriptionAfterShutdown() {
-        assertEval("System.exit(0);");
-        getState().onShutdown(e -> {});
+        Assertions.assertThrows(IllegalStateException.class, () -> {
+            assertEval("System.exit(0);");
+            getState().onShutdown(e -> {});
+        });
     }
 
     private static class ShutdownListener implements Consumer<JShell> {

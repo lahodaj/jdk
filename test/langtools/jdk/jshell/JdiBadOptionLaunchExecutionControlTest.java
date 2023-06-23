@@ -26,22 +26,21 @@
  * @bug 8169519 8166581
  * @summary Tests for JDI connector failure
  * @modules jdk.jshell/jdk.jshell jdk.jshell/jdk.jshell.spi jdk.jshell/jdk.jshell.execution
- * @run testng JdiBadOptionLaunchExecutionControlTest
+ * @run junit JdiBadOptionLaunchExecutionControlTest
  */
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.testng.annotations.Test;
 import jdk.jshell.JShell;
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
-@Test
 public class JdiBadOptionLaunchExecutionControlTest {
 
     private static final String EXPECTED_ERROR =
             "Launching JShell execution engine threw: Failed remote launch: java.util.concurrent.ExecutionException: com.sun.jdi.connect.VMStartException: VM initialization failed";
 
+    @Test
     public void badOptionLaunchTest() {
         try {
             // turn on logging of launch failures
@@ -51,9 +50,9 @@ public class JdiBadOptionLaunchExecutionControlTest {
                     .remoteVMOptions("-BadBadOption")
                     .build();
         } catch (IllegalStateException ex) {
-            assertTrue(ex.getMessage().startsWith(EXPECTED_ERROR), ex.getMessage());
+            Assertions.assertTrue(ex.getMessage().startsWith(EXPECTED_ERROR), ex.getMessage());
             return;
         }
-        fail("Expected IllegalStateException");
+        Assertions.fail("Expected IllegalStateException");
     }
 }

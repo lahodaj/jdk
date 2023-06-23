@@ -26,17 +26,15 @@
  * @bug 8169519 8168615 8176474
  * @summary Tests for JDI connector failure
  * @modules jdk.jshell/jdk.jshell jdk.jshell/jdk.jshell.spi jdk.jshell/jdk.jshell.execution
- * @run testng JdiBogusHostListenExecutionControlTest
+ * @run junit JdiBogusHostListenExecutionControlTest
  */
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.testng.annotations.Test;
 import jdk.jshell.JShell;
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
-@Test
 public class JdiBogusHostListenExecutionControlTest {
 
     private static final String EXPECTED_ERROR =
@@ -44,6 +42,7 @@ public class JdiBogusHostListenExecutionControlTest {
     private static final String EXPECTED_LOCATION =
             "@ com.sun.jdi.SocketListen";
 
+    @Test
     public void badOptionListenTest() {
         try {
             // turn on logging of launch failures
@@ -52,12 +51,12 @@ public class JdiBogusHostListenExecutionControlTest {
                     .executionEngine("jdi:hostname(BattyRumbleBuckets-Snurfle-99-Blip)")
                     .build();
         } catch (IllegalStateException ex) {
-            assertTrue(ex.getMessage().startsWith(EXPECTED_ERROR),
+            Assertions.assertTrue(ex.getMessage().startsWith(EXPECTED_ERROR),
                     ex.getMessage() + "\nExpected: " + EXPECTED_ERROR);
-            assertTrue(ex.getMessage().contains(EXPECTED_LOCATION),
+            Assertions.assertTrue(ex.getMessage().contains(EXPECTED_LOCATION),
                     ex.getMessage() + "\nExpected: " + EXPECTED_LOCATION);
             return;
         }
-        fail("Expected IllegalStateException");
+        Assertions.fail("Expected IllegalStateException");
     }
 }

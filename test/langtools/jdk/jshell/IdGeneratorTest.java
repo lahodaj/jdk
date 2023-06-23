@@ -25,7 +25,7 @@
  * @test
  * @summary Test custom id generators
  * @build KullaTesting TestingInputStream
- * @run testng IdGeneratorTest
+ * @run junit IdGeneratorTest
  */
 
 import java.io.ByteArrayOutputStream;
@@ -38,14 +38,12 @@ import jdk.jshell.JShell;
 import jdk.jshell.SnippetEvent;
 import jdk.jshell.UnresolvedReferenceException;
 import jdk.jshell.VarSnippet;
-import org.testng.annotations.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
-
-@Test
 public class IdGeneratorTest {
 
+    @Test
     public JShell.Builder getBuilder() {
         TestingInputStream inStream = new TestingInputStream();
         ByteArrayOutputStream outStream = new ByteArrayOutputStream();
@@ -56,6 +54,7 @@ public class IdGeneratorTest {
                 .err(new PrintStream(errStream));
     }
 
+    @Test
     public void testTempNameGenerator() {
         JShell.Builder builder = getBuilder().tempVariableNameGenerator(new Supplier<String>() {
             int count = 0;
@@ -68,11 +67,12 @@ public class IdGeneratorTest {
         try (JShell jShell = builder.build()) {
             for (int i = 0; i < 3; ++i) {
                 VarSnippet v = (VarSnippet) jShell.eval("2 + " + (i + 1)).get(0).snippet();
-                assertEquals("temp" + (i + 1), v.name(), "Custom id: ");
+                Assertions.assertEquals(v.name(), "temp" + (i + 1), "Custom id: ");
             }
         }
     }
 
+    @Test
     public void testResetTempNameGenerator() {
         JShell.Builder builder = getBuilder().tempVariableNameGenerator(() -> {
             throw new AssertionError("Should not be called");
@@ -82,6 +82,7 @@ public class IdGeneratorTest {
         }
     }
 
+    @Test
     public void testIdGenerator() {
         JShell.Builder builder = getBuilder().idGenerator(((snippet, id) -> "custom" + id));
         try (JShell jShell = builder.build()) {
@@ -93,28 +94,30 @@ public class IdGeneratorTest {
 
     private void checkIds(List<SnippetEvent> events) {
         for (SnippetEvent event : events) {
-            assertTrue(event.snippet().id().startsWith("custom"), "Not started with \"custom\": "
+            Assertions.assertTrue(event.snippet().id().startsWith("custom"), "Not started with \"custom\": "
                     + event.snippet().id());
         }
     }
 
+    @Test
     public void testIdInException() {
         JShell.Builder builder = getBuilder().idGenerator(((snippet, id) -> "custom" + id));
         try (JShell jShell = builder.build()) {
             EvalException evalException = (EvalException) jShell.eval("throw new Error();").get(0).exception();
             for (StackTraceElement ste : evalException.getStackTrace()) {
-                assertTrue(ste.getFileName().startsWith("#custom"), "Not started with \"#custom\": "
+                Assertions.assertTrue(ste.getFileName().startsWith("#custom"), "Not started with \"#custom\": "
                         + ste.getFileName());
             }
             jShell.eval("void f() { g(); }");
             UnresolvedReferenceException unresolvedException = (UnresolvedReferenceException) jShell.eval("f();").get(0).exception();
             for (StackTraceElement ste : unresolvedException.getStackTrace()) {
-                assertTrue(ste.getFileName().startsWith("#custom"), "Not started with \"#custom\": "
+                Assertions.assertTrue(ste.getFileName().startsWith("#custom"), "Not started with \"#custom\": "
                         + ste.getFileName());
             }
         }
     }
 
+    @Test
     public void testResetIdGenerator() {
         JShell.Builder builder = getBuilder().idGenerator((sn, id) -> {
             throw new AssertionError("Should not be called");

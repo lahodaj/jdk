@@ -34,7 +34,7 @@
  * @library /tools/lib
  * @build toolbox.ToolBox toolbox.JarTask toolbox.JavacTask
  * @build KullaTesting ExecutionControlTestBase Compiler
- * @run testng FailOverDirectExecutionControlTest
+ * @run junit FailOverDirectExecutionControlTest
  * @key intermittent
  */
 
@@ -48,16 +48,13 @@ import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.Test;
-import org.testng.annotations.BeforeMethod;
 import jdk.jshell.execution.FailOverExecutionControlProvider;
 import jdk.jshell.spi.ExecutionControlProvider;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNull;
-import static org.testng.Assert.assertTrue;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-@Test
 public class FailOverDirectExecutionControlTest extends ExecutionControlTestBase {
 
     ClassLoader ccl;
@@ -92,7 +89,7 @@ public class FailOverDirectExecutionControlTest extends ExecutionControlTestBase
 
     }
 
-    @BeforeMethod
+    @BeforeEach
     @Override
     public void setUp() {
         Logger logger = Logger.getLogger("jdk.jshell.execution");
@@ -135,7 +132,7 @@ public class FailOverDirectExecutionControlTest extends ExecutionControlTestBase
         setUp(builder -> builder.executionEngine(provider, pm));
     }
 
-    @AfterMethod
+    @AfterEach
     @Override
     public void tearDown() {
         super.tearDown();
@@ -145,20 +142,21 @@ public class FailOverDirectExecutionControlTest extends ExecutionControlTestBase
     }
 
     @Override
+    @Test
     public void variables() {
         super.variables();
-        assertEquals(logged.get(Level.FINEST).size(), 1);
-        assertEquals(logged.get(Level.FINE).size(), 2);
-        assertEquals(logged.get(Level.WARNING).size(), 2);
-        assertNull(logged.get(Level.SEVERE));
+        Assertions.assertEquals(1, logged.get(Level.FINEST).size());
+        Assertions.assertEquals(2, logged.get(Level.FINE).size());
+        Assertions.assertEquals(2, logged.get(Level.WARNING).size());
+        Assertions.assertNull(logged.get(Level.SEVERE));
         String log = logged.get(Level.WARNING).get(0);
-        assertTrue(log.contains("Failure failover -- 0 = alwaysFailing"), log);
-        assertTrue(log.contains("This operation intentionally broken"), log);
+        Assertions.assertTrue(log.contains("Failure failover -- 0 = alwaysFailing"), log);
+        Assertions.assertTrue(log.contains("This operation intentionally broken"), log);
         log = logged.get(Level.WARNING).get(1);
-        assertTrue(log.contains("Failure failover -- 1 = alwaysFailing"), log);
-        assertTrue(log.contains("This operation intentionally broken"), log);
+        Assertions.assertTrue(log.contains("Failure failover -- 1 = alwaysFailing"), log);
+        Assertions.assertTrue(log.contains("This operation intentionally broken"), log);
         log = logged.get(Level.FINEST).get(0);
-        assertTrue(
+        Assertions.assertTrue(
                 log.contains("Success failover -- 2 = " + standardListenSpec())
                 || log.contains("Success failover -- 3 = " + standardLaunchSpec())
                 || log.contains("Success failover -- 4 = " + standardJdiSpec()),

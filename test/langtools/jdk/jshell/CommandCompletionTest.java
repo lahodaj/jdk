@@ -32,7 +32,7 @@
  * @library /tools/lib
  * @build toolbox.ToolBox toolbox.JarTask toolbox.JavacTask
  * @build ReplToolTesting TestingInputStream Compiler
- * @run testng CommandCompletionTest
+ * @run junit CommandCompletionTest
  */
 
 import java.io.IOException;
@@ -46,16 +46,13 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.testng.SkipException;
-import org.testng.annotations.Test;
 
 import jdk.internal.jshell.tool.JShellTool;
 import jdk.internal.jshell.tool.JShellToolBuilder;
 import jdk.jshell.SourceCodeAnalysis.Suggestion;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 public class CommandCompletionTest extends ReplToolTesting {
 
@@ -69,7 +66,7 @@ public class CommandCompletionTest extends ReplToolTesting {
         try {
             repl.start(args);
         } catch (Exception ex) {
-            fail("Repl tool died with exception", ex);
+            Assertions.fail("Repl tool died with exception", ex);
         }
     }
 
@@ -78,7 +75,7 @@ public class CommandCompletionTest extends ReplToolTesting {
             setCommandInput("\n");
         } else {
             List<String> completions = computeCompletions(code, false);
-            assertTrue(completions.size() >= minElements, "Command: " + code + ", output: " +
+            Assertions.assertTrue(completions.size() >= minElements, "Command: " + code + ", output: " +
                     completions.toString() + ", expected output with at least " + minElements + " elements");
         }
     }
@@ -94,14 +91,14 @@ public class CommandCompletionTest extends ReplToolTesting {
     public void assertCompletion(String code, boolean isSmart, String... expected) {
         List<String> completions = computeCompletions(code, isSmart);
         List<String> expectedL = Arrays.asList(expected);
-        assertEquals(completions, expectedL, "Command: " + code + ", output: " +
+        Assertions.assertEquals(expectedL, completions, "Command: " + code + ", output: " +
                 completions.toString() + ", expected: " + expectedL.toString());
     }
 
     private List<String> computeCompletions(String code, boolean isSmart) {
         int cursor =  code.indexOf('|');
         code = code.replace("|", "");
-        assertTrue(cursor > -1, "'|' not found: " + code);
+        Assertions.assertTrue(cursor > -1, "'|' not found: " + code);
         List<Suggestion> completions =
                 repl.commandCompletionSuggestions(code, cursor, new int[] {-1}); //XXX: ignoring anchor for now
         return completions.stream()

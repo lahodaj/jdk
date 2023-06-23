@@ -34,7 +34,7 @@
  * @build toolbox.ToolBox toolbox.JarTask toolbox.JavacTask
  * @build Compiler UITesting
  * @build ToolTabSnippetTest
- * @run testng/timeout=300 ToolTabSnippetTest
+ * @run junit/timeout=300 ToolTabSnippetTest
  */
 
 import java.io.IOException;
@@ -48,15 +48,14 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
 import jdk.internal.jshell.tool.ConsoleIOContextTestSupport;
-import org.testng.annotations.Test;
 
-@Test
 public class ToolTabSnippetTest extends UITesting {
 
     public ToolTabSnippetTest() {
         super(true);
     }
 
+    @org.junit.jupiter.api.Test
     public void testExpression() throws Exception {
         Path classes = prepareZip();
         doRunTest((inputSink, out) -> {
@@ -208,6 +207,7 @@ public class ToolTabSnippetTest extends UITesting {
         });
     }
 
+    @org.junit.jupiter.api.Test
     public void testCleaningCompletionTODO() throws Exception {
         doRunTest((inputSink, out) -> {
             CountDownLatch testCompleteComputationStarted = new CountDownLatch(1);
@@ -241,6 +241,7 @@ public class ToolTabSnippetTest extends UITesting {
         });
     }
 
+    @org.junit.jupiter.api.Test
     public void testNoRepeat() throws Exception {
         doRunTest((inputSink, out) -> {
             inputSink.write("String xyzAA;\n");
@@ -266,6 +267,7 @@ public class ToolTabSnippetTest extends UITesting {
         });
     }
 
+    @org.junit.jupiter.api.Test
     public void testCrash8221759() throws Exception {
         doRunTest((inputSink, out) -> {
             inputSink.write("java.io.File.path" + TAB);
@@ -331,6 +333,7 @@ public class ToolTabSnippetTest extends UITesting {
     //where:
         private final Compiler compiler = new Compiler();
 
+    @org.junit.jupiter.api.Test
     public void testDocumentationAfterInsert() throws Exception {
         doRunTest((inputSink, out) -> {
             inputSink.write("import java.time.*\n");

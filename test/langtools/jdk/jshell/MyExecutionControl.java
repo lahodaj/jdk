@@ -42,8 +42,8 @@ import jdk.jshell.execution.Util;
 import jdk.jshell.spi.ExecutionControl;
 import jdk.jshell.spi.ExecutionControl.EngineTerminationException;
 import jdk.jshell.spi.ExecutionEnv;
-import static org.testng.Assert.fail;
 import static jdk.jshell.execution.Util.remoteInputOutput;
+import org.junit.jupiter.api.Assertions;
 
 class MyExecutionControl extends JdiExecutionControl {
 
@@ -140,7 +140,7 @@ class MyExecutionControl extends JdiExecutionControl {
         } catch (VMDisconnectedException ex) {
             // Ignore if already closed
         } catch (Throwable e) {
-            fail("disposeVM threw: " + e);
+            Assertions.fail("disposeVM threw: " + e);
         } finally {
             if (process != null) {
                 process.destroy();

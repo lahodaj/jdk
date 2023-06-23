@@ -25,27 +25,25 @@
  * @test
  * @bug 8199193
  * @summary Tests for the --enable-preview option
- * @run testng ToolEnablePreviewTest
+ * @run junit ToolEnablePreviewTest
  */
 
-import org.testng.annotations.Test;
-
-import static org.testng.Assert.assertTrue;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 public class ToolEnablePreviewTest extends ReplToolTesting {
 
     @Test
     public void testOptionDebug() {
         String release = System.getProperty("java.specification.version");
-        test(
-                (a) -> assertCommand(a, "/debug b",
+        test((a) -> assertCommand(a, "/debug b",
                         "RemoteVM Options: []\n"
                         + "Compiler options: []"),
                 (a) -> assertCommand(a, "/env --enable-preview",
                         "|  Setting new options and restoring state."),
                 (a) -> assertCommandCheckOutput(a, "/debug b", s -> {
-                    assertTrue(s.contains("RemoteVM Options: [--enable-preview]"));
-                    assertTrue(s.contains("Compiler options: [-source, " + release + ", --enable-preview]")
+                    Assertions.assertTrue(s.contains("RemoteVM Options: [--enable-preview]"));
+                    Assertions.assertTrue(s.contains("Compiler options: [-source, " + release + ", --enable-preview]")
                             || s.contains("Compiler options: [--enable-preview, -source, " + release + "]"),
                             "\nExpected -- " + "Compiler options: [-source, " + release + ", --enable-preview]"
                             + "\nOr -- " + "Compiler options: [--enable-preview, -source, " + release + "]"
@@ -59,8 +57,8 @@ public class ToolEnablePreviewTest extends ReplToolTesting {
         String release = System.getProperty("java.specification.version");
         test(new String[] {"--enable-preview"},
                 (a) -> assertCommandCheckOutput(a, "/debug b", s -> {
-                    assertTrue(s.contains("RemoteVM Options: [--enable-preview]"));
-                    assertTrue(s.contains("Compiler options: [-source, " + release + ", --enable-preview]")
+                    Assertions.assertTrue(s.contains("RemoteVM Options: [--enable-preview]"));
+                    Assertions.assertTrue(s.contains("Compiler options: [-source, " + release + ", --enable-preview]")
                             || s.contains("Compiler options: [--enable-preview, -source, " + release + "]"),
                             "\nExpected -- " + "Compiler options: [-source, " + release + ", --enable-preview]"
                             + "\nOr -- " + "Compiler options: [--enable-preview, -source, " + release + "]"

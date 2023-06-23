@@ -23,8 +23,8 @@
 
 import java.util.ServiceLoader;
 import javax.tools.Tool;
-import org.testng.annotations.Test;
-import static org.testng.Assert.assertTrue;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 /*
  * @test
@@ -36,9 +36,8 @@ import static org.testng.Assert.assertTrue;
  *          jdk.jshell/jdk.internal.jshell.tool
  * @library /tools/lib
  * @build Compiler toolbox.ToolBox
- * @run testng ToolProviderTest
+ * @run junit ToolProviderTest
  */
-@Test
 public class ToolProviderTest extends StartOptionTest {
 
     // Through the provider, the console and console go to command out (we assume,
@@ -71,11 +70,12 @@ public class ToolProviderTest extends StartOptionTest {
 
     // Test --show-version
     @Override
+    @Test
     public void testShowVersion() {
         startCo(s -> {
-            assertTrue(s.startsWith("jshell "), "unexpected version: " + s);
-            assertTrue(s.contains("Welcome"), "Expected start (but got no welcome): " + s);
-            assertTrue(s.trim().contains("jshell>"), "Expected prompt, got: " + s);
+            Assertions.assertTrue(s.startsWith("jshell "), "unexpected version: " + s);
+            Assertions.assertTrue(s.contains("Welcome"), "Expected start (but got no welcome): " + s);
+            Assertions.assertTrue(s.trim().contains("jshell>"), "Expected prompt, got: " + s);
         },
                 "--show-version");
     }

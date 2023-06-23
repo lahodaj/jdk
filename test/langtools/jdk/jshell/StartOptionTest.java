@@ -30,7 +30,7 @@
  *          jdk.jshell/jdk.internal.jshell.tool
  * @library /tools/lib
  * @build Compiler toolbox.ToolBox
- * @run testng StartOptionTest
+ * @run junit StartOptionTest
  */
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -46,16 +46,12 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
 import jdk.jshell.tool.JavaShellToolBuilder;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-@Test
 public class StartOptionTest {
 
     protected ByteArrayOutputStream cmdout;
@@ -83,7 +79,7 @@ public class StartOptionTest {
             return builder()
                     .start(args);
         } catch (Exception ex) {
-            fail("Repl tool died with exception", ex);
+            Assertions.fail("Repl tool died with exception", ex);
         }
         return -1; // for compiler
     }
@@ -97,7 +93,7 @@ public class StartOptionTest {
         if (checkOut != null) {
             checkOut.accept(out);
         } else {
-            assertEquals(out, "", label + ": Expected empty -- ");
+            Assertions.assertEquals("", out, label + ": Expected empty -- ");
         }
     }
 
@@ -105,7 +101,7 @@ public class StartOptionTest {
         if (checkCode != null) {
             checkCode.accept(ec);
         } else {
-            assertEquals(ec, 0, "Expected standard exit code (0), but found: " + ec);
+            Assertions.assertEquals(0, ec, "Expected standard exit code (0), but found: " + ec);
         }
     }
 
@@ -128,8 +124,7 @@ public class StartOptionTest {
 
     // Start with an exit code and command error check
     protected void startExCe(int eec, Consumer<String> checkError, String... args) {
-        StartOptionTest.this.startExCoUoCeCn(
-                (Integer ec) -> assertEquals((int) ec, eec,
+        StartOptionTest.this.startExCoUoCeCn((Integer ec) -> Assertions.assertEquals(eec, (int) ec,
                         "Expected error exit code (" + eec + "), but found: " + ec),
                 null, null, checkError, null, args);
     }
@@ -142,7 +137,7 @@ public class StartOptionTest {
     private Consumer<String> assertOrNull(String expected, String label) {
         return expected == null
                 ? null
-                : s -> assertEquals(s.replaceAll("\\r\\n?", "\n").trim(), expected.trim(), label);
+                : s -> Assertions.assertEquals(expected.trim(), s.replaceAll("\\r\\n?", "\n").trim(), label);
     }
 
     // Start and check the resultant: exit code (Ex), command output (Co),
@@ -153,10 +148,9 @@ public class StartOptionTest {
             String expectedError,
             String expectedConsole,
             String... args) {
-        startExCoUoCeCn(
-                expectedExitCode == 0
+        startExCoUoCeCn(expectedExitCode == 0
                         ? null
-                        : (Integer i) -> assertEquals((int) i, expectedExitCode,
+                        : (Integer i) -> Assertions.assertEquals(expectedExitCode, (int) i,
                         "Expected exit code (" + expectedExitCode + "), but found: " + i),
                 assertOrNull(expectedCmdOutput, "cmdout: "),
                 assertOrNull(expectedUserOutput, "userout: "),
@@ -180,7 +174,7 @@ public class StartOptionTest {
         startExCoUoCeCn(0, null, expectedUserOutput, null, null, args);
     }
 
-    @BeforeMethod
+    @BeforeEach
     public void setUp() {
         cmdout = new ByteArrayOutputStream();
         cmderr = new ByteArrayOutputStream();
@@ -203,6 +197,7 @@ public class StartOptionTest {
     }
 
     // Test load files
+    @Test
     public void testCommandFile() {
         String fn = writeToFile("String str = \"Hello \"\n" +
                 "/list\n" +
@@ -217,36 +212,40 @@ public class StartOptionTest {
     }
 
     // Test that the usage message is printed
+    @Test
     public void testUsage() {
         for (String opt : new String[]{"-?", "-h", "--help"}) {
             startCo(s -> {
-                assertTrue(s.split("\n").length >= 7, "Not enough usage lines: " + s);
-                assertTrue(s.startsWith("Usage:   jshell <option>..."), "Unexpect usage start: " + s);
-                assertTrue(s.contains("--show-version"), "Expected help: " + s);
-                assertFalse(s.contains("Welcome"), "Unexpected start: " + s);
+                Assertions.assertTrue(s.split("\n").length >= 7, "Not enough usage lines: " + s);
+                Assertions.assertTrue(s.startsWith("Usage:   jshell <option>..."), "Unexpect usage start: " + s);
+                Assertions.assertTrue(s.contains("--show-version"), "Expected help: " + s);
+                Assertions.assertFalse(s.contains("Welcome"), "Unexpected start: " + s);
             }, opt);
         }
     }
 
     // Test the --help-extra message
+    @Test
     public void testHelpExtra() {
         for (String opt : new String[]{"-X", "--help-extra"}) {
             startCo(s -> {
-                assertTrue(s.split("\n").length >= 5, "Not enough help-extra lines: " + s);
-                assertTrue(s.contains("--add-exports"), "Expected --add-exports: " + s);
-                assertTrue(s.contains("--execution"), "Expected --execution: " + s);
-                assertFalse(s.contains("Welcome"), "Unexpected start: " + s);
+                Assertions.assertTrue(s.split("\n").length >= 5, "Not enough help-extra lines: " + s);
+                Assertions.assertTrue(s.contains("--add-exports"), "Expected --add-exports: " + s);
+                Assertions.assertTrue(s.contains("--execution"), "Expected --execution: " + s);
+                Assertions.assertFalse(s.contains("Welcome"), "Unexpected start: " + s);
             }, opt);
         }
     }
 
     // Test handling of bogus options
+    @Test
     public void testUnknown() {
         startExCe(1, "Unknown option: u", "-unknown");
         startExCe(1, "Unknown option: unknown", "--unknown");
     }
 
     // Test that input is read with "-" and there is no extra output.
+    @Test
     public void testHypenFile() {
         setIn("System.out.print(\"Hello\");\n");
         startUo("Hello", "-");
@@ -257,12 +256,13 @@ public class StartOptionTest {
         startUo("===Hello===", fn, "-", fn);
         // check that errors go to standard error
         setIn(") Foobar");
-        startExCe(0, s -> assertTrue(s.contains("illegal start of expression"),
+        startExCe(0, s -> Assertions.assertTrue(s.contains("illegal start of expression"),
                 "cmderr: illegal start of expression"),
                 "-");
     }
 
     // Test that user specified exit codes are propagated
+    @Test
     public void testExitCode() {
         setIn("/exit 57\n");
         startExCoUoCeCn(57, null, null, null, "-> /exit 57", "-s");
@@ -277,11 +277,13 @@ public class StartOptionTest {
     }
 
     // Test that non-existent load file sends output to stderr and does not startExCe (no welcome).
+    @Test
     public void testUnknownLoadFile() {
         startExCe(1, "File 'UNKNOWN' for 'jshell' is not found.", "UNKNOWN");
     }
 
     // Test bad usage of the --startup option
+    @Test
     public void testStartup() {
         String fn = writeToFile("");
         startExCe(1, "Argument to startup missing.", "--startup");
@@ -291,18 +293,21 @@ public class StartOptionTest {
     }
 
     // Test an option that causes the back-end to fail is propagated
+    @Test
     public void testStartupFailedOption() {
-        startExCe(1, s -> assertTrue(s.contains("Unrecognized option: -hoge-foo-bar"), "cmderr: " + s),
+        startExCe(1, s -> Assertions.assertTrue(s.contains("Unrecognized option: -hoge-foo-bar"), "cmderr: " + s),
                 "-R-hoge-foo-bar");
     }
 
     // Test the use of non-existant files with the --startup option
+    @Test
     public void testStartupUnknown() {
         startExCe(1, "File 'UNKNOWN' for '--startup' is not found.", "--startup", "UNKNOWN");
         startExCe(1, "File 'UNKNOWN' for '--startup' is not found.", "--startup", "DEFAULT", "--startup", "UNKNOWN");
     }
 
     // Test bad usage of --class-path option
+    @Test
     public void testClasspath() {
         for (String cp : new String[]{"--class-path"}) {
             startExCe(1, "Only one --class-path option may be used.", cp, ".", "--class-path", ".");
@@ -311,12 +316,14 @@ public class StartOptionTest {
     }
 
     // Test bogus module on --add-modules option
+    @Test
     public void testUnknownModule() {
-        startExCe(1, s -> assertTrue(s.contains("rror") && s.contains("unKnown"), "cmderr: " + s),
+        startExCe(1, s -> Assertions.assertTrue(s.contains("rror") && s.contains("unKnown"), "cmderr: " + s),
                 "--add-modules", "unKnown");
     }
 
     // Test that muliple feedback options fail
+    @Test
     public void testFeedbackOptionConflict() {
         startExCe(1, "Only one feedback option (--feedback, -q, -s, or -v) may be used.",
                 "--feedback", "concise", "--feedback", "verbose");
@@ -331,34 +338,37 @@ public class StartOptionTest {
     }
 
     // Test bogus arguments to the --feedback option
+    @Test
     public void testNegFeedbackOption() {
         startExCe(1, "Argument to feedback missing.", "--feedback");
         startExCe(1, "Does not match any current feedback mode: blorp -- --feedback blorp", "--feedback", "blorp");
     }
 
     // Test --version
+    @Test
     public void testVersion() {
         startCo(s -> {
-            assertTrue(s.startsWith("jshell"), "unexpected version: " + s);
-            assertFalse(s.contains("Welcome"), "Unexpected start: " + s);
+            Assertions.assertTrue(s.startsWith("jshell"), "unexpected version: " + s);
+            Assertions.assertFalse(s.contains("Welcome"), "Unexpected start: " + s);
         },
                 "--version");
     }
 
     // Test --show-version
+    @Test
     public void testShowVersion() {
         startExCoUoCeCn(null,
                 s -> {
-                    assertTrue(s.startsWith("jshell"), "unexpected version: " + s);
-                    assertTrue(s.contains("Welcome"), "Expected start (but got no welcome): " + s);
+                    Assertions.assertTrue(s.startsWith("jshell"), "unexpected version: " + s);
+                    Assertions.assertTrue(s.contains("Welcome"), "Expected start (but got no welcome): " + s);
                 },
                 null,
                 null,
-                s -> assertTrue(s.trim().startsWith("jshell>"), "Expected prompt, got: " + s),
+                s -> Assertions.assertTrue(s.trim().startsWith("jshell>"), "Expected prompt, got: " + s),
                 "--show-version");
     }
 
-    @AfterMethod
+    @AfterEach
     public void tearDown() {
         cmdout = null;
         cmderr = null;

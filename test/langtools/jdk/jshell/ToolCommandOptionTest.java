@@ -30,16 +30,15 @@
  *          jdk.compiler/com.sun.tools.javac.main
  * @library /tools/lib
  * @build ToolCommandOptionTest ReplToolTesting
- * @run testng ToolCommandOptionTest
+ * @run junit ToolCommandOptionTest
  */
 import java.nio.file.Path;
-import org.testng.annotations.Test;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
-@Test
 public class ToolCommandOptionTest extends ReplToolTesting {
 
+    @Test
     public void listTest() {
         test(
                 (a) -> assertCommand(a, "int x;",
@@ -67,6 +66,7 @@ public class ToolCommandOptionTest extends ReplToolTesting {
         );
     }
 
+    @Test
     public void typesTest() {
         test(
                 (a) -> assertCommand(a, "int x",
@@ -92,6 +92,7 @@ public class ToolCommandOptionTest extends ReplToolTesting {
         );
     }
 
+    @Test
     public void dropTest() {
         test(false, new String[]{"--no-startup"},
                 (a) -> assertCommand(a, "int x = 5;",
@@ -120,6 +121,7 @@ public class ToolCommandOptionTest extends ReplToolTesting {
         );
     }
 
+    @Test
     public void setEditorTest() {
         test(
                 (a) -> assertCommand(a, "/set editor -furball",
@@ -157,6 +159,7 @@ public class ToolCommandOptionTest extends ReplToolTesting {
         );
     }
 
+    @Test
     public void retainEditorTest() {
         test(
                 (a) -> assertCommand(a, "/set editor -retain -furball",
@@ -211,6 +214,7 @@ public class ToolCommandOptionTest extends ReplToolTesting {
         );
     }
 
+    @Test
     public void setEditorEnvTest() {
         setEnvVar("EDITOR", "best one");
         setEditorEnvSubtest();
@@ -244,6 +248,7 @@ public class ToolCommandOptionTest extends ReplToolTesting {
         );
     }
 
+    @Test
     public void setStartTest() {
         Compiler compiler = new Compiler();
         Path startup = compiler.getPath("StartTest/startup.txt");
@@ -288,6 +293,7 @@ public class ToolCommandOptionTest extends ReplToolTesting {
         );
     }
 
+    @Test
     public void retainStartTest() {
         Compiler compiler = new Compiler();
         Path startup = compiler.getPath("StartTest/startup.txt");
@@ -337,9 +343,9 @@ public class ToolCommandOptionTest extends ReplToolTesting {
         );
     }
 
+    @Test
     public void setModeTest() {
-        test(
-                (a) -> assertCommandOutputContains(a, "/set mode",
+        test((a) -> assertCommandOutputContains(a, "/set mode",
                         "|  /set format verbose unresolved"),
                 (a) -> assertCommandOutputStartsWith(a, "/set mode *",
                         "|  Expected a feedback mode name: *"),
@@ -395,10 +401,11 @@ public class ToolCommandOptionTest extends ReplToolTesting {
                         "|  Does not match any current feedback mode: mymode -- /set mode mymode\n" +
                         "|  Available feedback modes:"),
                 (a) -> assertCommandCheckOutput(a, "/set feedback",
-                        (s) -> assertFalse(s.contains("mymode"), "Didn't delete: " + s))
+                        (s) -> Assertions.assertFalse(s.contains("mymode"), "Didn't delete: " + s))
         );
     }
 
+    @Test
     public void setModeSmashTest() {
         test(
                 (a) -> assertCommand(a, "/set mode mymode -command",
@@ -428,6 +435,7 @@ public class ToolCommandOptionTest extends ReplToolTesting {
         );
     }
 
+    @Test
     public void retainModeTest() {
         test(
                 (a) -> assertCommandOutputStartsWith(a, "/set mode -retain",
@@ -515,32 +523,31 @@ public class ToolCommandOptionTest extends ReplToolTesting {
                 (a) -> assertCommandOutputStartsWith(a, "/set mode -retain kmode -delete",
                         "")
         );
-        test(
-                (a) -> assertCommandOutputStartsWith(a, "/set feedback tmode",
+        test((a) -> assertCommandOutputStartsWith(a, "/set feedback tmode",
                         "|  Does not match any current feedback mode: tmode"),
                 (a) -> assertCommandOutputStartsWith(a, "/set feedback kmode",
                         "|  Does not match any current feedback mode: kmode"),
                 (a) -> assertCommandOutputStartsWith(a, "/set feedback mymode",
                         "|  Does not match any current feedback mode: mymode"),
                 (a) -> assertCommandCheckOutput(a, "/set feedback",
-                        (s) -> assertFalse(s.contains("mymode"), "Didn't delete mymode: " + s)),
+                        (s) -> Assertions.assertFalse(s.contains("mymode"), "Didn't delete mymode: " + s)),
                 (a) -> assertCommandCheckOutput(a, "/set feedback",
-                        (s) -> assertFalse(s.contains("kmode"), "Didn't delete kmode: " + s)),
+                        (s) -> Assertions.assertFalse(s.contains("kmode"), "Didn't delete kmode: " + s)),
                 (a) -> assertCommandCheckOutput(a, "/set feedback",
-                        (s) -> assertFalse(s.contains("tmode"), "Didn't delete tmode: " + s))
+                        (s) -> Assertions.assertFalse(s.contains("tmode"), "Didn't delete tmode: " + s))
         );
     }
 
+    @Test
     public void retainModeDeleteLocalTest() {
-        test(
-                (a) -> assertCommand(a, "/set mode rmdlt normal -command",
+        test((a) -> assertCommand(a, "/set mode rmdlt normal -command",
                         "|  Created new feedback mode: rmdlt"),
                 (a) -> assertCommand(a, "/set mode rmdlt -delete -retain ",
                         ""),
                 (a) -> assertCommandCheckOutput(a, "/set feedback",
                         (s) -> {
-                            assertTrue(s.contains("normal"), "Expected normal mode: " + s);
-                            assertFalse(s.contains("rmdlt"), "Didn't delete rmdlt: " + s);
+                            Assertions.assertTrue(s.contains("normal"), "Expected normal mode: " + s);
+                            Assertions.assertFalse(s.contains("rmdlt"), "Didn't delete rmdlt: " + s);
                         })
         );
     }

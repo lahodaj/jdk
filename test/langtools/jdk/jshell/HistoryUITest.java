@@ -35,18 +35,16 @@
  * @build toolbox.ToolBox toolbox.JarTask toolbox.JavacTask
  * @build Compiler UITesting
  * @compile HistoryUITest.java
- * @run testng HistoryUITest
+ * @run junit HistoryUITest
  */
 
-import org.testng.annotations.Test;
-
-@Test
 public class HistoryUITest extends UITesting {
 
     public HistoryUITest() {
         super(true);
     }
 
+    @org.junit.jupiter.api.Test
     public void testPrevNextSnippet() throws Exception {
         doRunTest((inputSink, out) -> {
             inputSink.write("void test1() {\nSystem.err.println(1);\n}\n");
@@ -78,6 +76,7 @@ public class HistoryUITest extends UITesting {
         });
     }
 
+    @org.junit.jupiter.api.Test
     public void testReRun() throws Exception {
         doRunTest((inputSink, out) -> {
             inputSink.write("System.err.println(\"RAN\");\n");

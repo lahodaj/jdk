@@ -25,7 +25,7 @@
  * @test
  * @bug 8185108
  * @summary Test exception().getMessage() in events returned by eval()
- * @run testng ExceptionMessageTest
+ * @run junit ExceptionMessageTest
  */
 
 import java.util.HashMap;
@@ -41,22 +41,22 @@ import jdk.jshell.spi.ExecutionControl;
 import jdk.jshell.spi.ExecutionControlProvider;
 import jdk.jshell.spi.ExecutionEnv;
 
-import org.testng.annotations.DataProvider;
-import org.testng.annotations.Test;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
-@Test
 public class ExceptionMessageTest {
 
+    @Test
     public void testDefaultEC() {
         doTestCases(new JdiExecutionControlProvider(), "default");
     }
 
+    @Test
     public void testLocalEC() {
         doTestCases(new LocalExecutionControlProvider(), "local");
     }
 
+    @Test
     public void testDirectEC() {
         doTestCases(new ExecutionControlProvider() {
             public ExecutionControl generate(ExecutionEnv env, Map<String, String> param) throws Throwable {
@@ -84,11 +84,11 @@ public class ExceptionMessageTest {
 
     private void doTest(JShell jshell, String label, String code, String expected) {
         List<SnippetEvent> result = jshell.eval(code);
-        assertEquals(result.size(), 1, "Expected only one event");
+        Assertions.assertEquals(1, result.size(), "Expected only one event");
         SnippetEvent evt = result.get(0);
         Exception exc = evt.exception();
         String out = exc.getMessage();
-        assertEquals(out, expected, "Exception message not as expected: " +
+        Assertions.assertEquals(expected, out, "Exception message not as expected: " +
                 label + " -- " + code);
     }
 }

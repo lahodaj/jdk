@@ -30,15 +30,15 @@
  *          jdk.compiler/com.sun.tools.javac.main
  *          jdk.jshell
  * @build Compiler KullaTesting TestingInputStream ExpectedDiagnostic
- * @run testng UnnamedTest
+ * @run junit UnnamedTest
  */
 
 import java.util.function.Consumer;
 import jdk.jshell.VarSnippet;
-import org.testng.Assert;
-import org.testng.annotations.Test;
 
 import jdk.jshell.JShell;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 public class UnnamedTest extends KullaTesting {
 
@@ -46,8 +46,8 @@ public class UnnamedTest extends KullaTesting {
     public void unnamed() {
         VarSnippet sn1 = varKey(assertEval("int _ = 0;"));
         VarSnippet sn2 = varKey(assertEval("String _ = \"x\";"));
-        Assert.assertEquals(getState().varValue(sn1), "0");
-        Assert.assertEquals(getState().varValue(sn2), "\"x\"");
+        Assertions.assertEquals("0", getState().varValue(sn1));
+        Assertions.assertEquals("\"x\"", getState().varValue(sn2));
     }
 
     @Override

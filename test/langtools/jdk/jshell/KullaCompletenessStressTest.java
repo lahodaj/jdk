@@ -26,16 +26,16 @@
  * @summary Test SourceCodeAnalysis
  * @modules jdk.compiler/com.sun.tools.javac.api
  * @build KullaTesting TestingInputStream KullaCompletenessStressTest CompletenessStressTest
- * @run testng KullaCompletenessStressTest
+ * @run junit KullaCompletenessStressTest
  */
 
 import java.io.File;
 
-import org.testng.annotations.Test;
+import org.junit.jupiter.api.Test;
 
-@Test
 public class KullaCompletenessStressTest extends CompletenessStressTest {
     @Override
+    @Test
     public File[] getDirectoriesToTest() {
         String src = System.getProperty("test.src");
         File file;

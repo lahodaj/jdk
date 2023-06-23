@@ -27,28 +27,27 @@
  * @summary test wrappers and dependencies
  * @modules jdk.jshell/jdk.jshell
  * @build KullaTesting
- * @run testng WrapperTest
+ * @run junit WrapperTest
  */
 
 import java.util.Collection;
 import java.util.List;
-import org.testng.annotations.Test;
 import jdk.jshell.ErroneousSnippet;
 import jdk.jshell.Snippet;
 import jdk.jshell.Snippet.Kind;
 import jdk.jshell.SourceCodeAnalysis.SnippetWrapper;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 import static jdk.jshell.Snippet.Status.RECOVERABLE_DEFINED;
 import static jdk.jshell.Snippet.Status.VALID;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
-@Test
 public class WrapperTest extends KullaTesting {
 
+    @Test
     public void testMethod() {
         String src = "void glib() { System.out.println(\"hello\"); }";
         List<SnippetWrapper> swl = getState().sourceCodeAnalysis().wrappers(src);
-        assertEquals(swl.size(), 1, "unexpected list length");
+        Assertions.assertEquals(1, swl.size(), "unexpected list length");
         assertWrapperHas(swl.get(0), src, Kind.METHOD, "void", "glib", "println");
         assertPosition(swl.get(0), src, 0, 4);
         assertPosition(swl.get(0), src, 5, 4);
@@ -63,6 +62,7 @@ public class WrapperTest extends KullaTesting {
     }
 
     // test 8159740
+    @Test
     public void testMethodCorralled() {
         String src = "void glib() { f(); }";
         //            _123456789_123456789
@@ -75,6 +75,7 @@ public class WrapperTest extends KullaTesting {
     }
 
     // test 8159740
+    @Test
     public void testClassCorralled0() {
         String src = "class AAA { float mmm(double d1234) { return (float) (f0 * d1234); } }";
         //            _123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789
@@ -91,6 +92,7 @@ public class WrapperTest extends KullaTesting {
     }
 
     // test 8159740
+    @Test
     public void testClassCorralled() {
         String src = "class AAA { int xxx = x0 + 4; float mmm(float ffff) { return f0 * ffff; } }";
         //            _123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789
@@ -109,6 +111,7 @@ public class WrapperTest extends KullaTesting {
     }
 
     // test 8159740
+    @Test
     public void testClassWithConstructorCorralled() {
         String src = "public class AAA { AAA(String b) {} int xxx = x0 + 4; float mmm(float ffff) { return f0 * ffff; } }";
         //            _123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789
@@ -130,6 +133,7 @@ public class WrapperTest extends KullaTesting {
     }
 
     // test 8159740
+    @Test
     public void testInterfaceCorralled() {
         String src = "interface AAA { default float mmm(double d1234) { return (float) (f0 * d1234); } }";
         //            _123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789
@@ -147,6 +151,7 @@ public class WrapperTest extends KullaTesting {
     }
 
     // test 8159740
+    @Test
     public void testEnumCorralled() {
         String src =
                 "public enum Planet {\n" +
@@ -182,25 +187,27 @@ public class WrapperTest extends KullaTesting {
                 "radius", "surfaceGravity", "surfaceWeight");
     }
 
+    @Test
     public void testMethodBad() {
         String src = "void flob() { ?????; }";
         List<SnippetWrapper> swl = getState().sourceCodeAnalysis().wrappers(src);
-        assertEquals(swl.size(), 1, "unexpected list length");
+        Assertions.assertEquals(1, swl.size(), "unexpected list length");
         assertWrapperHas(swl.get(0), src, Kind.METHOD, "void", "flob", "?????");
         assertPosition(swl.get(0), src, 9, 2);
 
         Snippet f = key(assertEvalFail(src));
-        assertEquals(f.kind(), Kind.ERRONEOUS);
-        assertEquals(((ErroneousSnippet)f).probableKind(), Kind.METHOD);
+        Assertions.assertEquals(Kind.ERRONEOUS, f.kind());
+        Assertions.assertEquals(Kind.METHOD, ((ErroneousSnippet)f).probableKind());
         SnippetWrapper sw = getState().sourceCodeAnalysis().wrapper(f);
         assertWrapperHas(sw, src, Kind.METHOD, "void", "flob", "?????");
         assertPosition(swl.get(0), src, 14, 5);
     }
 
+    @Test
     public void testVar() {
         String src = "int gx = 1234;";
         List<SnippetWrapper> swl = getState().sourceCodeAnalysis().wrappers(src);
-        assertEquals(swl.size(), 1, "unexpected list length");
+        Assertions.assertEquals(1, swl.size(), "unexpected list length");
         assertWrapperHas(swl.get(0), src, Kind.VAR, "int", "gx", "1234");
         assertPosition(swl.get(0), src, 4, 2);
 
@@ -210,25 +217,27 @@ public class WrapperTest extends KullaTesting {
         assertPosition(swg, src, 0, 3);
     }
 
+    @Test
     public void testVarBad() {
         String src = "double dd = ?????;";
         List<SnippetWrapper> swl = getState().sourceCodeAnalysis().wrappers(src);
-        assertEquals(swl.size(), 1, "unexpected list length");
+        Assertions.assertEquals(1, swl.size(), "unexpected list length");
         assertWrapperHas(swl.get(0), src, Kind.VAR, "double", "dd", "?????");
         assertPosition(swl.get(0), src, 9, 2);
 
         Snippet f = key(assertEvalFail(src));
-        assertEquals(f.kind(), Kind.ERRONEOUS);
-        assertEquals(((ErroneousSnippet)f).probableKind(), Kind.VAR);
+        Assertions.assertEquals(Kind.ERRONEOUS, f.kind());
+        Assertions.assertEquals(Kind.VAR, ((ErroneousSnippet)f).probableKind());
         SnippetWrapper sw = getState().sourceCodeAnalysis().wrapper(f);
         assertWrapperHas(sw, src, Kind.VAR, "double", "dd", "?????");
         assertPosition(swl.get(0), src, 12, 5);
     }
 
+    @Test
     public void testImport() {
         String src = "import java.lang.*;";
         List<SnippetWrapper> swl = getState().sourceCodeAnalysis().wrappers(src);
-        assertEquals(swl.size(), 1, "unexpected list length");
+        Assertions.assertEquals(1, swl.size(), "unexpected list length");
         assertWrapperHas(swl.get(0), src, Kind.IMPORT, "import", "java.lang");
         assertPosition(swl.get(0), src, 7, 4);
 
@@ -238,61 +247,65 @@ public class WrapperTest extends KullaTesting {
         assertPosition(swg, src, 0, 6);
     }
 
+    @Test
     public void testImportBad() {
         String src = "import java.?????;";
         List<SnippetWrapper> swl = getState().sourceCodeAnalysis().wrappers(src);
-        assertEquals(swl.size(), 1, "unexpected list length");
+        Assertions.assertEquals(1, swl.size(), "unexpected list length");
         assertWrapperHas(swl.get(0), src, Kind.IMPORT, "import", "?????");
         assertPosition(swl.get(0), src, 7, 4);
 
         Snippet f = key(assertEvalFail(src));
-        assertEquals(f.kind(), Kind.ERRONEOUS);
-        assertEquals(((ErroneousSnippet)f).probableKind(), Kind.IMPORT);
+        Assertions.assertEquals(Kind.ERRONEOUS, f.kind());
+        Assertions.assertEquals(Kind.IMPORT, ((ErroneousSnippet)f).probableKind());
         SnippetWrapper sw = getState().sourceCodeAnalysis().wrapper(f);
         assertWrapperHas(sw, src, Kind.IMPORT, "import", "?????");
         assertPosition(swl.get(0), src, 0, 6);
     }
 
+    @Test
     public void testErroneous() {
         String src = "@@@@@@@@@@";
         List<SnippetWrapper> swl = getState().sourceCodeAnalysis().wrappers(src);
-        assertEquals(swl.size(), 1, "unexpected list length");
+        Assertions.assertEquals(1, swl.size(), "unexpected list length");
         assertWrapperHas(swl.get(0), src, Kind.ERRONEOUS, "@@@@@@@@@@");
         assertPosition(swl.get(0), src, 0, 10);
 
         Snippet f = key(assertEvalFail(src));
-        assertEquals(f.kind(), Kind.ERRONEOUS);
-        assertEquals(((ErroneousSnippet)f).probableKind(), Kind.ERRONEOUS);
+        Assertions.assertEquals(Kind.ERRONEOUS, f.kind());
+        Assertions.assertEquals(Kind.ERRONEOUS, ((ErroneousSnippet)f).probableKind());
         SnippetWrapper sw = getState().sourceCodeAnalysis().wrapper(f);
         assertWrapperHas(sw, src, Kind.ERRONEOUS, "@@@@@@@@@@");
         assertPosition(swl.get(0), src, 0, 10);
     }
 
+    @Test
     public void testEmpty() {
         String src = "";
         List<SnippetWrapper> swl = getState().sourceCodeAnalysis().wrappers(src);
-        assertEquals(swl.size(), 0, "expected empty list");
+        Assertions.assertEquals(0, swl.size(), "expected empty list");
     }
 
+    @Test
     public void testDependencies() {
         Snippet a = key(assertEval("int aaa = 6;", added(VALID)));
         Snippet b = key(assertEval("class B { B(int x) { aaa = x; } }", added(VALID)));
         Snippet c = key(assertEval("B ccc() { return new B(aaa); }", added(VALID)));
         Collection<Snippet> dep;
         dep = getState().sourceCodeAnalysis().dependents(c);
-        assertEquals(dep.size(), 0);
+        Assertions.assertEquals(0, dep.size());
         dep = getState().sourceCodeAnalysis().dependents(b);
-        assertEquals(dep.size(), 1);
-        assertTrue(dep.contains(c));
+        Assertions.assertEquals(1, dep.size());
+        Assertions.assertTrue(dep.contains(c));
         dep = getState().sourceCodeAnalysis().dependents(a);
-        assertEquals(dep.size(), 2);
-        assertTrue(dep.contains(c));
-        assertTrue(dep.contains(b));
+        Assertions.assertEquals(2, dep.size());
+        Assertions.assertTrue(dep.contains(c));
+        Assertions.assertTrue(dep.contains(b));
     }
 
     private void assertWrapperHas(SnippetWrapper sw, String source, Kind kind, String... has) {
-        assertEquals(sw.source(), source);
-        assertEquals(sw.kind(), kind);
+        Assertions.assertEquals(source, sw.source());
+        Assertions.assertEquals(kind, sw.kind());
         String s = sw.wrapped();
         if (kind == Kind.IMPORT) {
             assertHas(s, "import");
@@ -308,7 +321,7 @@ public class WrapperTest extends KullaTesting {
     }
 
     private void assertHas(String s, String has) {
-        assertTrue(s.contains(has), "Expected to find '" + has + "' in: '" + s + "'");
+        Assertions.assertTrue(s.contains(has), "Expected to find '" + has + "' in: '" + s + "'");
     }
 
     private void assertPosition(SnippetWrapper sw, String source, int start, int length) {
@@ -322,8 +335,8 @@ public class WrapperTest extends KullaTesting {
         //System.err.printf("#  wrapped @ wrappedPos: %s\n", wrappedPart);
         //System.err.printf("#  source @ start: %s\n", sourcePart);
 
-        assertEquals(wrappedPart, sourcePart,
+        Assertions.assertEquals(sourcePart, wrappedPart,
                 "position " + wpg + " in " + sw.wrapped());
-        assertEquals(sw.wrappedToSourcePosition(wpg), start);
+        Assertions.assertEquals(start, sw.wrappedToSourcePosition(wpg));
     }
 }

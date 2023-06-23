@@ -38,7 +38,7 @@
  * @build toolbox.ToolBox toolbox.JarTask toolbox.JavacTask
  * @build Compiler UITesting
  * @build PasteAndMeasurementsUITest
- * @run testng/othervm PasteAndMeasurementsUITest
+ * @run junit/othervm PasteAndMeasurementsUITest
  */
 
 import java.io.Console;
@@ -46,15 +46,14 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import jdk.internal.org.jline.reader.impl.LineReaderImpl;
 
-import org.testng.annotations.Test;
 
-@Test
 public class PasteAndMeasurementsUITest extends UITesting {
 
     public PasteAndMeasurementsUITest() {
         super(true);
     }
 
+    @org.junit.jupiter.api.Test
     public void testPrevNextSnippet() throws Exception {
         Field cons = System.class.getDeclaredField("cons");
         cons.setAccessible(true);
@@ -77,6 +76,7 @@ public class PasteAndMeasurementsUITest extends UITesting {
     }
         private static final String LOC = "\033[12;1R";
 
+    @org.junit.jupiter.api.Test
     public void testBracketedPaste() throws Exception {
         Field cons = System.class.getDeclaredField("cons");
         cons.setAccessible(true);
@@ -91,6 +91,7 @@ public class PasteAndMeasurementsUITest extends UITesting {
         });
     }
 
+    @org.junit.jupiter.api.Test
     public void testBracketedPasteNonAscii() throws Exception {
         Field cons = System.class.getDeclaredField("cons");
         cons.setAccessible(true);

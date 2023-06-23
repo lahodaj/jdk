@@ -24,7 +24,7 @@
 import javax.tools.Diagnostic;
 
 import jdk.jshell.Diag;
-import static org.testng.Assert.assertEquals;
+import org.junit.jupiter.api.Assertions;
 
 public class ExpectedDiagnostic {
 
@@ -79,16 +79,16 @@ public class ExpectedDiagnostic {
 
     public void assertDiagnostic(Diag diagnostic) {
         String code = diagnostic.getCode();
-        assertEquals(code, this.code, "Expected error: " + this.code + ", got: " + code);
-        assertEquals(diagnostic.isError(), kind == Diagnostic.Kind.ERROR);
+        Assertions.assertEquals(this.code, code, "Expected error: " + this.code + ", got: " + code);
+        Assertions.assertEquals(kind == Diagnostic.Kind.ERROR, diagnostic.isError());
         if (startPosition != -1) {
-            assertEquals(diagnostic.getStartPosition(), startPosition, "Start position");
+            Assertions.assertEquals(startPosition, diagnostic.getStartPosition(), "Start position");
         }
         if (endPosition != -1) {
-            assertEquals(diagnostic.getEndPosition(), endPosition, "End position");
+            Assertions.assertEquals(endPosition, diagnostic.getEndPosition(), "End position");
         }
         if (position != -1) {
-            assertEquals(diagnostic.getPosition(), position, "Position");
+            Assertions.assertEquals(position, diagnostic.getPosition(), "Position");
         }
     }
 }

@@ -45,14 +45,11 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 
-import org.testng.annotations.BeforeMethod;
 
 import jdk.jshell.tool.JavaShellToolBuilder;
 import static java.util.stream.Collectors.toList;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNotNull;
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 
 public class ReplToolTesting {
 
@@ -142,15 +139,15 @@ public class ReplToolTesting {
                     .filter(l -> !l.isEmpty())
                     .collect(Collectors.toList());
             int previousId = Integer.MIN_VALUE;
-            assertEquals(lines.size(), keys.size(), "Number of keys");
+            Assertions.assertEquals(keys.size(), lines.size(), "Number of keys");
             for (int i = 0; i < lines.size(); ++i) {
                 String line = lines.get(i);
                 Matcher matcher = idPattern.matcher(line);
-                assertTrue(matcher.find(), "Snippet id not found: " + line);
+                Assertions.assertTrue(matcher.find(), "Snippet id not found: " + line);
                 String src = keys.get(i).getSource();
-                assertTrue(line.endsWith(src), "Line '" + line + "' does not end with: " + src);
+                Assertions.assertTrue(line.endsWith(src), "Line '" + line + "' does not end with: " + src);
                 int id = Integer.parseInt(matcher.group(1));
-                assertTrue(previousId < id,
+                Assertions.assertTrue(previousId < id,
                         String.format("The previous id is not less than the next one: previous: %d, next: %d",
                                 previousId, id));
                 previousId = id;
@@ -165,13 +162,13 @@ public class ReplToolTesting {
                     .filter(l -> !l.isEmpty())
                     .filter(l -> !l.startsWith("|     ")) // error/unresolved info
                     .collect(Collectors.toList());
-            assertEquals(lines.size(), set.size(), message + " : expected: " + set.keySet() + "\ngot:\n" + lines);
+            Assertions.assertEquals(set.size(), lines.size(), message + " : expected: " + set.keySet() + "\ngot:\n" + lines);
             for (String line : lines) {
                 Matcher matcher = extractPattern.matcher(line);
-                assertTrue(matcher.find(), line);
+                Assertions.assertTrue(matcher.find(), line);
                 String src = matcher.group(1);
                 MemberInfo info = set.get(src);
-                assertNotNull(info, "Not found snippet with signature: " + src + ", line: "
+                Assertions.assertNotNull(info, "Not found snippet with signature: " + src + ", line: "
                         + line + ", keys: " + set.keySet() + "\n");
             }
         };
@@ -252,7 +249,7 @@ public class ReplToolTesting {
         initSnippets();
         ReplTest[] wtests = new ReplTest[tests.length + 3];
         wtests[0] = a -> assertCommandCheckOutput(a, "<start>",
-                s -> assertTrue(s.startsWith(startUpMessage), "Expected start-up message '" + startUpMessage + "' Got: " + s));
+                s -> Assertions.assertTrue(s.startsWith(startUpMessage), "Expected start-up message '" + startUpMessage + "' Got: " + s));
         wtests[1] = a -> assertCommand(a, "/debug 0", null);
         System.arraycopy(tests, 0, wtests, 2, tests.length);
         wtests[tests.length + 2] = a -> assertCommand(a, "/exit", null);
@@ -275,7 +272,7 @@ public class ReplToolTesting {
         }
     }
 
-    @BeforeMethod
+    @BeforeEach
     public void setUp() {
         prefsMap = new HashMap<>();
         prefsMap.put("INDENT", "0");
@@ -323,7 +320,7 @@ public class ReplToolTesting {
             builder(locale)
                     .run(args);
         } catch (Exception ex) {
-            fail("Repl tool died with exception", ex);
+            Assertions.fail("Repl tool died with exception", ex);
         }
     }
 
@@ -333,14 +330,13 @@ public class ReplToolTesting {
         String ceos = getCommandErrorOutput();
         String uos = getUserOutput();
         String ueos = getUserErrorOutput();
-        assertTrue((cos.isEmpty() || cos.startsWith("|  Goodbye") || !locale.equals(Locale.ROOT)),
+        Assertions.assertTrue((cos.isEmpty() || cos.startsWith("|  Goodbye") || !locale.equals(Locale.ROOT)),
                 "Expected a goodbye, but got: " + cos);
-        assertEquals(ceos,
-                     expectedErrorOutput,
+        Assertions.assertEquals(                     expectedErrorOutput, ceos,
                      "Expected \"" + expectedErrorOutput +
                      "\" command error output, got: \"" + ceos + "\"");
-        assertTrue(uos.isEmpty(), "Expected empty user output, got: " + uos);
-        assertTrue(ueos.isEmpty(), "Expected empty user error output, got: " + ueos);
+        Assertions.assertTrue(uos.isEmpty(), "Expected empty user output, got: " + uos);
+        Assertions.assertTrue(ueos.isEmpty(), "Expected empty user error output, got: " + ueos);
     }
 
     public void assertReset(boolean after, String cmd) {
@@ -353,7 +349,7 @@ public class ReplToolTesting {
         Pattern outputPattern = Pattern.compile(output);
         assertCommandCheckOutput(after, expr, s -> {
             Matcher matcher = outputPattern.matcher(s);
-            assertTrue(matcher.find(), "Output: '" + s + "' does not fit pattern: '" + output + "'");
+            Assertions.assertTrue(matcher.find(), "Output: '" + s + "' does not fit pattern: '" + output + "'");
             String name = matcher.group(1);
             VariableInfo tempVar = new TempVariableInfo(expr, type, name, value);
             variables.put(tempVar.toString(), tempVar);
@@ -488,7 +484,7 @@ public class ReplToolTesting {
 
     public void assertCommandOutputContains(boolean after, String cmd, String... hasThese) {
         assertCommandCheckOutput(after, cmd, (s)
-                -> assertTrue(Arrays.stream(hasThese)
+                -> Assertions.assertTrue(Arrays.stream(hasThese)
                                     .allMatch(has -> s.contains(has)),
                         "Output: \'" + s + "' does not contain: "
                                 + Arrays.stream(hasThese)
@@ -512,7 +508,7 @@ public class ReplToolTesting {
 
     public void assertCommandUserOutputContains(boolean after, String cmd, String... hasThese) {
         assertCommandCheckUserOutput(after, cmd, (s)
-                -> assertTrue(Arrays.stream(hasThese)
+                -> Assertions.assertTrue(Arrays.stream(hasThese)
                         .allMatch(has -> s.contains(has)),
                 "User output: \'" + s + "' does not contain: "
                         + Arrays.stream(hasThese)
@@ -554,13 +550,13 @@ public class ReplToolTesting {
                             if (!output.trim().startsWith(prefix)) {
                                 int i = 0;
         }
-            assertTrue(output.trim().startsWith(prefix), "Output: \'" + output + "' does not start with: " + prefix);
+            Assertions.assertTrue(output.trim().startsWith(prefix), "Output: \'" + output + "' does not start with: " + prefix);
         };
     }
 
     public void assertOutput(String got, String expected, String display) {
         if (expected != null) {
-            assertEquals(got, expected, display + ".\n");
+            Assertions.assertEquals(expected, got, display + ".\n");
         }
     }
 
@@ -645,10 +641,10 @@ public class ReplToolTesting {
             Predicate<String> howeverCheckOutput = Pattern.compile(howeverPattern).asPredicate();
             return output -> {
                 if (output.startsWith("|  ")) {
-                    assertTrue(howeverCheckOutput.test(output),
+                    Assertions.assertTrue(howeverCheckOutput.test(output),
                     "Output: " + output + " does not fit pattern: " + howeverPattern);
                 } else {
-                    assertTrue(arrowCheckOutput.test(output),
+                    Assertions.assertTrue(arrowCheckOutput.test(output),
                     "Output: " + output + " does not fit pattern: " + arrowPattern);
                 }
             };
@@ -705,7 +701,7 @@ public class ReplToolTesting {
         public Consumer<String> checkOutput() {
             String expectedOutput = String.format("\\| *\\w+ method %s", name);
             Predicate<String> checkOutput = Pattern.compile(expectedOutput).asPredicate();
-            return s -> assertTrue(checkOutput.test(s), "Expected: '" + expectedOutput + "', actual: " + s);
+            return s -> Assertions.assertTrue(checkOutput.test(s), "Expected: '" + expectedOutput + "', actual: " + s);
         }
 
         @Override
@@ -744,7 +740,7 @@ public class ReplToolTesting {
             String fullType = type.equals("@interface")? "annotation interface" : type;
             String expectedOutput = String.format("\\| *\\w+ %s %s", fullType, name);
             Predicate<String> checkOutput = Pattern.compile(expectedOutput).asPredicate();
-            return s -> assertTrue(checkOutput.test(s), "Expected: '" + expectedOutput + "', actual: " + s);
+            return s -> Assertions.assertTrue(checkOutput.test(s), "Expected: '" + expectedOutput + "', actual: " + s);
         }
 
         @Override
@@ -774,7 +770,7 @@ public class ReplToolTesting {
 
         @Override
         public Consumer<String> checkOutput() {
-            return s -> assertTrue("".equals(s), "Expected: '', actual: " + s);
+            return s -> Assertions.assertTrue("".equals(s), "Expected: '', actual: " + s);
         }
 
         @Override
@@ -858,7 +854,7 @@ public class ReplToolTesting {
                     tests[index].run(true);
                     tests[index + 1].run(false);
                 } else {
-                    fail("Did not exit Repl tool after test");
+                    Assertions.fail("Did not exit Repl tool after test");
                 }
                 ++index;
             } // For now, anything else is thrown away

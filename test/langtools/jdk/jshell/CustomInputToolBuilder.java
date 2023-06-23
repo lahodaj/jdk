@@ -27,7 +27,7 @@
  * @summary Verify JavaShellToolBuilder uses provided inputs
  * @modules jdk.jshell
  * @build KullaTesting TestingInputStream
- * @run testng CustomInputToolBuilder
+ * @run junit CustomInputToolBuilder
  */
 
 import java.io.ByteArrayInputStream;
@@ -38,15 +38,14 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import jdk.jshell.tool.JavaShellToolBuilder;
-import org.testng.annotations.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
-import static org.testng.Assert.assertTrue;
-
-@Test
 public class CustomInputToolBuilder extends KullaTesting {
 
     private static final String TEST_JDK = "test.jdk";
 
+    @Test
     public void checkCustomInput() throws Exception {
         String testJdk = System.getProperty(TEST_JDK);
         try {
@@ -96,11 +95,12 @@ public class CustomInputToolBuilder extends KullaTesting {
             List<String> actualLines = Arrays.asList(actual.split("\\R"));
 
             for (String expectedLine : expectedLines) {
-                assertTrue(actualLines.contains(expectedLine),
+                Assertions.assertTrue(actualLines.contains(expectedLine),
                             "actual:\n" + actualLines + "\n, expected:\n" + expectedLine);
             }
     }
 
+    @Test
     public void checkInteractiveTerminal() throws Exception {
         String testJdk = System.getProperty(TEST_JDK);
         try {

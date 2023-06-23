@@ -27,27 +27,26 @@
  * @summary Tests for JDI connector timeout failure
  * @modules jdk.jshell/jdk.jshell jdk.jshell/jdk.jshell.spi jdk.jshell/jdk.jshell.execution
  * @build HangingRemoteAgent
- * @run testng JdiHangingLaunchExecutionControlTest
+ * @run junit JdiHangingLaunchExecutionControlTest
  */
 
-import org.testng.annotations.Test;
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
-@Test
 public class JdiHangingLaunchExecutionControlTest {
 
     private static final String EXPECTED_ERROR =
             "Launching JShell execution engine threw: Accept timed out";
 
+    @Test
     public void hangLaunchTimeoutTest() {
         try {
             System.err.printf("Unexpected return value: %s\n",
                     HangingRemoteAgent.state(true, null).eval("33;"));
         } catch (IllegalStateException ex) {
-            assertTrue(ex.getMessage().startsWith(EXPECTED_ERROR), ex.getMessage());
+            Assertions.assertTrue(ex.getMessage().startsWith(EXPECTED_ERROR), ex.getMessage());
             return;
         }
-        fail("Expected IllegalStateException");
+        Assertions.fail("Expected IllegalStateException");
     }
 }

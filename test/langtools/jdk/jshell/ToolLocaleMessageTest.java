@@ -31,16 +31,14 @@
  *          jdk.jdeps/com.sun.tools.javap
  *          jdk.jshell/jdk.internal.jshell.tool
  * @build KullaTesting TestingInputStream toolbox.ToolBox Compiler
- * @run testng ToolLocaleMessageTest
+ * @run junit ToolLocaleMessageTest
  * @key intermittent
  */
 
 import java.util.Locale;
-import org.testng.annotations.Test;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
-@Test
 public class ToolLocaleMessageTest extends ReplToolTesting {
 
     void testLocale(ReplTest... tests) {
@@ -49,30 +47,32 @@ public class ToolLocaleMessageTest extends ReplToolTesting {
 
     void assertCommandOK(boolean after, String cmd, String... contains) {
         assertCommandCheckOutput(after, cmd, s -> {
-            assertFalse(s.contains("Exception"), "Output of '" + cmd + "' has Exception: " + s);
-            assertFalse(s.contains("ERROR:"), "Output of '" + cmd + "' has error: " + s);
+            Assertions.assertFalse(s.contains("Exception"), "Output of '" + cmd + "' has Exception: " + s);
+            Assertions.assertFalse(s.contains("ERROR:"), "Output of '" + cmd + "' has error: " + s);
             for (String m : contains) {
-                assertTrue(s.contains(m), "Expected to find '" + m + "' in output of '" + cmd + "' -- output: " + s);
+                Assertions.assertTrue(s.contains(m), "Expected to find '" + m + "' in output of '" + cmd + "' -- output: " + s);
             }
         });
     }
 
     void assertCommandFail(boolean after, String cmd, String... contains) {
         assertCommandCheckOutput(after, cmd, s -> {
-            assertFalse(s.contains("Exception"), "Output of '" + cmd + "' has Exception: " + s);
-            assertTrue(s.contains("ERROR:"), "Expected to find error in output of '" + cmd + "' has error: " + s);
+            Assertions.assertFalse(s.contains("Exception"), "Output of '" + cmd + "' has Exception: " + s);
+            Assertions.assertTrue(s.contains("ERROR:"), "Expected to find error in output of '" + cmd + "' has error: " + s);
             for (String m : contains) {
-                assertTrue(s.contains(m), "Expected to find '" + m + "' in output of '" + cmd + "' -- output: " + s);
+                Assertions.assertTrue(s.contains(m), "Expected to find '" + m + "' in output of '" + cmd + "' -- output: " + s);
             }
         });
     }
 
+    @Test
     public void testTerminate() {
         testLocale(
                 (a) -> assertCommandOK(a, "System.exit(1)", "/reload")
         );
     }
 
+    @Test
     public void testSample() {
         try {
             testLocale(
@@ -98,6 +98,7 @@ public class ToolLocaleMessageTest extends ReplToolTesting {
         }
     }
 
+    @Test
     public void testCommand() {
         try {
             testLocale(
@@ -132,6 +133,7 @@ public class ToolLocaleMessageTest extends ReplToolTesting {
         }
     }
 
+    @Test
     public void testHelp() {
         testLocale(
                 (a) -> assertCommandOK(a, "/help", "/list", "/save", "/set", "[-restore]"),
@@ -153,6 +155,7 @@ public class ToolLocaleMessageTest extends ReplToolTesting {
         );
     }
 
+    @Test
     public void testFeedbackError() {
         try {
             testLocale(

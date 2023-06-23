@@ -23,12 +23,12 @@
 
 import javax.tools.Diagnostic;
 
-import org.testng.annotations.Test;
 import jdk.jshell.VarSnippet;
 import java.net.InetAddress;
 
 import static jdk.jshell.Snippet.Status.VALID;
 import static jdk.jshell.Snippet.SubKind.*;
+import org.junit.jupiter.api.Test;
 
 public class ExecutionControlTestBase extends KullaTesting {
 

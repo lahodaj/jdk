@@ -25,10 +25,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
-import org.testng.annotations.Test;
-
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 public abstract class EditorTestBase extends ReplToolTesting {
 
@@ -61,11 +60,11 @@ public abstract class EditorTestBase extends ReplToolTesting {
     }
 
     void assertEditInput(boolean after, String cmd, String input, Action action) {
-        assertEditInput(after, cmd, s -> assertEquals(s, input, "Input"), action);
+        assertEditInput(after, cmd, s -> Assertions.assertEquals(input, s, "Input"), action);
     }
 
     void assertEditOutput(boolean after, String cmd, String output, Action action) {
-        assertEditOutput(after, cmd, s -> assertEquals(s.trim(), output.trim(), "command"), action);
+        assertEditOutput(after, cmd, s -> Assertions.assertEquals(output.trim(), s.trim(), "command"), action);
     }
 
     @Test
@@ -219,16 +218,15 @@ public abstract class EditorTestBase extends ReplToolTesting {
 
     @Test
     public void testNoArguments() {
-        testEditor(
-                a -> assertVariable(a, "int", "a"),
+        testEditor(a -> assertVariable(a, "int", "a"),
                 a -> assertMethod(a, "void f() {}", "()void", "f"),
                 a -> assertClass(a, "class A {}", "class", "A"),
                 a -> assertEditInput(a, "/ed", s -> {
                     String[] ss = s.split("\n");
-                    assertEquals(ss.length, 3, "Expected 3 lines: " + s);
-                    assertEquals(ss[0], "int a;");
-                    assertEquals(ss[1], "void f() {}");
-                    assertEquals(ss[2], "class A {}");
+                    Assertions.assertEquals(3, ss.length, "Expected 3 lines: " + s);
+                    Assertions.assertEquals("int a;", ss[0]);
+                    Assertions.assertEquals("void f() {}", ss[1]);
+                    Assertions.assertEquals("class A {}", ss[2]);
                 }, this::exit)
         );
     }
@@ -236,7 +234,7 @@ public abstract class EditorTestBase extends ReplToolTesting {
     @Test
     public void testStartup() {
         testEditor(true, new String[0],
-                a -> assertEditInput(a, "/ed", s -> assertTrue(s.isEmpty(), "Checking of startup: " + s), this::cancel),
+                a -> assertEditInput(a, "/ed", s -> Assertions.assertTrue(s.isEmpty(), "Checking of startup: " + s), this::cancel),
                 a -> assertEditInput(a, "/ed s1", assertStartsWith("import"), this::cancel));
     }
 
@@ -263,7 +261,8 @@ public abstract class EditorTestBase extends ReplToolTesting {
         );
     }
 
-    @Test(enabled = false) // TODO JDK-8191875
+    @Test() 
+    @Disabled
     public void testStatementMush() {
         testEditor(
                 a -> assertCommand(a, "System.out.println(\"Hello\")",

@@ -27,7 +27,7 @@
  * @bug 8143955 8080843 8163816 8143006 8169828 8171130 8162989 8210808
  * @modules jdk.jshell/jdk.internal.jshell.tool
  * @build ReplToolTesting CustomEditor EditorTestBase
- * @run testng ExternalEditorTest
+ * @run junit ExternalEditorTest
  * @key intermittent
  */
 
@@ -47,14 +47,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
 
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
-
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 public class ExternalEditorTest extends EditorTestBase {
 
@@ -133,21 +130,19 @@ public class ExternalEditorTest extends EditorTestBase {
 
     @Test
     public void testStatementSemicolonAddition() {
-        testEditor(
-                a -> assertCommand(a, "if (true) {}", ""),
+        testEditor(a -> assertCommand(a, "if (true) {}", ""),
                 a -> assertCommand(a, "if (true) {} else {}", ""),
                 a -> assertCommand(a, "Object o", "o ==> null"),
                 a -> assertCommand(a, "if (true) o = new Object() { int x; }", ""),
                 a -> assertCommand(a, "if (true) o = new Object() { int y; }", ""),
                 a -> assertCommand(a, "System.err.flush()", ""), // test still ; for expression statement
                 a -> assertEditOutput(a, "/ed", "", () -> {
-                    assertEquals(getSource(),
-                            "if (true) {}\n" +
+                    Assertions.assertEquals(                            "if (true) {}\n" +
                             "if (true) {} else {}\n" +
                             "Object o;\n" +
                             "if (true) o = new Object() { int x; };\n" +
                             "if (true) o = new Object() { int y; };\n" +
-                            "System.err.flush();\n");
+                            "System.err.flush();\n", getSource());
                     exit();
                 })
         );
@@ -156,24 +151,23 @@ public class ExternalEditorTest extends EditorTestBase {
     @Test
     public void testTempFileDeleted() {
         String[] fna = new String[1];
-        testEditor(
-                a -> assertVariable(a, "int", "a", "0", "0"),
+        testEditor(a -> assertVariable(a, "int", "a", "0", "0"),
                 a -> assertEditOutput(a, "/ed 1", "a ==> 10", () -> {
                     fna[0] = getFilename();
-                    assertTrue(Files.exists(Paths.get(fna[0])), "Test set-up failed: " + fna[0]);
+                    Assertions.assertTrue(Files.exists(Paths.get(fna[0])), "Test set-up failed: " + fna[0]);
                     writeSource("\n\n\nint a = 10;\n\n\n");
                     exit();
                 }),
                a -> assertCommand(a, "if (true) {} else {}", "")
         );
-        assertFalse(Files.exists(Paths.get(fna[0])), "File not deleted: " + fna[0]);
+        Assertions.assertFalse(Files.exists(Paths.get(fna[0])), "File not deleted: " + fna[0]);
     }
 
     private static boolean isWindows() {
         return System.getProperty("os.name").startsWith("Windows");
     }
 
-    @BeforeClass
+    @BeforeAll
     public static void setUpExternalEditorTest() throws IOException {
         listener = new ServerSocket(0);
         listener.setSoTimeout(30000);
@@ -208,7 +202,7 @@ public class ExternalEditorTest extends EditorTestBase {
                     checkInput.accept(getSource());
                     action.accept();
                 } catch (SocketTimeoutException e) {
-                    fail("Socket timeout exception.\n Output: " + getCommandOutput() +
+                    Assertions.fail("Socket timeout exception.\n Output: " + getCommandOutput() +
                             "\n, error: " + getCommandErrorOutput());
                 } catch (Throwable e) {
                     shutdownEditor();
@@ -250,7 +244,8 @@ public class ExternalEditorTest extends EditorTestBase {
         );
     }
 
-    @Test(enabled = false) // TODO 8159229
+    @Test() 
+    @Disabled
     public void testRemoveTempFile() {
         test(new String[]{"--no-startup"},
                 a -> assertCommandCheckOutput(a, "/set editor " + executionScript,
@@ -264,7 +259,7 @@ public class ExternalEditorTest extends EditorTestBase {
         );
     }
 
-    @AfterClass
+    @AfterAll
     public static void shutdown() throws IOException {
         executorShutdown();
         if (listener != null) {

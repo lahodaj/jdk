@@ -34,7 +34,7 @@
  *          jdk.jdeps/com.sun.tools.javap
  *          jdk.jshell/jdk.internal.jshell.tool
  * @build KullaTesting TestingInputStream
- * @run testng ToolSimpleTest
+ * @run junit ToolSimpleTest
  */
 
 import java.util.ArrayList;
@@ -46,10 +46,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.testng.annotations.Test;
-
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 public class ToolSimpleTest extends ReplToolTesting {
 
@@ -148,24 +146,22 @@ public class ToolSimpleTest extends ReplToolTesting {
 
     @Test
     public void testThrowWithPercent() {
-        test(
-                (a) -> assertCommandCheckOutput(a,
+        test((a) -> assertCommandCheckOutput(a,
                         "URI u = new URI(\"http\", null, \"h\", -1, \"a\" + (char)0x04, null, null);", (s) ->
-                                assertTrue(s.contains("URISyntaxException") && !s.contains("JShellTool"),
+                                Assertions.assertTrue(s.contains("URISyntaxException") && !s.contains("JShellTool"),
                                         "Output: '" + s + "'")),
                 (a) -> assertCommandCheckOutput(a,
                         "throw new Exception(\"%z\")", (s) ->
-                                assertTrue(s.contains("java.lang.Exception") && !s.contains("UnknownFormatConversionException"),
+                                Assertions.assertTrue(s.contains("java.lang.Exception") && !s.contains("UnknownFormatConversionException"),
                                         "Output: '" + s + "'"))
         );
     }
 
     @Test
     public void oneLineOfError() {
-        test(
-                (a) -> assertCommand(a, "12+", null),
+        test((a) -> assertCommand(a, "12+", null),
                 (a) -> assertCommandCheckOutput(a, "  true", (s) ->
-                        assertTrue(s.contains("12+") && !s.contains("true"), "Output: '" + s + "'"))
+                        Assertions.assertTrue(s.contains("12+") && !s.contains("true"), "Output: '" + s + "'"))
         );
     }
 
@@ -461,7 +457,7 @@ public class ToolSimpleTest extends ReplToolTesting {
             List<String> ss = Stream.of(s.split("\n"))
                     .filter(l -> !l.isEmpty())
                     .collect(Collectors.toList());
-            assertTrue(ss.size() >= 10, "Help does not print enough lines:" + s);
+            Assertions.assertTrue(ss.size() >= 10, "Help does not print enough lines:" + s);
         };
         test(
                 (a) -> assertCommandCheckOutput(a, "/?", testOutput),
@@ -487,9 +483,8 @@ public class ToolSimpleTest extends ReplToolTesting {
 
     @Test
     public void testHelpStart() {
-        test(
-                (a) -> assertCommandCheckOutput(a, "/help /exit",
-                        s -> assertTrue(s.replaceAll("\\r\\n?", "\n").startsWith(
+        test((a) -> assertCommandCheckOutput(a, "/help /exit",
+                        s -> Assertions.assertTrue(s.replaceAll("\\r\\n?", "\n").startsWith(
                                 "|  \n" +
                                 "|                                   /exit\n" +
                                 "|                                   =====\n" +
@@ -501,17 +496,16 @@ public class ToolSimpleTest extends ReplToolTesting {
 
     @Test
     public void testHelpFormat() {
-        test(
-                (a) -> assertCommandCheckOutput(a, "/help", s -> {
+        test((a) -> assertCommandCheckOutput(a, "/help", s -> {
                     String[] lines = s.split("\\R");
-                    assertTrue(lines.length > 20,
+                    Assertions.assertTrue(lines.length > 20,
                             "Too few lines of /help output: " + lines.length
                           + "\n" + s);
                     for (int i = 0; i < lines.length; ++i) {
                         String l = lines[i];
-                        assertTrue(l.startsWith("| "),
+                        Assertions.assertTrue(l.startsWith("| "),
                                 "Expected /help line to start with | :\n" + l);
-                        assertTrue(l.length() <= 80,
+                        Assertions.assertTrue(l.length() <= 80,
                                 "/help line too long: " + l.length() + "\n" + l);
                     }
                  })
@@ -529,7 +523,7 @@ public class ToolSimpleTest extends ReplToolTesting {
     private void assertHelp(boolean a, String command, String... find) {
         assertCommandCheckOutput(a, command, s -> {
             for (String f : find) {
-                assertTrue(s.contains(f),
+                Assertions.assertTrue(s.contains(f),
                         "Expected output of " + command + " to contain: " + f
                       + "\n" + s);
             }
@@ -542,9 +536,9 @@ public class ToolSimpleTest extends ReplToolTesting {
         String[] res = trimmed.isEmpty()
                 ? new String[0]
                 : trimmed.split("\n");
-        assertEquals(res.length, match.size(), "Got: " + Arrays.asList(res));
+        Assertions.assertEquals(match.size(), res.length, "Got: " + Arrays.asList(res));
         for (int i = 0; i < match.size(); ++i) {
-            assertTrue(res[i].contains(match.get(i)));
+            Assertions.assertTrue(res[i].contains(match.get(i)));
         }
     }
 
@@ -554,8 +548,7 @@ public class ToolSimpleTest extends ReplToolTesting {
         List<String> startVarList = new ArrayList<>(START_UP);
         startVarList.add("int aardvark");
         startVarList.add("int weevil");
-        test(
-                a -> assertCommandCheckOutput(a, "/list -all",
+        test(a -> assertCommandCheckOutput(a, "/list -all",
                         s -> checkLineToList(s, START_UP)),
                 a -> assertCommandOutputStartsWith(a, "/list " + arg,
                         "|  No such snippet: " + arg),
@@ -570,7 +563,7 @@ public class ToolSimpleTest extends ReplToolTesting {
                         "s3 : import"),
                 a -> assertCommandCheckOutput(a, "/list 1-2 s3",
                         s -> {
-                            assertTrue(Pattern.matches(".*aardvark.*\\R.*weevil.*\\R.*s3.*import.*", s.trim()),
+                            Assertions.assertTrue(Pattern.matches(".*aardvark.*\\R.*weevil.*\\R.*s3.*import.*", s.trim()),
                                     "No match: " + s);
                         }),
                 a -> assertCommandOutputStartsWith(a, "/list " + arg,
@@ -618,7 +611,7 @@ public class ToolSimpleTest extends ReplToolTesting {
                 a -> assertCommandCheckOutput(a, "/methods print println printf",
                         s -> checkLineToList(s, printingMethodList)),
                 a -> assertCommandCheckOutput(a, "/methods println",
-                        s -> assertEquals(s.trim().split("\n").length, 10)),
+                        s -> Assertions.assertEquals(10, s.trim().split("\n").length)),
                 a -> assertCommandCheckOutput(a, "/methods",
                         s -> checkLineToList(s, printingMethodList)),
                 a -> assertCommandOutputStartsWith(a, "/methods " + arg,
@@ -767,11 +760,10 @@ public class ToolSimpleTest extends ReplToolTesting {
 
     @Test
     public void testJavaSeSetStart() {
-        test(
-                (a) -> assertCommand(a, "/set sta JAVASE", ""),
+        test((a) -> assertCommand(a, "/set sta JAVASE", ""),
                 (a) -> assertCommand(a, "/reset", "|  Resetting state."),
                 (a) -> assertCommandCheckOutput(a, "/li -a",
-                            s -> assertTrue(s.split("import ").length > 160,
+                            s -> Assertions.assertTrue(s.split("import ").length > 160,
                             "not enough imports for JAVASE:\n" + s))
         );
     }
@@ -842,9 +834,9 @@ public class ToolSimpleTest extends ReplToolTesting {
     @Test
     public void testCompoundOptions() {
         Consumer<String> confirmNoStartup = s -> {
-                    assertEquals(0, Stream.of(s.split("\n"))
+                    Assertions.assertEquals(Stream.of(s.split("\n"))
                             .filter(l -> !l.isEmpty())
-                            .count(), "Expected no lines: " + s);
+                            .count(), 0, "Expected no lines: " + s);
                 };
         test(Locale.ROOT, false, new String[]{"-nq"}, "",
                 (a) -> assertCommandCheckOutput(a, "/list -all", confirmNoStartup),

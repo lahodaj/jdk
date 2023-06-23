@@ -31,21 +31,20 @@
  *          jdk.jdeps/com.sun.tools.javap
  *          jdk.jshell/jdk.internal.jshell.tool
  * @build KullaTesting TestingInputStream toolbox.ToolBox Compiler
- * @run testng ToolFormatTest
+ * @run junit ToolFormatTest
  */
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.List;
-import org.testng.annotations.Test;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
-@Test
 public class ToolFormatTest extends ReplToolTesting {
 
+    @Test
     public void testSetFormat() {
         try {
             test(
@@ -86,6 +85,7 @@ public class ToolFormatTest extends ReplToolTesting {
         }
     }
 
+    @Test
     public void testSetFormatOverride() {
         test(
                 (a) -> assertCommand(a, "/set mode tm -c", "|  Created new feedback mode: tm"),
@@ -138,6 +138,7 @@ public class ToolFormatTest extends ReplToolTesting {
         );
     }
 
+    @Test
     public void testSetFormatSelectorSample() {
         test(
                 (a) -> assertCommandOutputStartsWith(a, "/set mode ate -quiet",
@@ -197,7 +198,8 @@ public class ToolFormatTest extends ReplToolTesting {
     // A sampling of these has been added (above: testSetFormatSelectorSample).
     // See 8173007
     // Save for possible future deep testing or debugging
-    @Test(enabled = false)
+    @Test()
+    @Disabled
     public void testSetFormatSelector() {
         List<ReplTest> tests = new ArrayList<>();
         tests.add((a) -> assertCommandOutputStartsWith(a, "/set mode ate -quiet",
@@ -278,6 +280,7 @@ public class ToolFormatTest extends ReplToolTesting {
         }
     }
 
+    @Test
     public void testSetTruncation() {
         try {
             test(
@@ -309,31 +312,31 @@ public class ToolFormatTest extends ReplToolTesting {
         }
     }
 
+    @Test
     public void testDefaultTruncation() {
-        test(
-                    (a) -> assertCommand(a, "char[] cs = new char[2000];", null),
+        test((a) -> assertCommand(a, "char[] cs = new char[2000];", null),
                     (a) -> assertCommand(a, "Arrays.fill(cs, 'A');", ""),
                     (a) -> assertCommandCheckOutput(a, "String s = new String(cs)",
                             (s) -> {
-                                assertTrue(s.length() < 120, "Result too long (" + s.length() + ") -- " + s);
-                                assertTrue(s.contains("AAAAAAAAAAAAAAAAAA"), "Bad value: " + s);
+                                Assertions.assertTrue(s.length() < 120, "Result too long (" + s.length() + ") -- " + s);
+                                Assertions.assertTrue(s.contains("AAAAAAAAAAAAAAAAAA"), "Bad value: " + s);
                             }),
                     (a) -> assertCommandCheckOutput(a, "s",
                             (s) -> {
-                                assertTrue(s.length() > 300, "Result too short (" + s.length() + ") -- " + s);
-                                assertTrue(s.contains("AAAAAAAAAAAAAAAAAA"), "Bad value: " + s);
+                                Assertions.assertTrue(s.length() > 300, "Result too short (" + s.length() + ") -- " + s);
+                                Assertions.assertTrue(s.contains("AAAAAAAAAAAAAAAAAA"), "Bad value: " + s);
                             }),
                     (a) -> assertCommandCheckOutput(a, "\"X\" + s",
                             (s) -> {
-                                assertTrue(s.length() > 300, "Result too short (" + s.length() + ") -- " + s);
-                                assertTrue(s.contains("XAAAAAAAAAAAAAAAAAA"), "Bad value: " + s);
+                                Assertions.assertTrue(s.length() > 300, "Result too short (" + s.length() + ") -- " + s);
+                                Assertions.assertTrue(s.contains("XAAAAAAAAAAAAAAAAAA"), "Bad value: " + s);
                             })
         );
     }
 
+    @Test
     public void testPrompt() {
-        test(
-                (a) -> assertCommand(a, "/set mode tp -quiet", "|  Created new feedback mode: tp"),
+        test((a) -> assertCommand(a, "/set mode tp -quiet", "|  Created new feedback mode: tp"),
                 (a) -> assertCommand(a, "/set prompt tp 'aaa' 'bbb'", ""),
                 (a) -> assertCommand(a, "/set prompt tp",
                         "|  /set prompt tp \"aaa\" \"bbb\""),
@@ -347,35 +350,37 @@ public class ToolFormatTest extends ReplToolTesting {
                         (s) -> {
                             try {
                                 BufferedReader rdr = new BufferedReader(new StringReader(s));
-                                assertEquals(rdr.readLine(), "|  /set mode tp -quiet",
+                                Assertions.assertEquals("|  /set mode tp -quiet", rdr.readLine(),
                                         "|  /set mode tp -quiet");
-                                assertEquals(rdr.readLine(), "|  /set prompt tp \"aaa\" \"bbb\"",
+                                Assertions.assertEquals("|  /set prompt tp \"aaa\" \"bbb\"", rdr.readLine(),
                                         "|  /set prompt tp \"aaa\" \"bbb\"");
                                 String l = rdr.readLine();
                                 while (l.startsWith("|  /set format tp ")) {
                                     l = rdr.readLine();
                                 }
-                                assertEquals(l, "|  /set mode -retain tp",
+                                Assertions.assertEquals("|  /set mode -retain tp", l,
                                         "|  /set mode -retain tp");
-                                assertEquals(rdr.readLine(), "|  ",
+                                Assertions.assertEquals("|  ", rdr.readLine(),
                                         "|  ");
-                                assertEquals(rdr.readLine(), "|  /set mode tp -quiet",
+                                Assertions.assertEquals("|  /set mode tp -quiet", rdr.readLine(),
                                         "|  /set mode tp -quiet");
-                                assertEquals(rdr.readLine(), "|  /set prompt tp \"ccc\" \"ddd\"",
+                                Assertions.assertEquals("|  /set prompt tp \"ccc\" \"ddd\"", rdr.readLine(),
                                         "|  /set prompt tp \"ccc\" \"ddd\"");
                             } catch (IOException ex) {
-                                fail("threw " + ex);
+                                Assertions.fail("threw " + ex);
                             }
                         })
         );
     }
 
+    @Test
     public void testShowFeedbackModes() {
         test(
                 (a) -> assertCommandOutputContains(a, "/set feedback", "normal")
         );
     }
 
+    @Test
     public void testSetNewModeQuiet() {
         try {
             test(
@@ -396,6 +401,7 @@ public class ToolFormatTest extends ReplToolTesting {
         }
     }
 
+    @Test
     public void testSetError() {
         try {
             test(
@@ -473,6 +479,7 @@ public class ToolFormatTest extends ReplToolTesting {
         }
     }
 
+    @Test
     public void testSetHelp() {
         try {
             test(
