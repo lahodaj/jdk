@@ -76,8 +76,17 @@ public class MultipleMatchers {
              username = this.username;
         }
 
+        public __matcher Person1(Integer id, String username) {
+             id = 0;
+             username = this.username;
+        }
+
         public __matcher Person1(String name) {
              name = this.name;
+        }
+
+        public __matcher Person1(Integer id) {
+             id = 0;
         }
     }
 

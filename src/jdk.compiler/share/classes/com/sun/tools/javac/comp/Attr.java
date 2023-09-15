@@ -4253,16 +4253,48 @@ public class Attr extends JCTree.Visitor {
 
         List<Type> expectedRecordTypes = null;
 
-        if (site.tsym.kind == Kind.TYP) {
+        MATCHERS: if (site.tsym.kind == Kind.TYP) {
             int nestedPatternCount = tree.nested.size();
             var matchers = site.tsym.members().getSymbols(sym -> (sym.flags() & MATCHER) != 0 && sym.type.getParameterTypes().size() == nestedPatternCount);
             Iterator<Symbol> matchersIt = matchers.iterator();
 
             if (matchersIt.hasNext()) {
-                MethodSymbol matcher = (MethodSymbol) matchers.iterator().next();
+                ListBuffer<MethodSymbol> applicableMatchers = new ListBuffer<>();
 
-                tree.matcher = matcher;
-                expectedRecordTypes = types.memberType(site, matcher).getParameterTypes();
+                NEXT_MATCHER: while (matchersIt.hasNext()) {
+                    MethodSymbol matcher = (MethodSymbol) matchersIt.next();
+                    Iterator<Type> nestedTypesIt = types.memberType(site, matcher).getParameterTypes().iterator();
+                    Iterator<JCPattern> nestedIt = tree.nested.iterator();
+
+                    while (nestedTypesIt.hasNext()) {
+                        Type expectedNestedType = nestedTypesIt.next();
+                        JCPattern nestedPattern = nestedIt.next();
+                        JCTree speculative = deferredAttr.attribSpeculative(nestedPattern, env, new ResultInfo(KindSelector.VAL, expectedNestedType));
+                        if (!types.isCastable(speculative.type, expectedNestedType)) {
+                            continue NEXT_MATCHER;
+                        }
+                    }
+                    applicableMatchers.add(matcher);
+                }
+
+                switch (applicableMatchers.size()) {
+                    case 0 -> {
+                        log.error(tree.pos(), Errors.NoMatchers);
+                        //skip the rest of matchers handling, let expectedRecordTypes be filled with error to prevent downstream errors:
+                        break MATCHERS;
+                    }
+                    case 1 -> {
+                        tree.matcher = applicableMatchers.toList().head;
+                    }
+                    default -> {
+                        log.error(tree.pos(), Errors.MultipleMatchers(applicableMatchers.toList()));
+                        tree.matcher = applicableMatchers.toList().head;
+                    }
+                }
+            }
+
+            if (tree.matcher != null) {
+                expectedRecordTypes = types.memberType(site, tree.matcher).getParameterTypes();
             } else if (((ClassSymbol) site.tsym).isRecord()) {
                 ClassSymbol record = (ClassSymbol) site.tsym;
                 expectedRecordTypes = record.getRecordComponents()

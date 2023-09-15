@@ -1,0 +1,6 @@
+MultipleMatchersErrors.java:9:26: compiler.err.multiple.matchers: Person1(java.lang.Integer,java.lang.String),Person1(java.lang.String,java.lang.String)
+MultipleMatchersErrors.java:16:26: compiler.err.multiple.matchers: Person1(java.lang.Integer),Person1(java.lang.String)
+MultipleMatchersErrors.java:23:26: compiler.err.multiple.matchers: Person1(java.lang.Integer,java.lang.String),Person1(java.lang.String,java.lang.String)
+MultipleMatchersErrors.java:30:26: compiler.err.multiple.matchers: Person1(java.lang.Integer),Person1(java.lang.String)
+MultipleMatchersErrors.java:37:26: compiler.err.no.matchers
+5 errors
