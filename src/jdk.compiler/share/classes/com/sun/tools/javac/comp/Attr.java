@@ -1147,6 +1147,10 @@ public class Attr extends JCTree.Visitor {
                 }
             }
 
+            if (m.isDeconstructor()) {
+                m.matcherFlags.add(MatcherFlags.DECONSTRUCTOR);
+            }
+
             // annotation method checks
             if ((owner.flags() & ANNOTATION) != 0) {
                 // annotation method cannot have throws clause
@@ -4290,22 +4294,71 @@ public class Attr extends JCTree.Visitor {
             site = types.capture(tree.type);
         }
 
-        List<Type> expectedRecordTypes;
-        if (site.tsym.kind == Kind.TYP && ((ClassSymbol) site.tsym).isRecord()) {
-            ClassSymbol record = (ClassSymbol) site.tsym;
-            expectedRecordTypes = record.getRecordComponents()
-                                        .stream()
-                                        .map(rc -> types.memberType(site, rc))
-                                        .map(t -> types.upward(t, types.captures(t)).baseType())
-                                        .collect(List.collector());
-            tree.record = record;
-        } else {
+        List<Type> expectedRecordTypes = null;
+
+        MATCHERS: if (site.tsym.kind == Kind.TYP) {
+            int nestedPatternCount = tree.nested.size();
+            var matchers = site.tsym.members().getSymbols(sym -> (sym.flags() & MATCHER) != 0 && sym.type.getParameterTypes().size() == nestedPatternCount);
+            Iterator<Symbol> matchersIt = matchers.iterator();
+
+            if (matchersIt.hasNext()) {
+                ListBuffer<MethodSymbol> applicableMatchers = new ListBuffer<>();
+
+                NEXT_MATCHER: while (matchersIt.hasNext()) {
+                    MethodSymbol matcher = (MethodSymbol) matchersIt.next();
+                    Iterator<Type> nestedTypesIt = types.memberType(site, matcher).getParameterTypes().iterator();
+                    Iterator<JCPattern> nestedIt = tree.nested.iterator();
+
+                    while (nestedTypesIt.hasNext()) {
+                        Type expectedNestedType = nestedTypesIt.next();
+                        JCPattern nestedPattern = nestedIt.next();
+                        JCTree speculative = deferredAttr.attribSpeculative(nestedPattern, env, new ResultInfo(KindSelector.VAL, expectedNestedType));
+                        if (!types.isCastable(speculative.type, expectedNestedType)) {
+                            continue NEXT_MATCHER;
+                        }
+                    }
+                    applicableMatchers.add(matcher);
+                }
+
+                switch (applicableMatchers.size()) {
+                    case 0 -> {
+                        log.error(tree.pos(), Errors.NoMatchers);
+                        //skip the rest of matchers handling, let expectedRecordTypes be filled with error to prevent downstream errors:
+                        break MATCHERS;
+                    }
+                    case 1 -> {
+                        tree.matcher = applicableMatchers.toList().head;
+                    }
+                    default -> {
+                        log.error(tree.pos(), Errors.MultipleMatchers(applicableMatchers.toList()));
+                        tree.matcher = applicableMatchers.toList().head;
+                    }
+                }
+            }
+
+            if (tree.matcher != null) {
+                expectedRecordTypes = types.memberType(site, tree.matcher).getParameterTypes();
+            } else if (((ClassSymbol) site.tsym).isRecord()) {
+                ClassSymbol record = (ClassSymbol) site.tsym;
+                expectedRecordTypes = record.getRecordComponents()
+                                            .stream()
+                                            .map(rc -> types.memberType(site, rc))
+                                            .map(t -> types.upward(t, types.captures(t)).baseType())
+                                            .collect(List.collector());
+                tree.record = record;
+            }
+        }
+
+        if (expectedRecordTypes == null) {
             log.error(tree.pos(), Errors.DeconstructionPatternOnlyRecords(site.tsym));
             expectedRecordTypes = Stream.generate(() -> types.createErrorType(tree.type))
                                 .limit(tree.nested.size())
                                 .collect(List.collector());
             tree.record = syms.errSymbol;
+        } else {
+            tree.fullComponentTypes = expectedRecordTypes;
         }
+
         ListBuffer<BindingSymbol> outBindings = new ListBuffer<>();
         List<Type> recordTypes = expectedRecordTypes;
         List<JCPattern> nestedPatterns = tree.nested;

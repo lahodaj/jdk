@@ -270,6 +270,32 @@ public class AttributeWriter extends BasicWriter {
                 }
                 indent(-1);
             }
+//    @Override
+//    public Void visitMatcher(Matcher_attribute attr, Void unused) {
+//        println("Matcher:");
+//        indent(+1);
+//
+//        String nameString = attr.matcher_name_index != 0 ?
+//                constantWriter.stringValue(attr.matcher_name_index) : "<no name>";
+//        println("matcher_name_index: " + nameString);
+//
+//        String flagString =
+//                (0 != (attr.matcher_flags & Matcher_attribute.DECONSTRUCTOR) ? "deconstructor " : "") +
+//                        (0 != (attr.matcher_flags & Matcher_attribute.TOTAL) ? "total" : "");
+//        println("matcher_flags: " + flagString);
+//
+//        constantWriter.write(attr.matcher_methodtype.descriptor_index);
+//        println();
+//
+//        if (options.showAllAttrs && attr.attributes.size() > 0) {
+//            for (Attribute matcherAttribute: attr.attributes)
+//                write(attr, matcherAttribute, constant_pool);
+//            println();
+//        }
+//        indent(-1);
+//        return null;
+//    }
+//
             case NestHostAttribute attr -> {
                 print("NestHost: ");
                 constantWriter.write(attr.nestHost().index());
