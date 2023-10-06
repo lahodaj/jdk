@@ -507,6 +507,11 @@ public class Attributes {
             buf.writeIndex(attr.matcherMethodType());
             buf.writeList(attr.attributes());
         }
+
+        @Override
+        public AttributeMapper.AttributeStability stability() {
+            return AttributeStability.CP_REFS; //TODO - what is the real stability? Is the list of nested attributes static?
+        }
     };
 
     /** Attribute mapper for the {@code MethodParameters} attribute */

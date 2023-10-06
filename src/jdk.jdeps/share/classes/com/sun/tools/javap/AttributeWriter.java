@@ -421,10 +421,10 @@ public class AttributeWriter extends BasicWriter {
                         print(constantWriter.stringValue(e.provides()));
                         println(" with ... " + e.providesWith().size());
                         indent(+1);
-                        for (var with : e.providesWith()) {
-                            print("#" + with.index());
+                        for (var withX : e.providesWith()) {
+                            print("#" + withX.index());
                             tab();
-                            println("// ... with " + constantWriter.stringValue(with));
+                            println("// ... with " + constantWriter.stringValue(withX));
                         }
                         indent(-1);
                     }
