@@ -3506,7 +3506,13 @@ public class Flow {
             Type[] componentTypes;
 
             if (!record.type.isErroneous()) {
-                componentTypes = ((ClassSymbol) record.type.tsym).getRecordComponents()
+                List<? extends Symbol> components;
+                if (record.matcher != null) {
+                    components = record.matcher.params;
+                } else {
+                    components = ((ClassSymbol) record.type.tsym).getRecordComponents();
+                }
+                componentTypes = components
                         .map(r -> types.memberType(record.type, r))
                         .toArray(s -> new Type[s]);
             }

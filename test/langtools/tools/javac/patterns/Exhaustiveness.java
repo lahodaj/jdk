@@ -1996,6 +1996,29 @@ public class Exhaustiveness extends TestRunner {
                """);
     }
 
+    @Test
+    public void testMatchers(Path base) throws Exception {
+        doTest(base,
+               new String[0],
+               """
+               package test;
+               public class Test {
+                 record R(Object o1, Object o2) implements I {
+                     public __matcher R(Object o) {
+                         o = this.o1;
+                     }
+                 }
+
+                 void exhaustiveness(I i) {
+                   switch (i) {
+                     case R(Object o) -> {}
+                   }
+                 }
+                 sealed interface I {}
+               }
+               """);
+    }
+
     private void doTest(Path base, String[] libraryCode, String testCode, String... expectedErrors) throws IOException {
         doTest(base, libraryCode, testCode, false, expectedErrors);
     }
