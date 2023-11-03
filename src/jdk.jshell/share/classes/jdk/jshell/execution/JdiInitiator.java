@@ -26,8 +26,6 @@ package jdk.jshell.execution;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -45,6 +43,13 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import com.sun.jdi.connect.IllegalConnectorArgumentsException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.io.Reader;
+import java.io.StringWriter;
+import java.lang.Thread.Builder;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Sets up a JDI connection, providing the resulting JDI {@link VirtualMachine}
@@ -154,8 +159,11 @@ public class JdiInitiator {
     private VirtualMachine listenTarget(int port, List<String> remoteVMOptions) {
         ListeningConnector listener = (ListeningConnector) connector;
         // Files to collection to output of a start-up failure
-        File crashErrorFile = createTempFile("error");
-        File crashOutputFile = createTempFile("output");
+        AtomicLong lastWrite = new AtomicLong(System.currentTimeMillis());
+        StringBuffer crashOutput = new StringBuffer();
+        StringBuffer crashError = new StringBuffer();
+        Thread outputThread = null;
+        Thread errorThread = null;
         try {
             // Start listening, get the JDI connection address
             String addr = listener.startListening(connectorArgs);
@@ -173,9 +181,12 @@ public class JdiInitiator {
             args.add(remoteAgent);
             args.add("" + port);
             ProcessBuilder pb = new ProcessBuilder(args);
-            pb.redirectError(crashErrorFile);
-            pb.redirectOutput(crashOutputFile);
             process = pb.start();
+
+            Builder threads = Thread.ofVirtual();
+
+            outputThread = threads.start(new RecordOutput(process.getInputStream(), crashOutput, lastWrite));
+            errorThread = threads.start(new RecordOutput(process.getErrorStream(), crashError, lastWrite));
 
             // Accept the connection from the remote agent
             vm = timedVirtualMachineCreation(() -> listener.accept(connectorArgs),
@@ -185,10 +196,11 @@ public class JdiInitiator {
             } catch (IOException | IllegalConnectorArgumentsException ex) {
                 // ignore
             }
-            crashErrorFile.delete();
-            crashOutputFile.delete();
             return vm;
         } catch (Throwable ex) {
+            waitFor(outputThread, lastWrite);
+            waitFor(errorThread, lastWrite);
+
             if (process != null) {
                 process.destroyForcibly();
             }
@@ -197,9 +209,7 @@ public class JdiInitiator {
             } catch (IOException | IllegalConnectorArgumentsException iex) {
                 // ignore
             }
-            String text = readFile(crashErrorFile) + readFile(crashOutputFile);
-            crashErrorFile.delete();
-            crashOutputFile.delete();
+            String text = crashOutput.toString() + crashError.toString();
             if (text.isEmpty()) {
                 throw reportLaunchFail(ex, "listen");
             } else {
@@ -208,22 +218,49 @@ public class JdiInitiator {
         }
     }
 
-    private File createTempFile(String label) {
-        try {
-            File f = File.createTempFile("remote", label);
-            f.deleteOnExit();
-            return f;
-        } catch (IOException ex) {
-            throw new InternalError("Failed create temp ", ex);
+    private static final long TIMEOUT = 100;
+    private static void waitFor(Thread writer, AtomicLong lastWrite) {
+        //wait until reading from the stdout/stderr is "finished":
+        //either the reading thread finishes, or there's nothing read for a long period of time
+        if (writer != null) {
+            while (writer.isAlive() && (System.currentTimeMillis() - lastWrite.get()) < TIMEOUT) {
+                try {
+                    writer.join(TIMEOUT);
+                } catch (InterruptedException ex) {
+                }
+            }
         }
     }
 
-    private String readFile(File f) {
-        try {
-            return new String(Files.readAllBytes(f.toPath()),
-                    StandardCharsets.UTF_8);
-        } catch (IOException ex) {
-            return "error reading " + f + " : " + ex.toString();
+    private static final class RecordOutput implements Runnable {
+
+        private final InputStream input;
+        private final StringBuffer output;
+        private final AtomicLong lastWrite;
+
+        public RecordOutput(InputStream input, StringBuffer output, AtomicLong lastWrite) {
+            this.input = input;
+            this.output = output;
+            this.lastWrite = lastWrite;
+        }
+
+        @Override
+        public void run() {
+            Reader in = new InputStreamReader(input);
+            int r;
+
+            try {
+                while ((r = in.read()) != (-1)) {
+                    lastWrite.set(System.currentTimeMillis());
+                    output.append((char) r);
+                }
+            } catch (IOException ex) {
+                StringWriter out = new StringWriter();
+                PrintWriter pw = new PrintWriter(out);
+                ex.printStackTrace(pw);
+                pw.close();
+                output.append(out.toString());
+            }
         }
     }
 
