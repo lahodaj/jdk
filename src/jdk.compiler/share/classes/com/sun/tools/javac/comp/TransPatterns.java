@@ -102,6 +102,7 @@ import com.sun.tools.javac.tree.JCTree.JCRecordPattern;
 import com.sun.tools.javac.tree.JCTree.JCStatement;
 import com.sun.tools.javac.tree.JCTree.JCSwitchExpression;
 import com.sun.tools.javac.tree.JCTree.JCTry;
+import com.sun.tools.javac.tree.JCTree.JCYield;
 import com.sun.tools.javac.tree.JCTree.LetExpr;
 import com.sun.tools.javac.tree.TreeInfo;
 import com.sun.tools.javac.tree.TreeScanner;
@@ -397,6 +398,97 @@ public class TransPatterns extends TreeTranslator {
                     ? syms.objectType
                     : selector.type;
 
+            ListBuffer<JCStatement> statements = new ListBuffer<>();
+            VarSymbol temp = new VarSymbol(Flags.SYNTHETIC,
+                    names.fromString("selector" + variableIndex++ + target.syntheticNameChar() + "temp"),
+                    seltype,
+                    currentMethodSym);
+            boolean hasNullCase = cases.stream()
+                                       .flatMap(c -> c.labels.stream())
+                                       .anyMatch(p -> TreeInfo.isNullCaseLabel(p));
+            boolean needsNullCheck = !hasNullCase && !seltype.isPrimitive();
+
+            statements.append(make.at(tree.pos).VarDef(temp, null));
+            selector = translate(selector);
+
+            //TODO: when should be nullcheck be covered by the implicit try-catch? (the behavior implemented herein)
+            JCStatement selectorAssignment = make.at(tree.pos).Exec(make.Assign(make.Ident(temp), needsNullCheck ? attr.makeNullCheck(selector)
+                                                                                                                 : selector).setType(seltype));
+
+            if (cases.stream().anyMatch(c -> c.throwsCase)) {
+                ListBuffer<JCCase> nonThrowsCases = new ListBuffer<>();
+                ListBuffer<JCCase> throwsCases = new ListBuffer<>();
+
+                for (JCCase c : cases) {
+                    if (c.throwsCase) {
+                        throwsCases.append(c);
+                        c.throwsCase = false;
+                    } else {
+                        nonThrowsCases.append(c);
+                    }
+                }
+
+                VarSymbol caughtException = new VarSymbol(Flags.SYNTHETIC,
+                        names.fromString("caught" + variableIndex++ + target.syntheticNameChar() + "temp"),
+                        syms.throwableType,
+                        currentMethodSym);
+
+                JCPattern lastPattern = ((JCPatternCaseLabel) throwsCases.last().labels.last()).pat;
+                boolean catchesThrowable = lastPattern instanceof JCBindingPattern p &&
+                                           p.var.vartype.type.tsym == syms.throwableType.tsym;
+
+                if (!catchesThrowable) {
+                    throwsCases.append(make.Case(CaseKind.STATEMENT, false, List.of(make.DefaultCaseLabel()), null, List.of(make.Throw(make.Ident(caughtException))), null));
+                }
+
+                if (tree.hasTag(Tag.SWITCH)) {
+                    JCSwitch exceptionSwitch = make.Switch(make.Ident(caughtException), throwsCases.toList());
+                    exceptionSwitch.patternSwitch = true;
+
+                    JCSwitch mainSwitch = (JCSwitch) tree;
+                    mainSwitch.cases = nonThrowsCases.toList();
+
+                    JCTry mainTry = make.Try(make.Block(0, List.of(selectorAssignment)),
+                                                 List.of(make.Catch(make.VarDef(caughtException, null), make.Block(0, List.of(exceptionSwitch)))),
+                                                 make.Block(Flags.BODY_ONLY_FINALIZE, List.of(mainSwitch)));
+                    statements.append(mainTry);
+                    result = translate(make.Block(0L, statements.toList()));
+                } else {
+                    JCSwitchExpression exceptionSwitch = make.SwitchExpression(make.Ident(caughtException), throwsCases.toList());
+                    exceptionSwitch.patternSwitch = true;
+                    exceptionSwitch.setType(tree.type);
+                    new TreeScanner() {
+                        @Override
+                        public void visitYield(JCYield yld) {
+                            if (yld.target == tree) {
+                                yld.target = exceptionSwitch;
+                            }
+                            super.visitYield(yld);
+                        }
+                    }.scan(throwsCases.toList());
+
+                    ((JCSwitchExpression) tree).cases = nonThrowsCases.toList();
+                    JCYield nonExceptionalYield = make.Yield((JCExpression) tree);
+                    JCYield exceptionalYield = make.Yield(exceptionSwitch);
+
+                    JCTry selectorTry = make.Try(make.Block(0, List.of(selectorAssignment)),
+                                                 List.of(make.Catch(make.VarDef(caughtException, null), make.Block(0, List.of(exceptionalYield)))),
+                                                 make.Block(Flags.BODY_ONLY_FINALIZE, List.of(nonExceptionalYield)));
+                    JCSwitchExpression mainExpression = make.SwitchExpression(makeLit(syms.intType, 0), List.of(make.Case(CaseKind.STATEMENT, false, List.of(make.DefaultCaseLabel()), null, List.of(selectorTry), null)));
+                    mainExpression.setType(tree.type);
+                    nonExceptionalYield.target = mainExpression;
+                    exceptionalYield.target = mainExpression;
+                    LetExpr le = make.LetExpr(statements.toList(), mainExpression);
+                    le.setType(tree.type);
+                    le.needsCond = true;
+                    result = translate(le);
+                }
+                return ;
+            } else {
+                statements.append(selectorAssignment);
+                selector = make.Ident(temp);
+            }
+
             //rewrite pattern matching switches, performed in several steps:
             //1. record patterns are unrolled into a binding pattern and guards using unrollRecordPattern
             //   (guards implement the nested pattern checks)
@@ -460,21 +552,9 @@ public class TransPatterns extends TreeTranslator {
                 appendBreakIfNeeded(tree, cases, c.head);
             }
             cases = processCases(tree, newCases.toList());
-            ListBuffer<JCStatement> statements = new ListBuffer<>();
-            VarSymbol temp = new VarSymbol(Flags.SYNTHETIC,
-                    names.fromString("selector" + variableIndex++ + target.syntheticNameChar() + "temp"),
-                    seltype,
-                    currentMethodSym);
-            boolean hasNullCase = cases.stream()
-                                       .flatMap(c -> c.labels.stream())
-                                       .anyMatch(p -> TreeInfo.isNullCaseLabel(p));
 
             JCCase lastCase = cases.last();
 
-            selector = translate(selector);
-            boolean needsNullCheck = !hasNullCase && !seltype.isPrimitive();
-            statements.append(make.at(tree.pos).VarDef(temp, needsNullCheck ? attr.makeNullCheck(selector)
-                                                                            : selector));
             VarSymbol index = new VarSymbol(Flags.SYNTHETIC,
                     names.fromString("index" + target.syntheticNameChar() + variableIndex++),
                     syms.intType,
@@ -517,7 +597,7 @@ public class TransPatterns extends TreeTranslator {
             qualifier.type = syms.intType;
             selector = make.Apply(List.nil(),
                                   qualifier,
-                                  List.of(make.Ident(temp), make.Ident(index)))
+                                  List.of(selector, make.Ident(index)))
                            .setType(syms.intType);
 
             int i = 0;
@@ -836,7 +916,7 @@ public class TransPatterns extends TreeTranslator {
                         } else {
                             newLabel = List.of(jcPatternCaseLabelWithGuard);
                         }
-                        nestedCases.add(make.Case(CaseKind.STATEMENT, newLabel, accummulated.guard,
+                        nestedCases.add(make.Case(CaseKind.STATEMENT, false, newLabel, accummulated.guard,
                                                   accummulated.stats, null));
                         hasGuard = newGuard != null || accummulated.guard != null;
                     }
@@ -844,6 +924,7 @@ public class TransPatterns extends TreeTranslator {
                         JCContinue continueSwitch = make.Continue(null);
                         continueSwitch.target = currentSwitch;
                         nestedCases.add(make.Case(CaseKind.STATEMENT,
+                                                  false,
                                                   hasUnconditional
                                                           ? List.of(make.DefaultCaseLabel())
                                                           : List.of(make.ConstantCaseLabel(makeNull()),
@@ -858,6 +939,7 @@ public class TransPatterns extends TreeTranslator {
                             (JCPatternCaseLabel) accummulator.first().labels.head;
                     leadingTest.syntheticGuard = null;
                     result.add(make.Case(CaseKind.STATEMENT,
+                                         false,
                                          List.of(leadingTest),
                                          null,
                                          List.of(newSwitch),

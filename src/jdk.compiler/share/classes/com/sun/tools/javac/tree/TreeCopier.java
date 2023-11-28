@@ -162,7 +162,7 @@ public class TreeCopier<P> implements TreeVisitor<JCTree,P> {
         } else {
             body = null;
         }
-        return M.at(t.pos).Case(t.caseKind, labels, guard, stats, body);
+        return M.at(t.pos).Case(t.caseKind, t.throwsCase, labels, guard, stats, body);
     }
 
     @DefinedBy(Api.COMPILER_TREE)

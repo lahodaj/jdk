@@ -1666,12 +1666,16 @@ public class JavacParser implements Parser {
         ListBuffer<JCCase> caseExprs = new ListBuffer<>();
         int casePos = token.pos;
         ListBuffer<JCCaseLabel> pats = new ListBuffer<>();
+        boolean throwsCase = false;
 
         if (token.kind == DEFAULT) {
             nextToken();
             pats.append(toP(F.at(casePos).DefaultCaseLabel()));
         } else {
             accept(CASE);
+            if (throwsCase = token.kind == THROWS) {
+                nextToken();
+            }
             boolean allowDefault = false;
             while (true) {
                 JCCaseLabel label = parseCaseLabel(allowDefault);
@@ -1708,7 +1712,7 @@ public class JavacParser implements Parser {
                 kind = JCCase.STATEMENT;
                 break;
         }
-        caseExprs.append(toP(F.at(casePos).Case(kind, pats.toList(), guard, stats, body)));
+        caseExprs.append(toP(F.at(casePos).Case(kind, throwsCase, pats.toList(), guard, stats, body)));
         return caseExprs.toList();
     }
 
@@ -3186,6 +3190,10 @@ public class JavacParser implements Parser {
         switch (token.kind) {
         case CASE: {
             nextToken();
+            boolean throwsCase = token.kind == THROWS;
+            if (throwsCase) {
+                nextToken();
+            }
             ListBuffer<JCCaseLabel> pats = new ListBuffer<>();
             boolean allowDefault = false;
             while (true) {
@@ -3214,7 +3222,7 @@ public class JavacParser implements Parser {
                 caseKind = JCCase.STATEMENT;
                 stats = blockStatements();
             }
-            c = F.at(pos).Case(caseKind, pats.toList(), guard, stats, body);
+            c = F.at(pos).Case(caseKind, throwsCase, pats.toList(), guard, stats, body);
             if (stats.isEmpty())
                 storeEnd(c, S.prevToken().endPos);
             return cases.append(c).toList();
@@ -3240,7 +3248,7 @@ public class JavacParser implements Parser {
                 caseKind = JCCase.STATEMENT;
                 stats = blockStatements();
             }
-            c = F.at(pos).Case(caseKind, List.of(defaultPattern), guard, stats, body);
+            c = F.at(pos).Case(caseKind, false, List.of(defaultPattern), guard, stats, body);
             if (stats.isEmpty())
                 storeEnd(c, S.prevToken().endPos);
             return cases.append(c).toList();

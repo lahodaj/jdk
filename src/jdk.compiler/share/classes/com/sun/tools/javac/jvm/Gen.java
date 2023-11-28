@@ -406,6 +406,9 @@ public class Gen extends JCTree.Visitor {
      */
     boolean hasFinally(JCTree target, Env<GenContext> env) {
         while (env.tree != target) {
+            if (env.tree.hasTag(TRY) && env.info.finalize == null) {
+                System.err.println("!!!!");
+            }
             if (env.tree.hasTag(TRY) && env.info.finalize.hasFinalizer())
                 return true;
             env = env.next;
@@ -1495,32 +1498,37 @@ public class Gen extends JCTree.Visitor {
         // in a new environment which calls the finally block if there is one.
         final Env<GenContext> tryEnv = env.dup(tree, new GenContext());
         final Env<GenContext> oldEnv = env;
-        tryEnv.info.finalize = new GenFinalizer() {
-            void gen() {
-                Assert.check(tryEnv.info.gaps.length() % 2 == 0);
-                tryEnv.info.gaps.append(code.curCP());
-                genLast();
-            }
-            void genLast() {
-                if (tree.finalizer != null)
-                    genStat(tree.finalizer, oldEnv, CRT_BLOCK);
-            }
-            boolean hasFinalizer() {
-                return tree.finalizer != null;
-            }
-
-            @Override
-            void afterBody() {
-                if (tree.finalizer != null && (tree.finalizer.flags & BODY_ONLY_FINALIZE) != 0) {
-                    //for body-only finally, remove the GenFinalizer after try body
-                    //so that the finally is not generated to catch bodies:
-                    tryEnv.info.finalize = null;
+        JCBlock originalFinalizer = tree.finalizer;
+        try {
+            tryEnv.info.finalize = new GenFinalizer() {
+                void gen() {
+                    Assert.check(tryEnv.info.gaps.length() % 2 == 0);
+                    tryEnv.info.gaps.append(code.curCP());
+                    genLast();
                 }
-            }
+                void genLast() {
+                    if (tree.finalizer != null)
+                        genStat(tree.finalizer, oldEnv, CRT_BLOCK);
+                }
+                boolean hasFinalizer() {
+                    return tree.finalizer != null;
+                }
 
-        };
-        tryEnv.info.gaps = new ListBuffer<>();
-        genTry(tree.body, tree.catchers, tryEnv);
+                @Override
+                void afterBody() {
+                    if (tree.finalizer != null && (tree.finalizer.flags & BODY_ONLY_FINALIZE) != 0) {
+                        //for body-only finally, remove the finalizer after try body
+                        //so that the finally is not generated to catch bodies:
+                        tree.finalizer = null;
+                    }
+                }
+
+            };
+            tryEnv.info.gaps = new ListBuffer<>();
+            genTry(tree.body, tree.catchers, tryEnv);
+        } finally {
+            tree.finalizer = originalFinalizer;
+        }
     }
     //where
         /** Generate code for a try or synchronized statement

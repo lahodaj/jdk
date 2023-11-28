@@ -1793,14 +1793,16 @@ public class Attr extends JCTree.Visitor {
                         matchBindings = MatchBindingsComputer.EMPTY;
                     } else if (label instanceof JCPatternCaseLabel patternlabel) {
                         //pattern
+                        Type expectedType = c.throwsCase ? syms.throwableType
+                                                         : seltype;
                         JCPattern pat = patternlabel.pat;
-                        attribExpr(pat, switchEnv, seltype);
+                        attribExpr(pat, switchEnv, expectedType);
                         Type primaryType = TreeInfo.primaryPatternType(pat);
                         if (!primaryType.hasTag(TYPEVAR)) {
                             primaryType = chk.checkClassOrArrayType(pat.pos(), primaryType);
                         }
                         if (!errorPrimitiveSwitch) {
-                            checkCastablePattern(pat.pos(), seltype, primaryType);
+                            checkCastablePattern(pat.pos(), expectedType, primaryType);
                         }
                         Type patternType = types.erasure(primaryType);
                         JCExpression guard = c.guard;
@@ -1824,7 +1826,7 @@ public class Attr extends JCTree.Visitor {
                         boolean unconditional =
                                 unguarded &&
                                 !patternType.isErroneous() &&
-                                types.isSubtype(types.boxedTypeOrType(types.erasure(seltype)),
+                                types.isSubtype(types.boxedTypeOrType(types.erasure(expectedType)),
                                                 patternType);
                         if (unconditional) {
                             if (hasUnconditionalPattern) {

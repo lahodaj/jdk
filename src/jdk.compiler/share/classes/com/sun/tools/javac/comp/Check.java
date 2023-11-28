@@ -4800,6 +4800,8 @@ public class Check {
 
         return false;
     }
+
+    //TODO: check/fix dominance between ordinary and throws cases:
     void checkSwitchCaseLabelDominated(List<JCCase> cases) {
         List<Pair<JCCase, JCCaseLabel>> caseLabels = List.nil();
         boolean seenDefault = false;
@@ -4820,7 +4822,7 @@ public class Check {
                     }
                     continue;
                 }
-                if (seenDefault && !warnDominatedByDefault) {
+                if (seenDefault && !warnDominatedByDefault && !c.throwsCase) {
                     if (label.hasTag(PATTERNCASELABEL) ||
                         (label instanceof JCConstantCaseLabel && seenDefaultLabel)) {
                         log.error(label.pos(), Errors.PatternDominated);
@@ -4832,7 +4834,8 @@ public class Check {
                     JCCase testCase = caseAndLabel.fst;
                     JCCaseLabel testCaseLabel = caseAndLabel.snd;
                     Type testType = labelType(testCaseLabel);
-                    if (types.isSubtype(currentType, testType) &&
+                    if (c.throwsCase == caseAndLabel.fst.throwsCase &&
+                        types.isSubtype(currentType, testType) &&
                         !currentType.hasTag(ERROR) && !testType.hasTag(ERROR)) {
                         //the current label is potentially dominated by the existing (test) label, check:
                         boolean dominated = false;
