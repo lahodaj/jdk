@@ -406,9 +406,6 @@ public class Gen extends JCTree.Visitor {
      */
     boolean hasFinally(JCTree target, Env<GenContext> env) {
         while (env.tree != target) {
-            if (env.tree.hasTag(TRY) && env.info.finalize == null) {
-                System.err.println("!!!!");
-            }
             if (env.tree.hasTag(TRY) && env.info.finalize.hasFinalizer())
                 return true;
             env = env.next;
