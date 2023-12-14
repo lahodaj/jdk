@@ -46,6 +46,16 @@ public class CaseThrows {
         assertEquals("b", statementTestControlFlow(() -> throwException(new RuntimeException())));
         assertEquals(1, expressionTest());
         assertEquals(1, expressionTestUncaught());
+        assertEquals(0, expressionTestAsCondition(() -> 0));
+        assertEquals(1, expressionTestAsCondition(() -> 1));
+        assertEquals(2, expressionTestAsCondition(() -> throwException(new IllegalStateException())));
+        assertEquals(3, expressionTestAsCondition(() -> throwException(new RuntimeException())));
+        try {
+            expressionTestAsCondition(() -> throwException(new InternalError()));
+            throw new AssertionError("Expected an InternalError, but got none");
+        } catch (InternalError _) {
+            //OK
+        }
     }
 
     private int statementTest() {
@@ -91,6 +101,20 @@ public class CaseThrows {
         } catch (InternalError e) {
             return 1;
         }
+    }
+
+    private int expressionTestAsCondition(Supplier<Integer> selector) {
+        int x;
+        int y = -1;
+        if (switch (selector.get()) {
+            case 0 -> { x = 0; yield true; }
+            default -> { y = 1; yield false; }
+            case throws IllegalStateException _ -> { x = 2; yield true; }
+            case throws RuntimeException _ -> { y = 3; yield false; }
+        } && x != (-1)) {
+            return x;
+        }
+        return y;
     }
 
     private static <T extends Throwable> int throwException(T t) throws T {
