@@ -1827,7 +1827,8 @@ public class Attr extends JCTree.Visitor {
                                 unguarded &&
                                 !patternType.isErroneous() &&
                                 types.isSubtype(types.boxedTypeOrType(types.erasure(expectedType)),
-                                                patternType);
+                                                patternType) &&
+                                !c.throwsCase; //TODO: there should be two distinct "unconditional" checks, one for "normal" cases, one for "exceptional" cases
                         if (unconditional) {
                             if (hasUnconditionalPattern) {
                                 log.error(pat.pos(), Errors.DuplicateUnconditionalPattern);
