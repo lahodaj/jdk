@@ -287,4 +287,15 @@ public class SymbolMetadata {
             }
         }
     }
+
+    public int firstDeprecated;
+    public int firstDeprecatedForRemoval;
+    public int firstRemoved;
+
+    public void setFutureDeprecation(int firstDeprecated, int firstDeprecatedForRemoval, int firstRemoved) {
+        this.firstDeprecated = firstDeprecated;
+        this.firstDeprecatedForRemoval = firstDeprecatedForRemoval;
+        this.firstRemoved = firstRemoved;
+    }
+
 }

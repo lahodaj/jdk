@@ -209,6 +209,7 @@ public class Symtab {
     public final Type inheritedType;
     public final Type profileType;
     public final Type proprietaryType;
+    public final Type futureDeprecationType;
     public final Type systemType;
     public final Type autoCloseableType;
     public final Type trustMeType;
@@ -649,6 +650,7 @@ public class Symtab {
         // proprietary classes in ct.sym.  This class does not have a
         // class file.
         proprietaryType = enterSyntheticAnnotation("sun.Proprietary+Annotation");
+        futureDeprecationType = enterSyntheticAnnotation("jdk.internal.Future+Deprecation");
 
         // Enter a synthetic class that is used to provide profile info for
         // classes in ct.sym.  This class does not have a class file.

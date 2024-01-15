@@ -256,6 +256,7 @@ public class CreateSymbols {
 
         stripNonExistentAnnotations(data);
         splitHeaders(data.classes);
+        injectFutureDeprecations(data, currentVersion.charAt(0));
 
         Map<String, Map<Character, String>> package2Version2Module = new HashMap<>();
         Map<String, Set<FileData>> directory2FileData = new TreeMap<>();
@@ -344,12 +345,15 @@ public class CreateSymbols {
             "Ljdk/internal/ValueBased;";
     private static final String VALUE_BASED_ANNOTATION_INTERNAL =
             "Ljdk/internal/ValueBased+Annotation;";
+    private static final String FUTURE_DEPRECATION =
+            "Ljdk/internal/Future+Deprecation;";
     public static final Set<String> HARDCODED_ANNOTATIONS = new HashSet<>(
             List.of("Ljdk/Profile+Annotation;",
                     "Lsun/Proprietary+Annotation;",
                     PREVIEW_FEATURE_ANNOTATION_OLD,
                     PREVIEW_FEATURE_ANNOTATION_NEW,
-                    VALUE_BASED_ANNOTATION));
+                    VALUE_BASED_ANNOTATION,
+                    FUTURE_DEPRECATION));
 
     private void stripNonExistentAnnotations(LoadDescriptions data) {
         Set<String> allClasses = data.classes.name2Class.keySet();
@@ -746,6 +750,93 @@ public class CreateSymbols {
             }
 
             cd.header = newHeaders;
+        }
+    }
+
+    private static void injectFutureDeprecations(LoadDescriptions data, char currentVersion) {
+        for (ClassDescription classDescription : data.classes) {
+            injectFutureDeprecations(classDescription.header, currentVersion);
+            Map<String, List<MethodDescription>> nameAndDescriptor2Methods = new HashMap<>();
+            for (MethodDescription md : classDescription.methods) {
+                nameAndDescriptor2Methods.computeIfAbsent(md.name + ":" + md.descriptor, k -> new ArrayList<>())
+                                         .add(md);
+            }
+            for (List<MethodDescription> methodVariants : nameAndDescriptor2Methods.values()) {
+                if (methodVariants.get(0).name.equals("stop")) {
+                    System.err.println("clazz: " + classDescription.name + ", stop methods: " + methodVariants.size());
+                }
+                injectFutureDeprecations(methodVariants, currentVersion);
+            }
+        }
+    }
+
+    private static void injectFutureDeprecations(List<? extends FeatureDescription> data, char currentVersion) {
+        int firstDeprecated = Integer.MAX_VALUE;
+        int firstDeprecatedForRemoval = Integer.MAX_VALUE;
+        int lastSeen = Integer.MIN_VALUE;
+
+        data = new ArrayList<>(data);
+
+        Collections.sort(data, (fd1, fd2) -> fd1.versions.charAt(0) - fd2.versions.charAt(0));
+
+        for (FeatureDescription fd : data) {
+            if (fd.deprecated) {
+                for (char v : fd.versions.toCharArray()) {
+                    int versionNumber = Integer.parseInt("" + v, Character.MAX_RADIX);
+                    firstDeprecated = Math.min(firstDeprecated, versionNumber);
+                }
+                if (fd.runtimeAnnotations != null) {
+                    for (AnnotationDescription ann : fd.runtimeAnnotations) {
+                        if ("Ljava/lang/Deprecated;".equals(ann.annotationType)) {
+                            for (Entry<String, Object> e : ann.values.entrySet()) {
+                                if ("forRemoval".equals(e.getKey()) && (boolean) e.getValue()) {
+                                    for (char v : fd.versions.toCharArray()) {
+                                        int versionNumber = Integer.parseInt("" + v, Character.MAX_RADIX);
+                                        firstDeprecatedForRemoval = Math.min(firstDeprecatedForRemoval, versionNumber);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    //how can this happen?
+                }
+            }
+            for (char v : fd.versions.toCharArray()) {
+                int versionNumber = Integer.parseInt("" + v, Character.MAX_RADIX);
+                lastSeen = Math.max(lastSeen, versionNumber);
+            }
+        }
+
+        int currentVersionNumber = Integer.parseInt("" + currentVersion, Character.MAX_RADIX);
+
+        if (firstDeprecated < Integer.MAX_VALUE ||
+            firstDeprecatedForRemoval < Integer.MAX_VALUE ||
+            lastSeen < currentVersionNumber) {
+
+            Map<String, Object> values = new HashMap<>();
+
+            if (firstDeprecated < Integer.MAX_VALUE) {
+                values.put("firstDeprecated", firstDeprecated);
+            }
+
+            if (firstDeprecatedForRemoval < Integer.MAX_VALUE) {
+                values.put("firstDeprecatedForRemoval", firstDeprecatedForRemoval);
+            }
+
+            if (lastSeen < currentVersionNumber) {
+                values.put("firstRemoved", lastSeen + 1);
+            }
+
+            AnnotationDescription ad = new AnnotationDescription(FUTURE_DEPRECATION, values);
+
+            for (FeatureDescription fd : data) {
+                //XXX: only add when not already deprecated(?!)
+                if (fd.classAnnotations == null) {
+                    fd.classAnnotations = new ArrayList<>();
+                }
+                fd.classAnnotations.add(ad);
+            }
         }
     }
 

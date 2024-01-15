@@ -265,6 +265,34 @@ public class Check {
         }
     }
 
+    void warnDeprecatedSince(DiagnosticPosition pos, Symbol sym, int since, int sinceRemoval, int removed) {
+//            if (!lint.isSuppressed(LintCategory.REMOVAL)) {
+//                if (sym.kind == MDL) {
+//                    removalHandler.report(pos, Warnings.HasBeenDeprecatedForRemovalModule(sym));
+//                } else {
+                    if (since != 0 && sinceRemoval != 0 && since != sinceRemoval) {
+                        if (removed != 0) {
+                            log.warning(LintCategory.UPCOMING_CHANGE, pos, Warnings.FutureDeprecationOrdinaryRemovalRemoved(sym, sym.location(), "" + since, "" + sinceRemoval, "" + removed));
+                        } else {
+                            log.warning(LintCategory.UPCOMING_CHANGE, pos, Warnings.FutureDeprecationOrdinaryRemoval(sym, sym.location(), "" + since, "" + sinceRemoval));
+                        }
+                    } else if (sinceRemoval != 0) {
+                        if (removed != 0) {
+                            log.warning(LintCategory.UPCOMING_CHANGE, pos, Warnings.FutureDeprecationRemovalRemoved(sym, sym.location(), "" + sinceRemoval, "" + removed));
+                        } else {
+                            log.warning(LintCategory.UPCOMING_CHANGE, pos, Warnings.FutureDeprecationRemoval(sym, sym.location(), "" + sinceRemoval));
+                        }
+                    } else if (since != 0) {
+                        if (removed != 0) {
+                            log.warning(LintCategory.UPCOMING_CHANGE, pos, Warnings.FutureDeprecationOrdinaryRemoved(sym, sym.location(), "" + since, "" + removed));
+                        } else {
+                            log.warning(LintCategory.UPCOMING_CHANGE, pos, Warnings.FutureDeprecationOrdinary(sym, sym.location(), "" + since));
+                        }
+                    }
+//                }
+//            }
+    }
+
     /** Log a preview warning.
      *  @param pos        Position to be used for error reporting.
      *  @param msg        A Warning describing the problem.
@@ -3810,6 +3838,12 @@ public class Check {
                 && (s.outermostClass() != other.outermostClass() || s.outermostClass() == null)
                 && s.kind != Kind.PCK) {
             deferredLintHandler.report(() -> warnDeprecated(pos.get(), s));
+        }
+        if (s.getMetadata() != null) {
+            int firstDeprecated = !s.isDeprecated() ? s.getMetadata().firstDeprecated : 0;
+            if (firstDeprecated != 0 || s.getMetadata().firstDeprecatedForRemoval != 0 || s.getMetadata().firstRemoved != 0) {
+                deferredLintHandler.report(() -> warnDeprecatedSince(pos.get(), s, firstDeprecated, s.getMetadata().firstDeprecatedForRemoval, s.getMetadata().firstRemoved));
+            }
         }
     }
 

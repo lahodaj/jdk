@@ -254,6 +254,8 @@ public class ClassReader {
      */
     CompoundAnnotationProxy repeatable;
 
+    int targetVersionNumber;
+
     /** Get the ClassReader instance for this invocation. */
     public static ClassReader instance(Context context) {
         ClassReader instance = context.get(classReaderKey);
@@ -297,6 +299,10 @@ public class ClassReader {
         lintClassfile = Lint.instance(context).isEnabled(LintCategory.CLASSFILE);
 
         initAttributeReaders();
+
+        Target target = Target.instance(context);
+
+        targetVersionNumber = target.ordinal();
     }
 
     /** Add member to class unless it is synthetic.
@@ -1495,7 +1501,28 @@ public class ClassReader {
         for (CompoundAnnotationProxy proxy : annotations) {
             if (proxy.type.tsym.flatName() == syms.proprietaryType.tsym.flatName())
                 sym.flags_field |= PROPRIETARY;
-            else if (proxy.type.tsym.flatName() == syms.profileType.tsym.flatName()) {
+            else if (proxy.type.tsym.flatName() == syms.futureDeprecationType.tsym.flatName()) {
+                //TODO: check current source level
+                int firstDeprecated = 0;
+                int firstDeprecatedForRemoval = 0;
+                int firstRemoved = 0;
+
+                for (Pair<Name, Attribute> v : proxy.values) {
+                    if (v.snd instanceof Attribute.Constant constant) {
+                        if (constant.type == syms.intType) {
+                            int value = (Integer) constant.value;
+                            if (value > targetVersionNumber) {
+                                switch (v.fst.toString()) {
+                                    case "firstDeprecated" -> firstDeprecated = value;
+                                    case "firstDeprecatedForRemoval" -> firstDeprecatedForRemoval = value;
+                                    case "firstRemoved" -> firstRemoved = value;
+                                }
+                            }
+                        }
+                    }
+                }
+                sym.setFutureDeprecation(firstDeprecated, firstDeprecatedForRemoval, firstRemoved);
+            } else if (proxy.type.tsym.flatName() == syms.profileType.tsym.flatName()) {
                 if (profile != Profile.DEFAULT) {
                     for (Pair<Name, Attribute> v : proxy.values) {
                         if (v.fst == names.value && v.snd instanceof Attribute.Constant constant) {

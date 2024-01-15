@@ -216,6 +216,10 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
         initedMetadata().setClassInitTypeAttributes(l);
     }
 
+    public void setFutureDeprecation(int firstDeprecated, int firstDeprecatedForRemoval, int firstRemoved) {
+        initedMetadata().setFutureDeprecation(firstDeprecated, firstDeprecatedForRemoval, firstRemoved);
+    }
+
     public List<Attribute.Compound> getDeclarationAttributes() {
         return (metadata == null)
                 ? List.nil()

@@ -339,6 +339,11 @@ public class Lint
         VARARGS("varargs"),
 
         /**
+         * Warn about potentially unsafe vararg methods
+         */
+        UPCOMING_CHANGE("upcoming-change"),
+
+        /**
          * Warn about use of preview features.
          */
         PREVIEW("preview"),
