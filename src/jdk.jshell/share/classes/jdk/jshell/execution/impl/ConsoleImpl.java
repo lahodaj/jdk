@@ -287,6 +287,11 @@ public class ConsoleImpl {
             }
         }
 
+        @Override
+        public boolean isTerminal() {
+            return true;
+        }
+
         void ensureOutputAreWritten() {
             try {
                 sendAndReceive(() -> {

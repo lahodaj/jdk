@@ -45,4 +45,5 @@ public interface JdkConsole {
     char[] readPassword();
     void flush();
     Charset charset();
+    boolean isTerminal();
 }

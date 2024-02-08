@@ -177,7 +177,13 @@ public final class JdkConsoleImpl implements JdkConsole {
         return charset;
     }
 
+    @Override
+    public boolean isTerminal() {
+        return istty;
+    }
+
     private final Charset charset;
+    private final boolean istty;
     private final Object readLock;
     private final Object writeLock;
     private final Reader reader;
@@ -345,9 +351,10 @@ public final class JdkConsoleImpl implements JdkConsole {
         }
     }
 
-    public JdkConsoleImpl(Charset charset) {
+    public JdkConsoleImpl(Charset charset, boolean istty) {
         Objects.requireNonNull(charset);
         this.charset = charset;
+        this.istty = istty;
         readLock = new Object();
         writeLock = new Object();
         out = StreamEncoder.forOutputStreamWriter(

@@ -51,7 +51,7 @@ public class JdkConsoleProviderImpl implements JdkConsoleProvider {
     public JdkConsole console(boolean isTTY, Charset charset) {
         try {
             Terminal terminal = TerminalBuilder.builder().encoding(charset)
-                                               .exec(false).build();
+                                               .dumb(false).exec(false).build();
             return new JdkConsoleImpl(terminal);
         } catch (IllegalStateException ise) {
             //cannot create a non-dumb, non-exec terminal,
@@ -131,6 +131,11 @@ public class JdkConsoleProviderImpl implements JdkConsoleProvider {
         @Override
         public Charset charset() {
             return terminal.encoding();
+        }
+
+        @Override
+        public boolean isTerminal() {
+            return true;
         }
 
         public JdkConsoleImpl(Terminal terminal) {

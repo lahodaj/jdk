@@ -429,7 +429,7 @@ public sealed class Console implements Flushable permits ProxyingConsole {
 
         // If not found, default to built-in Console
         if (istty && c == null) {
-            c = new ProxyingConsole(new JdkConsoleImpl(CHARSET));
+            c = new ProxyingConsole(new JdkConsoleImpl(CHARSET, istty));
         }
 
         return c;

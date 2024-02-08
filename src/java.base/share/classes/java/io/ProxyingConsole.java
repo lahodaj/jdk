@@ -161,6 +161,14 @@ final class ProxyingConsole extends Console {
         return delegate.charset();
     }
 
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean isTerminal() {
+        return delegate.isTerminal();
+    }
+
     private static final class WrappingReader extends Reader {
         private final Reader r;
         private final Object lock;
