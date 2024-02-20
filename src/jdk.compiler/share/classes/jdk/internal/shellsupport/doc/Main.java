@@ -134,8 +134,12 @@ public class Main {
       //      System.err.println("For  Element: " + simpleName);
       //      System.err.println("sinceVersion: " + sinceVersion + "\t mappedVersion: " +
       // mappedVersion);
-      if (sinceVersion == null || mappedVersion == null) {
-        // return;
+      if (sinceVersion == null ) {
+        return;
+      }
+      if (mappedVersion == null) {
+        System.out.println("check for why mapped version is null for"+ simpleName);
+        return;
       }
       if (sinceVersion.contains(".")) {
         String[] x = sinceVersion.split("[.]");
