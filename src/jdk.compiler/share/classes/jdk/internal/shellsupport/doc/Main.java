@@ -40,18 +40,24 @@ import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+@FunctionalInterface
+interface TriConsumer<T, U, V> {
+  void accept(T t, U u, V v);
+}
 
 public class Main {
   static Map<String, String> classDictionary = new HashMap<>();
   static BiConsumer<String, String> persistElement = classDictionary::putIfAbsent;
-  static BiConsumer<JavadocHelper, Element> checkElement =
-      (javadocHelper, element) -> {
+  static TriConsumer<JavadocHelper, TypeElement, Element> checkElement =
+      (javadocHelper, te, element) -> {
         String comment = null;
         try {
           comment = javadocHelper.getResolvedDocComment(element);
           String sinceVersion = comment != null ? extractSinceVersion(comment) : null;
-          String mappedVersion = classDictionary.get(getElementName(element));
-          checkEquals(sinceVersion, mappedVersion, element.getSimpleName().toString());
+          String mappedVersion = classDictionary.get(getElementName(te, element));
+          checkEquals(sinceVersion, mappedVersion, getElementName(te, element));
         } catch (IOException e) {
           throw new RuntimeException(e);
         }
@@ -63,7 +69,7 @@ public class Main {
     if (matcher.find()) {
       return matcher.group(1);
     } else {
-      return "@since version not found";
+      return null;
     }
   }
 
@@ -125,10 +131,11 @@ public class Main {
 
   private static void checkEquals(String sinceVersion, String mappedVersion, String simpleName) {
     try {
-      System.err.println("For  Element: " + simpleName);
-      System.err.println("sinceVersion: " + sinceVersion + "\t mappedVersion: " + mappedVersion);
+      //      System.err.println("For  Element: " + simpleName);
+      //      System.err.println("sinceVersion: " + sinceVersion + "\t mappedVersion: " +
+      // mappedVersion);
       if (sinceVersion == null || mappedVersion == null) {
-        return;
+        // return;
       }
       if (sinceVersion.contains(".")) {
         String[] x = sinceVersion.split("[.]");
@@ -136,6 +143,7 @@ public class Main {
         if (Integer.parseInt(sinceVersion) < 9) sinceVersion = "9";
       }
       if (!sinceVersion.equals(mappedVersion)) {
+        System.err.println("For  Element: " + simpleName);
         System.err.println("Wrong since version " + sinceVersion + " instead of " + mappedVersion);
       }
     } catch (NumberFormatException e) {
@@ -170,14 +178,17 @@ public class Main {
 
   private static void analyzeClass(
       TypeElement te, String version, boolean shouldPersist, JavadocHelper javadocHelper) {
-    String uniqueElementId = getElementName(te);
+    String uniqueElementId = getElementName(te, te);
     if (shouldPersist) {
       persistElement.accept(uniqueElementId, version);
     } else {
-      if (te.getModifiers().contains(Modifier.PUBLIC)) {
-        checkElement.accept(javadocHelper, te);
+      if (!te.getModifiers().contains(Modifier.PUBLIC)) {
+        return; // TODO remove this later
+      } else {
+        checkElement.accept(javadocHelper, te, te);
       }
     }
+
     te.getEnclosedElements().stream()
         .filter(
             element ->
@@ -186,12 +197,12 @@ public class Main {
                     || element.getKind() == ElementKind.CONSTRUCTOR)
         .forEach(
             element -> {
-              String elementId = getElementName(element);
+              String elementId = getElementName(te, element);
               if (shouldPersist) {
                 persistElement.accept(elementId, version);
               } else {
                 if (element.getModifiers().contains(Modifier.PUBLIC)) {
-                  checkElement.accept(javadocHelper, te);
+                  checkElement.accept(javadocHelper, te, element);
                 }
               }
             });
@@ -201,32 +212,29 @@ public class Main {
         .forEach(nestedClass -> analyzeClass(nestedClass, version, shouldPersist, javadocHelper));
   }
 
-  private static String getElementName(Element element) {
-    StringBuilder sb = new StringBuilder();
-    if (element.getKind() == ElementKind.CLASS) {
-      TypeElement typeElement = (TypeElement) element;
-      sb.append("class:").append(typeElement.getQualifiedName());
-    } else if (element.getKind().isField()) {
-      VariableElement variableElement = (VariableElement) element;
-      sb.append("field:")
-          .append(variableElement.getEnclosingElement())
-          .append(":")
-          .append(element.getSimpleName());
+  private static String getElementName(TypeElement te, Element element) {
+    String prefix = "";
+    String suffix = "";
+
+    if (element.getKind().isField()) {
+      prefix = "field";
+      suffix = ":" + te.getQualifiedName() + ":" + element.getSimpleName();
     } else if (element.getKind() == ElementKind.METHOD
         || element.getKind() == ElementKind.CONSTRUCTOR) {
+      prefix = "method";
       ExecutableElement executableElement = (ExecutableElement) element;
-      String binaryName =
-          ((TypeElement) executableElement.getEnclosingElement()).getQualifiedName().toString();
-      String methodName = element.getSimpleName().toString();
-      String descriptor = executableElement.toString();
-      sb.append("method:")
-          .append(binaryName)
-          .append(":")
-          .append(methodName)
-          .append(":")
-          .append(descriptor);
+      String methodName = executableElement.getSimpleName().toString();
+      String descriptor =
+          executableElement.getParameters().stream()
+              .map(p -> p.asType().toString())
+              .collect(Collectors.joining(",", "(", ")"));
+      suffix = ":" + te.getQualifiedName() + ":" + methodName + ":" + descriptor;
+    } else if (element.getKind().isDeclaredType()) {
+      prefix = "class";
+      suffix = ":" + te.getQualifiedName();
     }
-    return sb.toString();
+
+    return prefix + suffix;
   }
 
   private static class JavaSource extends SimpleJavaFileObject {
