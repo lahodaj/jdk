@@ -27,6 +27,7 @@ import com.sun.source.util.JavacTask;
 
 import javax.lang.model.element.*;
 import javax.lang.model.util.ElementFilter;
+import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.JavaCompiler;
 import javax.tools.SimpleJavaFileObject;
@@ -42,16 +43,18 @@ import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @FunctionalInterface
-interface TriConsumer<T, U, V, K> {
+interface MyConsumer<T, U, V, K> {
     void accept(T t, U u, V v, K k);
 }
 
 public class Main {
     static Map<String, String> classDictionary = new HashMap<>();
+
     static BiConsumer<String, String> persistElement = classDictionary::putIfAbsent;
-    static TriConsumer<JavadocHelper, TypeElement, Element, Types> checkElement = (javadocHelper, te, element, types) -> {
+    static MyConsumer<JavadocHelper, TypeElement, Element, Types> checkElement = (javadocHelper, te, element, types) -> {
         String comment = null;
         try {
             comment = javadocHelper.getResolvedDocComment(element);
@@ -77,17 +80,26 @@ public class Main {
         String sourcePath = args[0];
         String outputPath = args[1];
         JavaCompiler tool = ToolProvider.getSystemJavaCompiler();
+        Elements elements;
         for (int i = 9; i <= 23; i++) {
             try {
                 JavacTask ct = (JavacTask) tool.getTask(null, null, null, List.of("--release", String.valueOf(i)), null, Collections.singletonList(new JavaSource()));
                 ct.analyze();
                 Types types = ct.getTypes();
                 String version = String.valueOf(i);
-                ct.getElements().getAllModuleElements().forEach(me -> processModule(me, version, types));
+                elements = ct.getElements();
+                Elements finalElements = elements;
+                ct.getElements().getAllModuleElements().forEach(me -> processModule(me, version, types, finalElements));
+                var x = classDictionary.entrySet().stream()
+                        .filter(entry -> entry.getKey().startsWith("method:java.io.PrintStream"))
+                        .map(Map.Entry::getKey)
+                        .collect(Collectors.toList());
+                System.out.println("^ for debugging purposes");
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
+
 
         JavacTask ct = (JavacTask) tool.getTask(null, null, null, List.of("--module-source-path", sourcePath, "--system", "none", "-m", "java.base", "-d", outputPath), null, Collections.singletonList(new JavaSource()));
         ct.analyze();
@@ -102,7 +114,9 @@ public class Main {
                 }
             }
         }
-        ct.getElements().getAllModuleElements().parallelStream().forEach(me -> processModule(me, ct, sources, types));
+        elements = ct.getElements();
+        Elements finalElements = elements;
+        ct.getElements().getAllModuleElements().parallelStream().forEach(me -> processModule(me, ct, sources, types, finalElements));
     }
 
     private static void checkEquals(String sinceVersion, String mappedVersion, String simpleName) {
@@ -131,50 +145,50 @@ public class Main {
         }
     }
 
-    private static void processModule(ModuleElement me, String s, Types types) {
-        processModule(true, me, s, null, null, types);
+    private static void processModule(ModuleElement me, String s, Types types, Elements elements) {
+        processModule(true, me, s, null, null, types, elements);
     }
 
-    private static void processModule(ModuleElement me, JavacTask ct, List<Path> sources, Types types) {
-        processModule(false, me, null, ct, sources, types);
+    private static void processModule(ModuleElement me, JavacTask ct, List<Path> sources, Types types, Elements elements) {
+        processModule(false, me, null, ct, sources, types, elements);
     }
 
-    private static void processModule(boolean shouldPersist, ModuleElement me, String s, JavacTask ct, List<Path> sources, Types types) {
+    private static void processModule(boolean shouldPersist, ModuleElement me, String s, JavacTask ct, List<Path> sources, Types types, Elements elements) {
         for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(me.getDirectives())) {
             if (ed.getTargetModules() == null) {
-                analyzePackage(ed.getPackage(), s, shouldPersist, ct, sources, types);
+                analyzePackage(ed.getPackage(), s, shouldPersist, ct, sources, types, elements);
             }
         }
     }
 
-    private static void analyzePackage(PackageElement pe, String s, boolean shouldPersist, JavacTask ct, List<Path> sources, Types types) {
+    private static void analyzePackage(PackageElement pe, String s, boolean shouldPersist, JavacTask ct, List<Path> sources, Types types, Elements elements) {
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
             if (!shouldPersist) {
                 try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
-                    analyzeClass(te, s, shouldPersist, javadocHelper, types);
+                    analyzeClass(te, s, shouldPersist, javadocHelper, types, elements);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             } else {
-                analyzeClass(te, s, shouldPersist, null, types);
+                analyzeClass(te, s, shouldPersist, null, types, elements);
             }
         }
     }
 
-    private static void analyzeClass(TypeElement te, String version, boolean shouldPersist, JavadocHelper javadocHelper, Types types) {
+    private static void analyzeClass(TypeElement te, String version, boolean shouldPersist, JavadocHelper javadocHelper, Types types, Elements elements) {
+        if (!te.getModifiers().contains(Modifier.PUBLIC)) {
+            return;
+        }
         String uniqueElementId = getElementName(te, te, types);
         if (shouldPersist) {
             persistElement.accept(uniqueElementId, version);
         } else {
-            if (!te.getModifiers().contains(Modifier.PUBLIC)) {
-                return; // TODO remove this later
-            } else {
-                checkElement.accept(javadocHelper, te, te, types);
-            }
+            checkElement.accept(javadocHelper, te, te, types);
         }
 
-        te.getEnclosedElements().stream().filter(element -> element.getKind().isField() || element.getKind() == ElementKind.METHOD || element.getKind() == ElementKind.CONSTRUCTOR).forEach(element -> {
+
+        elements.getAllMembers(te).stream().filter(element -> element.getKind().isField() || element.getKind() == ElementKind.METHOD || element.getKind() == ElementKind.CONSTRUCTOR).forEach(element -> {
             String elementId = getElementName(te, element, types);
             if (shouldPersist) {
                 persistElement.accept(elementId, version);
@@ -184,10 +198,10 @@ public class Main {
                 }
             }
         });
-        te.getEnclosedElements().stream().filter(element -> element.getKind().isClass()).map(TypeElement.class::cast).forEach(nestedClass -> analyzeClass(nestedClass, version, shouldPersist, javadocHelper, types));
+        te.getEnclosedElements().stream().filter(element -> element.getKind().isClass()).map(TypeElement.class::cast).forEach(nestedClass -> analyzeClass(nestedClass, version, shouldPersist, javadocHelper, types, elements));
     }
 
-    private static String getElementName(TypeElement te, Element element, Types type) {
+    private static String getElementName(TypeElement te, Element element, Types types) {
         String prefix = "";
         String suffix = "";
 
@@ -198,7 +212,7 @@ public class Main {
             prefix = "method";
             ExecutableElement executableElement = (ExecutableElement) element;
             String methodName = executableElement.getSimpleName().toString();
-            String descriptor = executableElement.getParameters().stream().map(p -> type.erasure(p.asType()).toString()).collect(Collectors.joining(",", "(", ")"));
+            String descriptor = executableElement.getParameters().stream().map(p -> types.erasure(p.asType()).toString()).collect(Collectors.joining(",", "(", ")"));
             suffix = ":" + te.getQualifiedName() + ":" + methodName + ":" + descriptor;
         } else if (element.getKind().isDeclaredType()) {
             prefix = "class";
