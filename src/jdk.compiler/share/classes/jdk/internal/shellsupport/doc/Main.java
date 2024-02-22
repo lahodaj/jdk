@@ -85,25 +85,19 @@ public class Main {
             try {
                 JavacTask ct = (JavacTask) tool.getTask(null, null, null, List.of("--release", String.valueOf(i)), null, Collections.singletonList(new JavaSource()));
                 ct.analyze();
-                Types types = ct.getTypes();
                 String version = String.valueOf(i);
-                elements = ct.getElements();
-                Elements finalElements = elements;
-                ct.getElements().getAllModuleElements().forEach(me -> processModule(me, version, types, finalElements));
-                var x = classDictionary.entrySet().stream()
-                        .filter(entry -> entry.getKey().startsWith("method:java.io.PrintStream"))
-                        .map(Map.Entry::getKey)
-                        .collect(Collectors.toList());
-                System.out.println("^ for debugging purposes");
+                ct.getElements().getAllModuleElements().forEach(me -> processModule(me, version, ct));
+//                var x = classDictionary.entrySet().stream()
+//                        .filter(entry -> entry.getKey().startsWith("method:java.io.PrintStream"))
+//                        .map(Map.Entry::getKey)
+//                        .collect(Collectors.toList());
+//                System.out.println("^ for debugging purposes");
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
-
-
         JavacTask ct = (JavacTask) tool.getTask(null, null, null, List.of("--module-source-path", sourcePath, "--system", "none", "-m", "java.base", "-d", outputPath), null, Collections.singletonList(new JavaSource()));
         ct.analyze();
-        Types types = ct.getTypes();
 
         Path sourcesRoot = Paths.get(sourcePath);
         List<Path> sources = new ArrayList<>();
@@ -114,9 +108,7 @@ public class Main {
                 }
             }
         }
-        elements = ct.getElements();
-        Elements finalElements = elements;
-        ct.getElements().getAllModuleElements().parallelStream().forEach(me -> processModule(me, ct, sources, types, finalElements));
+        ct.getElements().getAllModuleElements().parallelStream().forEach(me -> processModule(me, ct, sources));
     }
 
     private static void checkEquals(String sinceVersion, String mappedVersion, String simpleName) {
@@ -145,33 +137,33 @@ public class Main {
         }
     }
 
-    private static void processModule(ModuleElement me, String s, Types types, Elements elements) {
-        processModule(true, me, s, null, null, types, elements);
+    private static void processModule(ModuleElement moduleElement, String s, JavacTask ct) {
+        processModule(true, moduleElement, s, ct, null);
     }
 
-    private static void processModule(ModuleElement me, JavacTask ct, List<Path> sources, Types types, Elements elements) {
-        processModule(false, me, null, ct, sources, types, elements);
+    private static void processModule(ModuleElement moduleElement, JavacTask ct, List<Path> sources) {
+        processModule(false, moduleElement, null, ct, sources);
     }
 
-    private static void processModule(boolean shouldPersist, ModuleElement me, String s, JavacTask ct, List<Path> sources, Types types, Elements elements) {
-        for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(me.getDirectives())) {
+    private static void processModule(boolean shouldPersist, ModuleElement moduleElement, String s, JavacTask ct, List<Path> sources) {
+        for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(moduleElement.getDirectives())) {
             if (ed.getTargetModules() == null) {
-                analyzePackage(ed.getPackage(), s, shouldPersist, ct, sources, types, elements);
+                analyzePackage(ed.getPackage(), s, shouldPersist, ct, sources);
             }
         }
     }
 
-    private static void analyzePackage(PackageElement pe, String s, boolean shouldPersist, JavacTask ct, List<Path> sources, Types types, Elements elements) {
+    private static void analyzePackage(PackageElement pe, String s, boolean shouldPersist, JavacTask ct, List<Path> sources) {
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
             if (!shouldPersist) {
                 try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
-                    analyzeClass(te, s, shouldPersist, javadocHelper, types, elements);
+                    analyzeClass(te, s, shouldPersist, javadocHelper, ct.getTypes(), ct.getElements());
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             } else {
-                analyzeClass(te, s, shouldPersist, null, types, elements);
+                analyzeClass(te, s, shouldPersist, null, ct.getTypes(), ct.getElements());
             }
         }
     }
