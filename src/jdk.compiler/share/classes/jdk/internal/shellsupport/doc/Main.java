@@ -27,6 +27,7 @@ import com.sun.source.util.JavacTask;
 
 import javax.lang.model.element.*;
 import javax.lang.model.util.ElementFilter;
+import javax.lang.model.util.Types;
 import javax.tools.JavaCompiler;
 import javax.tools.SimpleJavaFileObject;
 import javax.tools.ToolProvider;
@@ -43,214 +44,180 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @FunctionalInterface
-interface TriConsumer<T, U, V> {
-  void accept(T t, U u, V v);
+interface TriConsumer<T, U, V, K> {
+    void accept(T t, U u, V v, K k);
 }
 
 public class Main {
-  static Map<String, String> classDictionary = new HashMap<>();
-  static BiConsumer<String, String> persistElement = classDictionary::putIfAbsent;
-  static TriConsumer<JavadocHelper, TypeElement, Element> checkElement =
-      (javadocHelper, te, element) -> {
+    static Map<String, String> classDictionary = new HashMap<>();
+    static BiConsumer<String, String> persistElement = classDictionary::putIfAbsent;
+    static TriConsumer<JavadocHelper, TypeElement, Element, Types> checkElement = (javadocHelper, te, element, types) -> {
         String comment = null;
         try {
-          comment = javadocHelper.getResolvedDocComment(element);
-          String sinceVersion = comment != null ? extractSinceVersion(comment) : null;
-          String mappedVersion = classDictionary.get(getElementName(te, element));
-          checkEquals(sinceVersion, mappedVersion, getElementName(te, element));
+            comment = javadocHelper.getResolvedDocComment(element);
+            String sinceVersion = comment != null ? extractSinceVersion(comment) : null;
+            String mappedVersion = classDictionary.get(getElementName(te, element, types));
+            checkEquals(sinceVersion, mappedVersion, getElementName(te, element, types));
         } catch (IOException e) {
-          throw new RuntimeException(e);
+            throw new RuntimeException(e);
         }
-      };
+    };
 
-  private static String extractSinceVersion(String documentation) {
-    Pattern pattern = Pattern.compile("@since\\s+(\\d+(?:\\.\\d+)?)");
-    Matcher matcher = pattern.matcher(documentation);
-    if (matcher.find()) {
-      return matcher.group(1);
-    } else {
-      return null;
+    private static String extractSinceVersion(String documentation) {
+        Pattern pattern = Pattern.compile("@since\\s+(\\d+(?:\\.\\d+)?)");
+        Matcher matcher = pattern.matcher(documentation);
+        if (matcher.find()) {
+            return matcher.group(1);
+        } else {
+            return null;
+        }
     }
-  }
 
-  public static void main(String[] args) throws IOException {
-    String sourcePath = args[0];
-    String outputPath = args[1];
-    JavaCompiler tool = ToolProvider.getSystemJavaCompiler();
-    for (int i = 9; i <= 23; i++) {
-      try {
-        JavacTask ct =
-            (JavacTask)
-                tool.getTask(
-                    null,
-                    null,
-                    null,
-                    List.of("--release", String.valueOf(i)),
-                    null,
-                    Collections.singletonList(new JavaSource()));
+    public static void main(String[] args) throws IOException {
+        String sourcePath = args[0];
+        String outputPath = args[1];
+        JavaCompiler tool = ToolProvider.getSystemJavaCompiler();
+        for (int i = 9; i <= 23; i++) {
+            try {
+                JavacTask ct = (JavacTask) tool.getTask(null, null, null, List.of("--release", String.valueOf(i)), null, Collections.singletonList(new JavaSource()));
+                ct.analyze();
+                Types types = ct.getTypes();
+                String version = String.valueOf(i);
+                ct.getElements().getAllModuleElements().forEach(me -> processModule(me, version, types));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        JavacTask ct = (JavacTask) tool.getTask(null, null, null, List.of("--module-source-path", sourcePath, "--system", "none", "-m", "java.base", "-d", outputPath), null, Collections.singletonList(new JavaSource()));
         ct.analyze();
-        String version = String.valueOf(i);
-        ct.getElements()
-            .getAllModuleElements()
-            .forEach(me -> processModule(true, me, version, null, null));
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
-    }
+        Types types = ct.getTypes();
 
-    JavacTask ct =
-        (JavacTask)
-            tool.getTask(
-                null,
-                null,
-                null,
-                List.of(
-                    "--module-source-path",
-                    sourcePath,
-                    "--system",
-                    "none",
-                    "-m",
-                    "java.base",
-                    "-d",
-                    outputPath),
-                null,
-                Collections.singletonList(new JavaSource()));
-    ct.analyze();
-    Path sourcesRoot = Paths.get(sourcePath);
-    List<Path> sources = new ArrayList<>();
-    try (DirectoryStream<Path> ds = Files.newDirectoryStream(sourcesRoot)) {
-      for (Path p : ds) {
-        if (Files.isDirectory(p)) {
-          sources.add(p);
-        }
-      }
-    }
-    ct.getElements().getAllModuleElements().parallelStream()
-        .forEach(me -> processModule(false, me, null, ct, sources));
-  }
-
-  private static void checkEquals(String sinceVersion, String mappedVersion, String simpleName) {
-    try {
-      //      System.err.println("For  Element: " + simpleName);
-      //      System.err.println("sinceVersion: " + sinceVersion + "\t mappedVersion: " +
-      // mappedVersion);
-      if (sinceVersion == null ) {
-        return;
-      }
-      if (mappedVersion == null) {
-        System.out.println("check for why mapped version is null for"+ simpleName);
-        return;
-      }
-      if (sinceVersion.contains(".")) {
-        String[] x = sinceVersion.split("[.]");
-        sinceVersion = x[1];
-        if (Integer.parseInt(sinceVersion) < 9) sinceVersion = "9";
-      }
-      if (!sinceVersion.equals(mappedVersion)) {
-        System.err.println("For  Element: " + simpleName);
-        System.err.println("Wrong since version " + sinceVersion + " instead of " + mappedVersion);
-      }
-    } catch (NumberFormatException e) {
-      System.err.println("Element: " + simpleName + "\t Invalid number: " + sinceVersion);
-    }
-  }
-
-  private static void processModule(
-      boolean shouldPersist, ModuleElement me, String s, JavacTask ct, List<Path> sources) {
-    for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(me.getDirectives())) {
-      if (ed.getTargetModules() == null) {
-        analyzePackage(ed.getPackage(), s, shouldPersist, ct, sources);
-      }
-    }
-  }
-
-  private static void analyzePackage(
-      PackageElement pe, String s, boolean shouldPersist, JavacTask ct, List<Path> sources) {
-    List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
-    for (TypeElement te : typeElements) {
-      if (!shouldPersist) {
-        try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
-          analyzeClass(te, s, shouldPersist, javadocHelper);
-        } catch (Exception e) {
-          e.printStackTrace();
-        }
-      } else {
-        analyzeClass(te, s, shouldPersist, null);
-      }
-    }
-  }
-
-  private static void analyzeClass(
-      TypeElement te, String version, boolean shouldPersist, JavadocHelper javadocHelper) {
-    String uniqueElementId = getElementName(te, te);
-    if (shouldPersist) {
-      persistElement.accept(uniqueElementId, version);
-    } else {
-      if (!te.getModifiers().contains(Modifier.PUBLIC)) {
-        return; // TODO remove this later
-      } else {
-        checkElement.accept(javadocHelper, te, te);
-      }
-    }
-
-    te.getEnclosedElements().stream()
-        .filter(
-            element ->
-                element.getKind().isField()
-                    || element.getKind() == ElementKind.METHOD
-                    || element.getKind() == ElementKind.CONSTRUCTOR)
-        .forEach(
-            element -> {
-              String elementId = getElementName(te, element);
-              if (shouldPersist) {
-                persistElement.accept(elementId, version);
-              } else {
-                if (element.getModifiers().contains(Modifier.PUBLIC)) {
-                  checkElement.accept(javadocHelper, te, element);
+        Path sourcesRoot = Paths.get(sourcePath);
+        List<Path> sources = new ArrayList<>();
+        try (DirectoryStream<Path> ds = Files.newDirectoryStream(sourcesRoot)) {
+            for (Path p : ds) {
+                if (Files.isDirectory(p)) {
+                    sources.add(p);
                 }
-              }
-            });
-    te.getEnclosedElements().stream()
-        .filter(element -> element.getKind().isClass())
-        .map(TypeElement.class::cast)
-        .forEach(nestedClass -> analyzeClass(nestedClass, version, shouldPersist, javadocHelper));
-  }
-
-  private static String getElementName(TypeElement te, Element element) {
-    String prefix = "";
-    String suffix = "";
-
-    if (element.getKind().isField()) {
-      prefix = "field";
-      suffix = ":" + te.getQualifiedName() + ":" + element.getSimpleName();
-    } else if (element.getKind() == ElementKind.METHOD
-        || element.getKind() == ElementKind.CONSTRUCTOR) {
-      prefix = "method";
-      ExecutableElement executableElement = (ExecutableElement) element;
-      String methodName = executableElement.getSimpleName().toString();
-      String descriptor =
-          executableElement.getParameters().stream()
-              .map(p -> p.asType().toString())
-              .collect(Collectors.joining(",", "(", ")"));
-      suffix = ":" + te.getQualifiedName() + ":" + methodName + ":" + descriptor;
-    } else if (element.getKind().isDeclaredType()) {
-      prefix = "class";
-      suffix = ":" + te.getQualifiedName();
+            }
+        }
+        ct.getElements().getAllModuleElements().parallelStream().forEach(me -> processModule(me, ct, sources, types));
     }
 
-    return prefix + suffix;
-  }
-
-  private static class JavaSource extends SimpleJavaFileObject {
-    private static final String TEXT = "";
-
-    public JavaSource() {
-      super(URI.create("myfo:/Test.java"), Kind.SOURCE);
+    private static void checkEquals(String sinceVersion, String mappedVersion, String simpleName) {
+        try {
+            //      System.err.println("For  Element: " + simpleName);
+            //      System.err.println("sinceVersion: " + sinceVersion + "\t mappedVersion: " +
+            // mappedVersion);
+            if (sinceVersion == null) {
+                return;
+            }
+            if (mappedVersion == null) {
+                System.out.println("check for why mapped version is null for" + simpleName);
+                return;
+            }
+            if (sinceVersion.contains(".")) {
+                String[] x = sinceVersion.split("[.]");
+                sinceVersion = x[1];
+                if (Integer.parseInt(sinceVersion) < 9) sinceVersion = "9";
+            }
+            if (!sinceVersion.equals(mappedVersion)) {
+                System.err.println("For  Element: " + simpleName);
+                System.err.println("Wrong since version " + sinceVersion + " instead of " + mappedVersion);
+            }
+        } catch (NumberFormatException e) {
+            System.err.println("Element: " + simpleName + "\t Invalid number: " + sinceVersion);
+        }
     }
 
-    @Override
-    public CharSequence getCharContent(boolean ignoreEncodingErrors) {
-      return TEXT;
+    private static void processModule(ModuleElement me, String s, Types types) {
+        processModule(true, me, s, null, null, types);
     }
-  }
+
+    private static void processModule(ModuleElement me, JavacTask ct, List<Path> sources, Types types) {
+        processModule(false, me, null, ct, sources, types);
+    }
+
+    private static void processModule(boolean shouldPersist, ModuleElement me, String s, JavacTask ct, List<Path> sources, Types types) {
+        for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(me.getDirectives())) {
+            if (ed.getTargetModules() == null) {
+                analyzePackage(ed.getPackage(), s, shouldPersist, ct, sources, types);
+            }
+        }
+    }
+
+    private static void analyzePackage(PackageElement pe, String s, boolean shouldPersist, JavacTask ct, List<Path> sources, Types types) {
+        List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
+        for (TypeElement te : typeElements) {
+            if (!shouldPersist) {
+                try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
+                    analyzeClass(te, s, shouldPersist, javadocHelper, types);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            } else {
+                analyzeClass(te, s, shouldPersist, null, types);
+            }
+        }
+    }
+
+    private static void analyzeClass(TypeElement te, String version, boolean shouldPersist, JavadocHelper javadocHelper, Types types) {
+        String uniqueElementId = getElementName(te, te, types);
+        if (shouldPersist) {
+            persistElement.accept(uniqueElementId, version);
+        } else {
+            if (!te.getModifiers().contains(Modifier.PUBLIC)) {
+                return; // TODO remove this later
+            } else {
+                checkElement.accept(javadocHelper, te, te, types);
+            }
+        }
+
+        te.getEnclosedElements().stream().filter(element -> element.getKind().isField() || element.getKind() == ElementKind.METHOD || element.getKind() == ElementKind.CONSTRUCTOR).forEach(element -> {
+            String elementId = getElementName(te, element, types);
+            if (shouldPersist) {
+                persistElement.accept(elementId, version);
+            } else {
+                if (element.getModifiers().contains(Modifier.PUBLIC)) {
+                    checkElement.accept(javadocHelper, te, element, types);
+                }
+            }
+        });
+        te.getEnclosedElements().stream().filter(element -> element.getKind().isClass()).map(TypeElement.class::cast).forEach(nestedClass -> analyzeClass(nestedClass, version, shouldPersist, javadocHelper, types));
+    }
+
+    private static String getElementName(TypeElement te, Element element, Types type) {
+        String prefix = "";
+        String suffix = "";
+
+        if (element.getKind().isField()) {
+            prefix = "field";
+            suffix = ":" + te.getQualifiedName() + ":" + element.getSimpleName();
+        } else if (element.getKind() == ElementKind.METHOD || element.getKind() == ElementKind.CONSTRUCTOR) {
+            prefix = "method";
+            ExecutableElement executableElement = (ExecutableElement) element;
+            String methodName = executableElement.getSimpleName().toString();
+            String descriptor = executableElement.getParameters().stream().map(p -> type.erasure(p.asType()).toString()).collect(Collectors.joining(",", "(", ")"));
+            suffix = ":" + te.getQualifiedName() + ":" + methodName + ":" + descriptor;
+        } else if (element.getKind().isDeclaredType()) {
+            prefix = "class";
+            suffix = ":" + te.getQualifiedName();
+        }
+
+        return prefix + suffix;
+    }
+
+    private static class JavaSource extends SimpleJavaFileObject {
+        private static final String TEXT = "";
+
+        public JavaSource() {
+            super(URI.create("myfo:/Test.java"), Kind.SOURCE);
+        }
+
+        @Override
+        public CharSequence getCharContent(boolean ignoreEncodingErrors) {
+            return TEXT;
+        }
+    }
 }
