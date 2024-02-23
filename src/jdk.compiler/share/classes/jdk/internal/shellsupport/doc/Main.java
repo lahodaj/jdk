@@ -52,8 +52,8 @@ interface MyConsumer<T, U, V, K, Z, S> {
 public class Main {
   static Map<String, String> classDictionary = new HashMap<>();
 
-  public static void persistElement(String s, String ss) {
-    classDictionary.putIfAbsent(s, ss);
+  public static void persistElement(String key, String value) {
+    classDictionary.putIfAbsent(key, value);
   }
 
   public static void checkElement(JavadocHelper javadocHelper, String uniqueId, Element element) {
@@ -92,7 +92,6 @@ public class Main {
     String sourcePath = args[0];
     String outputPath = args[1];
     JavaCompiler tool = ToolProvider.getSystemJavaCompiler();
-    Elements elements;
     for (int i = 9; i <= 23; i++) {
       try {
         JavacTask ct =
@@ -107,12 +106,6 @@ public class Main {
         ct.analyze();
         String version = String.valueOf(i);
         ct.getElements().getAllModuleElements().forEach(me -> processModule(me, version, ct));
-        //                var x = classDictionary.entrySet().stream()
-        //                        .filter(entry ->
-        // entry.getKey().startsWith("method:java.io.PrintStream"))
-        //                        .map(Map.Entry::getKey)
-        //                        .collect(Collectors.toList());
-        //                System.out.println("^ for debugging purposes");
       } catch (IOException e) {
         e.printStackTrace();
       }
@@ -126,9 +119,7 @@ public class Main {
                 List.of(
                     "--module-source-path",
                     sourcePath,
-                    "--system",
-                    "none",
-                    "-m",
+                    "--limit-modules",
                     "java.base",
                     "-d",
                     outputPath),
@@ -152,9 +143,8 @@ public class Main {
   private static void checkEquals(
       String sinceVersion, String mappedVersion, String elementSimpleName) {
     try {
-      //      System.err.println("For  Element: " + simpleName);
-      //      System.err.println("sinceVersion: " + sinceVersion + "\t mappedVersion: " +
-      // mappedVersion);
+      System.err.println("For  Element: " + elementSimpleName);
+      System.err.println("sinceVersion: " + sinceVersion + "\t mappedVersion: " + mappedVersion);
       if (sinceVersion == null) {
         return;
       }
@@ -205,12 +195,12 @@ public class Main {
     for (TypeElement te : typeElements) {
       if (!shouldPersist) {
         try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
-          analyzeClass(te, s, shouldPersist, javadocHelper, ct.getTypes(), ct.getElements());
+          analyzeClass(te, s, shouldPersist, javadocHelper, ct.getTypes());
         } catch (Exception e) {
           e.printStackTrace();
         }
       } else {
-        analyzeClass(te, s, shouldPersist, null, ct.getTypes(), ct.getElements());
+        analyzeClass(te, s, shouldPersist, null, ct.getTypes());
       }
     }
   }
@@ -220,13 +210,14 @@ public class Main {
       String version,
       boolean shouldPersist,
       JavadocHelper javadocHelper,
-      Types types,
-      Elements elements) {
+      Types types) {
     if (!te.getModifiers().contains(Modifier.PUBLIC)) {
       return;
     }
     processElement.accept(shouldPersist, javadocHelper, te, te, types, version);
-    elements.getAllMembers(te).stream()
+    // elements.getAllMembers(te)
+    // TODO try to use Elements.getAllMembers instead of te.getEnclosedElements()
+    te.getEnclosedElements().stream()
         .filter(
             element ->
                 element.getKind().isField()
@@ -235,12 +226,13 @@ public class Main {
         .forEach(
             element ->
                 processElement.accept(shouldPersist, javadocHelper, te, element, types, version));
+
     te.getEnclosedElements().stream()
         .filter(element -> element.getKind().isClass())
         .map(TypeElement.class::cast)
         .forEach(
             nestedClass ->
-                analyzeClass(nestedClass, version, shouldPersist, javadocHelper, types, elements));
+                analyzeClass(nestedClass, version, shouldPersist, javadocHelper, types));
   }
 
   private static String getElementName(TypeElement te, Element element, Types types) {
