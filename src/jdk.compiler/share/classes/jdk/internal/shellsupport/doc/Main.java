@@ -111,7 +111,7 @@ public class Main {
         ct.getElements().getAllModuleElements().parallelStream().forEach(me -> processModule(me, ct, sources));
     }
 
-    private static void checkEquals(String sinceVersion, String mappedVersion, String simpleName) {
+    private static void checkEquals(String sinceVersion, String mappedVersion, String elementSimpleName) {
         try {
             //      System.err.println("For  Element: " + simpleName);
             //      System.err.println("sinceVersion: " + sinceVersion + "\t mappedVersion: " +
@@ -120,7 +120,7 @@ public class Main {
                 return;
             }
             if (mappedVersion == null) {
-                System.out.println("check for why mapped version is null for" + simpleName);
+                System.out.println("check for why mapped version is null for" + elementSimpleName);
                 return;
             }
             if (sinceVersion.contains(".")) {
@@ -129,26 +129,26 @@ public class Main {
                 if (Integer.parseInt(sinceVersion) < 9) sinceVersion = "9";
             }
             if (!sinceVersion.equals(mappedVersion)) {
-                System.err.println("For  Element: " + simpleName);
+                System.err.println("For  Element: " + elementSimpleName);
                 System.err.println("Wrong since version " + sinceVersion + " instead of " + mappedVersion);
             }
         } catch (NumberFormatException e) {
-            System.err.println("Element: " + simpleName + "\t Invalid number: " + sinceVersion);
+            System.err.println("Element: " + elementSimpleName + "\t Invalid number: " + sinceVersion);
         }
     }
 
-    private static void processModule(ModuleElement moduleElement, String s, JavacTask ct) {
-        processModule(true, moduleElement, s, ct, null);
+    private static void processModule(ModuleElement moduleElement, String releaseVersion, JavacTask ct) {
+        processModule(true, moduleElement, releaseVersion, ct, null);
     }
 
     private static void processModule(ModuleElement moduleElement, JavacTask ct, List<Path> sources) {
         processModule(false, moduleElement, null, ct, sources);
     }
 
-    private static void processModule(boolean shouldPersist, ModuleElement moduleElement, String s, JavacTask ct, List<Path> sources) {
+    private static void processModule(boolean shouldPersist, ModuleElement moduleElement, String releaseVersion, JavacTask ct, List<Path> sources) {
         for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(moduleElement.getDirectives())) {
             if (ed.getTargetModules() == null) {
-                analyzePackage(ed.getPackage(), s, shouldPersist, ct, sources);
+                analyzePackage(ed.getPackage(), releaseVersion, shouldPersist, ct, sources);
             }
         }
     }
@@ -178,7 +178,6 @@ public class Main {
         } else {
             checkElement.accept(javadocHelper, te, te, types);
         }
-
 
         elements.getAllMembers(te).stream().filter(element -> element.getKind().isField() || element.getKind() == ElementKind.METHOD || element.getKind() == ElementKind.CONSTRUCTOR).forEach(element -> {
             String elementId = getElementName(te, element, types);
