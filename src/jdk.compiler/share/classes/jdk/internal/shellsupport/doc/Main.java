@@ -22,6 +22,7 @@
  */
 
 package jdk.internal.shellsupport.doc;
+
 import com.sun.source.util.JavacTask;
 import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.Symbol;
@@ -152,6 +153,7 @@ public class Main {
                                         null,
                                         Collections.singletonList(new JavaSource()));
                 ct.analyze();
+
                 String version = String.valueOf(i);
                 ct.getElements().getAllModuleElements().forEach(me -> processModuleRecord(me, version, ct));
             } catch (IOException e) {
