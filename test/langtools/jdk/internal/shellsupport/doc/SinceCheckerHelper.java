@@ -137,9 +137,9 @@ public class SinceCheckerHelper {
     private void testThisModule(String moduleName) throws Exception {
         List<Path> sources = new ArrayList<>();
 
-        Path home = Paths.get(System.getProperty("java.home"));
-        Path srcZip = home.resolve("lib").resolve("src.zip");
-
+//        Path home = Paths.get(System.getProperty("java.home"));
+//        Path srcZip = home.resolve("lib").resolve("src.zip");
+        Path srcZip = Path.of(pathAPIKEY.pathToSRC);
         File f = new File(srcZip.toUri());
         if (!f.exists() && !f.isDirectory()) {
 //            throw new SkippedException("Skipping Test because src.zip wasn't found");
@@ -160,11 +160,12 @@ public class SinceCheckerHelper {
                         JavacTask ct = (JavacTask) tool.getTask(null,
                                 fm,
                                 null,
-                                List.of("--limit-modules", moduleName, "-d", "."),
+                                List.of("-d", "."),
                                 null,
                                 Collections.singletonList(SimpleJavaFileObject.forSource(URI.create("myfo:/Test.java"), "")));
                         ct.analyze();
-                        processModuleCheck(ct.getElements().getModuleElement(moduleName), ct, sources);
+                        ct.getElements().getAllModuleElements().stream()
+                                .forEach(me -> processModuleCheck(me, ct, sources));
                         if (!wrongTagsList.isEmpty()) {
                             throw new Exception(wrongTagsList.toString());
                         }
@@ -210,23 +211,25 @@ public class SinceCheckerHelper {
         return LEGACY_PREVIEW_METHODS.contains(uniqueId)
                 &&
                 (JDK13.equals(currentVersion) || JDK14.equals(currentVersion));
-
     }
 
 
-    private Version extractSinceVersion(String documentation) {
+    private static Version extractSinceVersion(String documentation) {
         Pattern pattern = Pattern.compile("@since\\s+(\\d+(?:\\.\\d+)?)");
         Matcher matcher = pattern.matcher(documentation);
         if (matcher.find()) {
             String versionString = matcher.group(1);
-            assert versionString != null;
-            if (versionString.startsWith("1.")) {
+            try {
+            if (versionString.equals("1.0")) {
+                //XXX
+                versionString = "1";
+            } else if (versionString.startsWith("1.")) {
                 versionString = versionString.substring(2);
             }
-            try {
                 return Version.parse(versionString);
             } catch (NumberFormatException ex) {
-                throw new IllegalArgumentException("@since value that cannot be parsed: " + versionString);
+                System.err.println("@since value that cannot be parsed: " + versionString);
+                return null;
             }
         } else {
             return null;
@@ -245,10 +248,8 @@ public class SinceCheckerHelper {
             sinceVersion = Version.parse("9");
         }
         if (!sinceVersion.equals(Version.parse(mappedVersion))) {
-            String message = (Version.parse(mappedVersion).compareTo(Version.parse("9")) > 0) ?
-                    "Wrong since version " + sinceVersion + " instead of " + mappedVersion :
-                    "Wrong since version " + sinceVersion + " but existed in JDK 9 or older";
-            wrongTagsList.add("For Element: " + elementSimpleName + " " + message + "\n");
+            wrongTagsList.add("For  Element: " + elementSimpleName
+                    + " Wrong since version " + sinceVersion + " instead of " + mappedVersion + "\n");
         }
     }
 
