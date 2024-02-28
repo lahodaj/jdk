@@ -109,6 +109,9 @@ public class Main {
 
     public static Version checkElement(TypeElement clazz, Element element, Types types, JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
         String uniqueId = getElementName(clazz, element, types);
+//        if(uniqueId.contains("method:java.lang.foreign.SymbolLookup:libraryLookup:(java.nio.file.Path")){
+//            System.out.println("stop");
+//        }
         return checkElement(javadocHelper, uniqueId, currentVersion, enclosingVersion, element);
     }
 
@@ -156,6 +159,15 @@ public class Main {
 
                 String version = String.valueOf(i);
                 ct.getElements().getAllModuleElements().forEach(me -> processModuleRecord(me, version, ct));
+
+//                var x = classDictionary.entrySet().stream()
+//                        .filter(entry ->
+//                                entry.getKey().contains("SymbolLookup"))
+//                        .map(Map.Entry::getKey)
+//                        .collect(Collectors.toList());
+//
+//                System.out.println(x);
+
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -168,11 +180,12 @@ public class Main {
                                 null,
                                 List.of(
                                         "--limit-modules",
-                                        "java.base",
+                                        "java.sql",
                                         "-d",
                                         outputPath),
                                 null,
                                 Collections.singletonList(new JavaSource()));
+        //method:java.lang.foreign.SymbolLookup:libraryLookup:(java.nio.file.Path,java.lang.foreign.SegmentScope)
         ct.analyze();
 
         Path sourcesRoot = Paths.get(sourcePath);
