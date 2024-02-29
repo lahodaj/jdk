@@ -140,7 +140,6 @@ public class Main {
         String sourcePath = args[0];
         String outputPath = args[1];
         JavaCompiler tool = ToolProvider.getSystemJavaCompiler();
-        Elements elements;
         for (int i = 9; i <= 23; i++) {
             try {
                 JavacTask ct =
@@ -281,7 +280,7 @@ public class Main {
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
             try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
-                analyzeClassCheck(te, s, javadocHelper, ct.getTypes(), ct.getElements(), null); /*XXX: since tag from package-info (?!)*/
+                analyzeClassCheck(te, s, javadocHelper, ct.getTypes(),  null); /*XXX: since tag from package-info (?!)*/
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -293,7 +292,7 @@ public class Main {
             String version,
             JavadocHelper javadocHelper,
             Types types,
-            Elements elements,
+
             Version enclosingVersion) {
         if (!te.getModifiers().contains(Modifier.PUBLIC)) {
             return;
@@ -314,7 +313,7 @@ public class Main {
                 .map(TypeElement.class::cast)
                 .forEach(
                         nestedClass ->
-                                analyzeClassCheck(nestedClass, version, javadocHelper, types, elements, currentVersion));
+                                analyzeClassCheck(nestedClass, version, javadocHelper, types, currentVersion));
     }
 
     public static String getElementName(TypeElement te, Element element, Types types) {
