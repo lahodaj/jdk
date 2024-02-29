@@ -109,9 +109,6 @@ public class Main {
 
     public static Version checkElement(TypeElement clazz, Element element, Types types, JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
         String uniqueId = getElementName(clazz, element, types);
-//        if(uniqueId.contains("method:java.lang.foreign.SymbolLookup:libraryLookup:(java.nio.file.Path")){
-//            System.out.println("stop");
-//        }
         return checkElement(javadocHelper, uniqueId, currentVersion, enclosingVersion, element);
     }
 
@@ -159,15 +156,6 @@ public class Main {
 
                 String version = String.valueOf(i);
                 ct.getElements().getAllModuleElements().forEach(me -> processModuleRecord(me, version, ct));
-
-//                var x = classDictionary.entrySet().stream()
-//                        .filter(entry ->
-//                                entry.getKey().contains("SymbolLookup"))
-//                        .map(Map.Entry::getKey)
-//                        .collect(Collectors.toList());
-//
-//                System.out.println(x);
-
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -185,7 +173,6 @@ public class Main {
                                         outputPath),
                                 null,
                                 Collections.singletonList(new JavaSource()));
-        //method:java.lang.foreign.SymbolLookup:libraryLookup:(java.nio.file.Path,java.lang.foreign.SegmentScope)
         ct.analyze();
 
         Path sourcesRoot = Paths.get(sourcePath);
@@ -205,8 +192,7 @@ public class Main {
             Version sinceVersion, String mappedVersion, String elementSimpleName) {
         try {
             //      System.err.println("For  Element: " + simpleName);
-            //      System.err.println("sinceVersion: " + sinceVersion + "\t mappedVersion: " +
-            // mappedVersion);
+            //      System.err.println("sinceVersion: " + sinceVersion + "\t mappedVersion: " +mappedVersion);
             if (sinceVersion == null) {
                 return;
             }
@@ -245,7 +231,6 @@ public class Main {
 
     private static void analyzePackageRecord(
             PackageElement pe, String s, JavacTask ct) {
-//    System.err.println("analyzing package: " + pe);
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
             analyzeClassRecord(te, s, ct.getTypes(), ct.getElements());
@@ -293,7 +278,6 @@ public class Main {
 
     private static void analyzePackageCheck(
             PackageElement pe, String s, JavacTask ct, List<Path> sources) {
-//    System.err.println("analyzing package: " + pe);
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
             try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
