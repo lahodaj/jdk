@@ -38,10 +38,7 @@ import javax.tools.ToolProvider;
 import java.io.IOException;
 import java.lang.Runtime.Version;
 import java.net.URI;
-import java.nio.file.DirectoryStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.*;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -138,8 +135,6 @@ public class Main {
     }
 
     public static void main(String[] args) throws IOException {
-        String sourcePath = args[0];
-        String outputPath = args[1];
         JavaCompiler tool = ToolProvider.getSystemJavaCompiler();
         for (int i = 9; i <= 23; i++) {
             try {
@@ -160,32 +155,43 @@ public class Main {
                 e.printStackTrace();
             }
         }
-        try (StandardJavaFileManager fm = tool.getStandardFileManager(null, null, null)) {
-            JavacTask ct =
-                    (JavacTask)
-                            tool.getTask(
-                                    null,
-                                    fm, null,
-                                    List.of(
-                                            "--limit-modules",
-                                            "java.sql",
-                                            "-d",
-                                            outputPath),
-                                    null,
-                                    Collections.singletonList(new JavaSource()));
-            ct.analyze();
 
-            Path sourcesRoot = Paths.get(sourcePath);
-            List<Path> sources = new ArrayList<>();
-            try (DirectoryStream<Path> ds = Files.newDirectoryStream(sourcesRoot)) {
-                for (Path p : ds) {
-                    if (Files.isDirectory(p)) {
-                        sources.add(p);
+
+        Path home = Paths.get(System.getProperty("java.home"));
+        Path srcZip = home.resolve("lib").resolve("src.zip");
+
+        if (Files.isReadable(srcZip)) {
+            URI uri = URI.create("jar:" + srcZip.toUri());
+            try (FileSystem zipFO = FileSystems.newFileSystem(uri, Collections.emptyMap())) {
+                Path root = zipFO.getRootDirectories().iterator().next();
+                List<Path> sources = new ArrayList<>();
+                try (DirectoryStream<Path> ds = Files.newDirectoryStream(root)) {
+                    for (Path p : ds) {
+                        if (Files.isDirectory(p)) {
+                            sources.add(p);
+                        }
                     }
                 }
+
+
+                try (StandardJavaFileManager fm = tool.getStandardFileManager(null, null, null)) {
+                    JavacTask ct =
+                            (JavacTask)
+                                    tool.getTask(
+                                            null,
+                                            fm, null,
+                                            List.of(
+                                                    "--limit-modules",
+                                                    "java.base",
+                                                    "-d",
+                                                    "."),
+                                            null,
+                                            Collections.singletonList(new JavaSource()));
+                    ct.analyze();
+                    ct.getElements().getAllModuleElements().stream()
+                            .forEach(me -> processModuleCheck(me, ct, sources));
+                }
             }
-            ct.getElements().getAllModuleElements().stream()
-                    .forEach(me -> processModuleCheck(me, ct, sources));
         }
     }
 
