@@ -21,11 +21,10 @@
  * questions.
  */
 
-package jdk.internal.shellsupport.doc;
-
 import com.sun.source.util.JavacTask;
 import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.Symbol;
+import jdk.internal.shellsupport.doc.JavadocHelper;
 
 import javax.lang.model.element.*;
 import javax.lang.model.util.ElementFilter;
@@ -47,10 +46,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-@FunctionalInterface
-interface MyConsumer<T, U, V, K, Z, S> {
-    void accept(T t, U u, V v, K k, Z z, S s);
-}
 
 public class Main {
     //these are methods that were preview in JDK 13 and JDK 14, before the introduction
@@ -160,12 +155,15 @@ public class Main {
                 e.printStackTrace();
             }
         }
+
         try (StandardJavaFileManager fm = tool.getStandardFileManager(null, null, null)) {
+
             JavacTask ct =
                     (JavacTask)
                             tool.getTask(
                                     null,
-                                    fm, null,
+                                    fm, //XXX: close!
+                                    null,
                                     List.of(
                                             "--limit-modules",
                                             "java.sql",
@@ -186,8 +184,7 @@ public class Main {
             }
             ct.getElements().getAllModuleElements().stream()
                     .forEach(me -> processModuleCheck(me, ct, sources));
-        }
-    }
+        }}
 
     private static void checkEquals(
             Version sinceVersion, String mappedVersion, String elementSimpleName) {
@@ -282,7 +279,7 @@ public class Main {
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
             try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
-                analyzeClassCheck(te, s, javadocHelper, ct.getTypes(), null); /*XXX: since tag from package-info (?!)*/
+                analyzeClassCheck(te, s, javadocHelper, ct.getTypes(),  null); /*XXX: since tag from package-info (?!)*/
             } catch (Exception e) {
                 e.printStackTrace();
             }
