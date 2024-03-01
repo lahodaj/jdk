@@ -44,11 +44,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-@FunctionalInterface
-interface MyConsumer<T, U, V, K, Z, S> {
-    void accept(T t, U u, V v, K k, Z z, S s);
-}
-
 public class Main {
     //these are methods that were preview in JDK 13 and JDK 14, before the introduction
     //of the @PreviewFeature
