@@ -33,6 +33,7 @@ import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.JavaCompiler;
 import javax.tools.SimpleJavaFileObject;
+import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 import java.io.IOException;
 import java.lang.Runtime.Version;
@@ -159,32 +160,33 @@ public class Main {
                 e.printStackTrace();
             }
         }
-        JavacTask ct =
-                (JavacTask)
-                        tool.getTask(
-                                null,
-                                tool.getStandardFileManager(null, null, null), //XXX: close!
-                                null,
-                                List.of(
-                                        "--limit-modules",
-                                        "java.sql",
-                                        "-d",
-                                        outputPath),
-                                null,
-                                Collections.singletonList(new JavaSource()));
-        ct.analyze();
+        try (StandardJavaFileManager fm = tool.getStandardFileManager(null, null, null)) {
+            JavacTask ct =
+                    (JavacTask)
+                            tool.getTask(
+                                    null,
+                                    fm, null,
+                                    List.of(
+                                            "--limit-modules",
+                                            "java.sql",
+                                            "-d",
+                                            outputPath),
+                                    null,
+                                    Collections.singletonList(new JavaSource()));
+            ct.analyze();
 
-        Path sourcesRoot = Paths.get(sourcePath);
-        List<Path> sources = new ArrayList<>();
-        try (DirectoryStream<Path> ds = Files.newDirectoryStream(sourcesRoot)) {
-            for (Path p : ds) {
-                if (Files.isDirectory(p)) {
-                    sources.add(p);
+            Path sourcesRoot = Paths.get(sourcePath);
+            List<Path> sources = new ArrayList<>();
+            try (DirectoryStream<Path> ds = Files.newDirectoryStream(sourcesRoot)) {
+                for (Path p : ds) {
+                    if (Files.isDirectory(p)) {
+                        sources.add(p);
+                    }
                 }
             }
+            ct.getElements().getAllModuleElements().stream()
+                    .forEach(me -> processModuleCheck(me, ct, sources));
         }
-        ct.getElements().getAllModuleElements().stream()
-                .forEach(me -> processModuleCheck(me, ct, sources));
     }
 
     private static void checkEquals(
@@ -280,7 +282,7 @@ public class Main {
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
             try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
-                analyzeClassCheck(te, s, javadocHelper, ct.getTypes(),  null); /*XXX: since tag from package-info (?!)*/
+                analyzeClassCheck(te, s, javadocHelper, ct.getTypes(), null); /*XXX: since tag from package-info (?!)*/
             } catch (Exception e) {
                 e.printStackTrace();
             }
