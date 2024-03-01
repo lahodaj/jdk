@@ -21,11 +21,11 @@
  * questions.
  */
 
-package jdk.internal.shellsupport.doc;
 
 import com.sun.source.util.JavacTask;
 import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.Symbol;
+import jdk.internal.shellsupport.doc.JavadocHelper;
 
 import javax.lang.model.element.*;
 import javax.lang.model.util.ElementFilter;
