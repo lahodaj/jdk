@@ -29,49 +29,41 @@ import javax.lang.model.element.*;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
-import javax.tools.JavaCompiler;
-import javax.tools.SimpleJavaFileObject;
-import javax.tools.StandardJavaFileManager;
-import javax.tools.ToolProvider;
 import java.io.IOException;
 import java.lang.Runtime.Version;
-import java.net.URI;
-import java.nio.file.DirectoryStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+public class SinceCheckerHelper {
 
-public class SinceCheckerTestHelper {
     //these are methods that were preview in JDK 13 and JDK 14, before the introduction
     //of the @PreviewFeature
-    static final Set<String> LEGACY_PREVIEW_METHODS = Set.of(
-            "method:java.lang.String:stripIndent:()",
-            "method:java.lang.String:translateEscapes:()",
-            "method:java.lang.String:formatted:(java.lang.Object[])"
-    );
+    static final Set<String> LEGACY_PREVIEW_METHODS = Set.of("method:java.lang.String:stripIndent:()", "method:java.lang.String:translateEscapes:()", "method:java.lang.String:formatted:(java.lang.Object[])");
 
-    static Map<String, IntroducedIn> classDictionary = new HashMap<>();
+    Map<String, IntroducedIn> classDictionary = new HashMap<>();
 
-    public  void persistElement(TypeElement clazz, Element element, Types types, String version) {
+    public void persistElement(TypeElement clazz, Element element, Types types, String version) {
         String uniqueId = getElementName(clazz, element, types);
-        IntroducedIn introduced = classDictionary.computeIfAbsent(uniqueId, i -> new IntroducedIn());
+        classDictionary.computeIfAbsent(uniqueId, i -> new IntroducedIn(null, null));
+
+        IntroducedIn introduced = classDictionary.get(uniqueId);
+
         if (isPreview(element, uniqueId, version)) {
-            if (introduced.introducedPreview == null) {
-                introduced.introducedPreview = version;
+            if (introduced.introducedPreview() == null) {
+                classDictionary.put(uniqueId, new IntroducedIn(version, introduced.introducedStable()));
             }
         } else {
-            if (introduced.introducedStable == null) {
-                introduced.introducedStable = version;
+            if (introduced.introducedStable() == null) {
+                classDictionary.put(uniqueId, new IntroducedIn(introduced.introducedPreview(), version));
             }
         }
     }
 
-    public  Version checkElement(JavadocHelper javadocHelper, String uniqueId, String currentVersion, Version enclosingVersion, Element element) {
+
+    public Version checkElement(JavadocHelper javadocHelper, String uniqueId, String currentVersion, Version enclosingVersion, Element element) {
         String comment = null;
         try {
             comment = javadocHelper.getResolvedDocComment(element);
@@ -81,8 +73,7 @@ public class SinceCheckerTestHelper {
             }
             IntroducedIn mappedVersion = classDictionary.get(uniqueId);
             try {
-                String realMappedVersion = isPreview(element, uniqueId, currentVersion) ? mappedVersion.introducedPreview
-                        : mappedVersion.introducedStable;
+                String realMappedVersion = isPreview(element, uniqueId, currentVersion) ? mappedVersion.introducedPreview() : mappedVersion.introducedStable();
                 checkEquals(sinceVersion, realMappedVersion, uniqueId);
             } catch (Exception e) {
                 System.err.println("Error for " + uniqueId + " " + e.getMessage());
@@ -93,7 +84,7 @@ public class SinceCheckerTestHelper {
         }
     }
 
-    private  boolean isPreview(Element el, String uniqueId, String currentVersion) {
+    private boolean isPreview(Element el, String uniqueId, String currentVersion) {
         while (el != null) {
             Symbol s = (Symbol) el;
             if ((s.flags() & Flags.PREVIEW_API) != 0) {
@@ -101,17 +92,16 @@ public class SinceCheckerTestHelper {
             }
             el = el.getEnclosingElement();
         }
-        boolean legacyPreview = LEGACY_PREVIEW_METHODS.contains(uniqueId) &&
-                ("13".equals(currentVersion) || "14".equals(currentVersion));
+        boolean legacyPreview = LEGACY_PREVIEW_METHODS.contains(uniqueId) && ("13".equals(currentVersion) || "14".equals(currentVersion));
         return legacyPreview;
     }
 
-    public  Version checkElement(TypeElement clazz, Element element, Types types, JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
+    public Version checkElement(TypeElement clazz, Element element, Types types, JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
         String uniqueId = getElementName(clazz, element, types);
         return checkElement(javadocHelper, uniqueId, currentVersion, enclosingVersion, element);
     }
 
-    private  Version extractSinceVersion(String documentation) {
+    private Version extractSinceVersion(String documentation) {
         Pattern pattern = Pattern.compile("@since\\s+(\\d+(?:\\.\\d+)?)");
         Matcher matcher = pattern.matcher(documentation);
         if (matcher.find()) {
@@ -136,9 +126,7 @@ public class SinceCheckerTestHelper {
     }
 
 
-
-    private  void checkEquals(
-            Version sinceVersion, String mappedVersion, String elementSimpleName) {
+    private void checkEquals(Version sinceVersion, String mappedVersion, String elementSimpleName) {
         try {
             //      System.err.println("For  Element: " + simpleName);
             //      System.err.println("sinceVersion: " + sinceVersion + "\t mappedVersion: " +mappedVersion);
@@ -162,68 +150,43 @@ public class SinceCheckerTestHelper {
     }
 
 
+    public void processModuleCheck(ModuleElement moduleElement, JavacTask ct, List<Path> sources) {
+        processModuleCheck(moduleElement, null, ct, sources);
+    }
 
-    public void processModuleRecord(
-            ModuleElement moduleElement,
-            String releaseVersion,
-            JavacTask ct) {
-        for (ModuleElement.ExportsDirective ed :
-                ElementFilter.exportsIn(moduleElement.getDirectives())) {
+    public  void processModuleRecord(ModuleElement moduleElement, String releaseVersion, JavacTask ct) {
+        for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(moduleElement.getDirectives())) {
             if (ed.getTargetModules() == null) {
                 analyzePackageRecord(ed.getPackage(), releaseVersion, ct);
             }
         }
     }
 
-    private  void analyzePackageRecord(
-            PackageElement pe, String s, JavacTask ct) {
+    private void analyzePackageRecord(PackageElement pe, String s, JavacTask ct) {
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
             analyzeClassRecord(te, s, ct.getTypes(), ct.getElements());
         }
     }
 
-    private  void analyzeClassRecord(
-            TypeElement te,
-            String version,
-            Types types,
-            Elements elements) {
+    private void analyzeClassRecord(TypeElement te, String version, Types types, Elements elements) {
         if (!te.getModifiers().contains(Modifier.PUBLIC)) {
             return;
         }
         persistElement(te, te, types, version);
-        elements.getAllMembers(te).stream()
-                .filter(element -> element.getModifiers().contains(Modifier.PUBLIC))
-                .filter(
-                        element ->
-                                element.getKind().isField()
-                                        || element.getKind() == ElementKind.METHOD
-                                        || element.getKind() == ElementKind.CONSTRUCTOR)
-                .forEach(
-                        element -> persistElement(te, element, types, version));
-        te.getEnclosedElements().stream()
-                .filter(element -> element.getKind().isClass())
-                .map(TypeElement.class::cast)
-                .forEach(
-                        nestedClass ->
-                                analyzeClassRecord(nestedClass, version, types, elements));
+        elements.getAllMembers(te).stream().filter(element -> element.getModifiers().contains(Modifier.PUBLIC)).filter(element -> element.getKind().isField() || element.getKind() == ElementKind.METHOD || element.getKind() == ElementKind.CONSTRUCTOR).forEach(element -> persistElement(te, element, types, version));
+        te.getEnclosedElements().stream().filter(element -> element.getKind().isClass()).map(TypeElement.class::cast).forEach(nestedClass -> analyzeClassRecord(nestedClass, version, types, elements));
     }
 
-    public   void processModuleCheck(
-            ModuleElement moduleElement,
-            String releaseVersion,
-            JavacTask ct,
-            List<Path> sources) {
-        for (ModuleElement.ExportsDirective ed :
-                ElementFilter.exportsIn(moduleElement.getDirectives())) {
+    private void processModuleCheck(ModuleElement moduleElement, String releaseVersion, JavacTask ct, List<Path> sources) {
+        for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(moduleElement.getDirectives())) {
             if (ed.getTargetModules() == null) {
                 analyzePackageCheck(ed.getPackage(), releaseVersion, ct, sources);
             }
         }
     }
 
-    private  void analyzePackageCheck(
-            PackageElement pe, String s, JavacTask ct, List<Path> sources) {
+    private void analyzePackageCheck(PackageElement pe, String s, JavacTask ct, List<Path> sources) {
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
             try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
@@ -234,51 +197,27 @@ public class SinceCheckerTestHelper {
         }
     }
 
-    private  void analyzeClassCheck(
-            TypeElement te,
-            String version,
-            JavadocHelper javadocHelper,
-            Types types,
-
-            Version enclosingVersion) {
+    private void analyzeClassCheck(TypeElement te, String version, JavadocHelper javadocHelper, Types types, Version enclosingVersion) {
         if (!te.getModifiers().contains(Modifier.PUBLIC)) {
             return;
         }
         Version currentVersion = checkElement(te, te, types, javadocHelper, version, enclosingVersion);
-        te.getEnclosedElements().stream()
-                .filter(element -> element.getModifiers().contains(Modifier.PUBLIC))
-                .filter(
-                        element ->
-                                element.getKind().isField()
-                                        || element.getKind() == ElementKind.METHOD
-                                        || element.getKind() == ElementKind.CONSTRUCTOR)
-                .forEach(
-                        element ->
-                                checkElement(te, element, types, javadocHelper, version, currentVersion));
-        te.getEnclosedElements().stream()
-                .filter(element -> element.getKind().isClass())
-                .map(TypeElement.class::cast)
-                .forEach(
-                        nestedClass ->
-                                analyzeClassCheck(nestedClass, version, javadocHelper, types, currentVersion));
+        te.getEnclosedElements().stream().filter(element -> element.getModifiers().contains(Modifier.PUBLIC)).filter(element -> element.getKind().isField() || element.getKind() == ElementKind.METHOD || element.getKind() == ElementKind.CONSTRUCTOR).forEach(element -> checkElement(te, element, types, javadocHelper, version, currentVersion));
+        te.getEnclosedElements().stream().filter(element -> element.getKind().isClass()).map(TypeElement.class::cast).forEach(nestedClass -> analyzeClassCheck(nestedClass, version, javadocHelper, types, currentVersion));
     }
 
-    public  String getElementName(TypeElement te, Element element, Types types) {
+    public String getElementName(TypeElement te, Element element, Types types) {
         String prefix = "";
         String suffix = "";
 
         if (element.getKind().isField()) {
             prefix = "field";
             suffix = ":" + te.getQualifiedName() + ":" + element.getSimpleName();
-        } else if (element.getKind() == ElementKind.METHOD
-                || element.getKind() == ElementKind.CONSTRUCTOR) {
+        } else if (element.getKind() == ElementKind.METHOD || element.getKind() == ElementKind.CONSTRUCTOR) {
             prefix = "method";
             ExecutableElement executableElement = (ExecutableElement) element;
             String methodName = executableElement.getSimpleName().toString();
-            String descriptor =
-                    executableElement.getParameters().stream()
-                            .map(p -> types.erasure(p.asType()).toString())
-                            .collect(Collectors.joining(",", "(", ")"));
+            String descriptor = executableElement.getParameters().stream().map(p -> types.erasure(p.asType()).toString()).collect(Collectors.joining(",", "(", ")"));
             suffix = ":" + te.getQualifiedName() + ":" + methodName + ":" + descriptor;
         } else if (element.getKind().isDeclaredType()) {
             prefix = "class";
@@ -288,21 +227,7 @@ public class SinceCheckerTestHelper {
         return prefix + suffix;
     }
 
-    private static class JavaSource extends SimpleJavaFileObject {
-        private static final String TEXT = "";
+    public record IntroducedIn(String introducedPreview, String introducedStable) {
 
-        public JavaSource() {
-            super(URI.create("myfo:/Test.java"), Kind.SOURCE);
-        }
-
-        @Override
-        public CharSequence getCharContent(boolean ignoreEncodingErrors) {
-            return TEXT;
-        }
-    }
-
-    public static class IntroducedIn {
-        public String introducedPreview;
-        public String introducedStable;
     }
 }

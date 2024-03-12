@@ -21,68 +21,54 @@
  * questions.
  */
 
-import jdk.internal.shellsupport.doc.SinceCheckerTestHelper;
-import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.*;
+/*
+ * @test
+ * @bug 8131019 8189778 8190552
+ * @summary Test JavadocHelper
+ * @library /tools/lib
+ * @modules jdk.compiler/com.sun.tools.javac.api
+ *          jdk.compiler/com.sun.tools.javac.main
+ *          jdk.compiler/jdk.internal.shellsupport.doc
+ * @build toolbox.ToolBox toolbox.JarTask toolbox.JavacTask
+ * @run testng/timeout=900/othervm -Xmx1024m JavadocHelperTest
+ */
 
 import com.sun.source.util.JavacTask;
-import com.sun.tools.javac.code.Flags;
-import com.sun.tools.javac.code.Symbol;
-import jdk.internal.shellsupport.doc.JavadocHelper;
+import jdk.internal.shellsupport.doc.SinceCheckerHelper;
+import org.junit.jupiter.api.Test;
 
-import javax.lang.model.element.*;
-import javax.lang.model.util.ElementFilter;
-import javax.lang.model.util.Elements;
-import javax.lang.model.util.Types;
 import javax.tools.JavaCompiler;
 import javax.tools.SimpleJavaFileObject;
-import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 import java.io.IOException;
-import java.lang.Runtime.Version;
 import java.net.URI;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
-
-public class JavaBaseSinceChecker {
-
+public class JavaBaseSinceCheckerTest {
+    public static String moduleToTest = "java.base";
     //these are methods that were preview in JDK 13 and JDK 14, before the introduction
     //of the @PreviewFeature
-    static final Set<String> LEGACY_PREVIEW_METHODS = Set.of(
-            "method:java.lang.String:stripIndent:()",
-            "method:java.lang.String:translateEscapes:()",
-            "method:java.lang.String:formatted:(java.lang.Object[])"
-    );
-
-    static Map<String, IntroducedIn> classDictionary = new HashMap<>();
-
-    SinceCheckerTestHelper sinceCheckerTestHelper ;
+    public SinceCheckerHelper sinceCheckerTestHelper;
 
     @Test
-    public void checkAllSinceTags() throws IOException {
-        String sourcePath = "args[0]";
-        String outputPath = "args[1]";
+    public void testModule() throws IOException {
+        sinceCheckerTestHelper = new SinceCheckerHelper();
+        // source path is the path to the source code of the JDK
+        // output path is the path to the output directory
+        // this is temporary
+        String sourcePath = "";
+        String outputPath = "";
+
         JavaCompiler tool = ToolProvider.getSystemJavaCompiler();
-        sinceCheckerTestHelper = new SinceCheckerTestHelper();
         for (int i = 9; i <= 23; i++) {
             try {
-                JavacTask ct =
-                        (JavacTask)
-                                tool.getTask(
-                                        null,
-                                        null,
-                                        null,
-                                        List.of("--release", String.valueOf(i)),
-                                        null,
-                                        Collections.singletonList(new JavaSource()));
+                JavacTask ct = (JavacTask) tool.getTask(null, null, null, List.of("--release", String.valueOf(i)), null, Collections.singletonList(new JavaSource()));
                 ct.analyze();
 
                 String version = String.valueOf(i);
@@ -91,20 +77,12 @@ public class JavaBaseSinceChecker {
                 e.printStackTrace();
             }
         }
-        JavacTask ct =
-                (JavacTask)
-                        tool.getTask(
-                                null,
-                                tool.getStandardFileManager(null, null, null), //XXX: close!
-                                null,
-                                List.of(
-                                        "--limit-modules",
-                                        "jdk.base",
-                                        "-d",
-                                        outputPath),
-                                null,
-                                Collections.singletonList(new JavaSource()));
+
+
+        JavacTask ct = (JavacTask) tool.getTask(null, tool.getStandardFileManager(null, null, null), //XXX: close!
+                null, List.of("--limit-modules", moduleToTest, "-d", outputPath), null, Collections.singletonList(new JavaSource()));
         ct.analyze();
+
         Path sourcesRoot = Paths.get(sourcePath);
         List<Path> sources = new ArrayList<>();
         try (DirectoryStream<Path> ds = Files.newDirectoryStream(sourcesRoot)) {
@@ -114,8 +92,7 @@ public class JavaBaseSinceChecker {
                 }
             }
         }
-        ct.getElements().getAllModuleElements().stream()
-                .forEach(me -> sinceCheckerTestHelper.processModuleCheck(me,null, ct, sources));
+        ct.getElements().getAllModuleElements().stream().forEach(me -> sinceCheckerTestHelper.processModuleCheck(me, ct, sources));
 
     }
 
@@ -133,8 +110,5 @@ public class JavaBaseSinceChecker {
         }
     }
 
-    public static class IntroducedIn {
-        public String introducedPreview;
-        public String introducedStable;
-    }
+
 }
