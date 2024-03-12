@@ -1,4 +1,4 @@
-/*
+package jdk.internal.shellsupport.doc;/*
  * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -24,7 +24,6 @@
 import com.sun.source.util.JavacTask;
 import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.Symbol;
-import jdk.internal.shellsupport.doc.JavadocHelper;
 
 import javax.lang.model.element.*;
 import javax.lang.model.util.ElementFilter;
@@ -47,7 +46,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 
-public class Main {
+public class SinceCheckerTestHelper {
     //these are methods that were preview in JDK 13 and JDK 14, before the introduction
     //of the @PreviewFeature
     static final Set<String> LEGACY_PREVIEW_METHODS = Set.of(
@@ -58,7 +57,7 @@ public class Main {
 
     static Map<String, IntroducedIn> classDictionary = new HashMap<>();
 
-    public static void persistElement(TypeElement clazz, Element element, Types types, String version) {
+    public  void persistElement(TypeElement clazz, Element element, Types types, String version) {
         String uniqueId = getElementName(clazz, element, types);
         IntroducedIn introduced = classDictionary.computeIfAbsent(uniqueId, i -> new IntroducedIn());
         if (isPreview(element, uniqueId, version)) {
@@ -72,7 +71,7 @@ public class Main {
         }
     }
 
-    public static Version checkElement(JavadocHelper javadocHelper, String uniqueId, String currentVersion, Version enclosingVersion, Element element) {
+    public  Version checkElement(JavadocHelper javadocHelper, String uniqueId, String currentVersion, Version enclosingVersion, Element element) {
         String comment = null;
         try {
             comment = javadocHelper.getResolvedDocComment(element);
@@ -94,7 +93,7 @@ public class Main {
         }
     }
 
-    private static boolean isPreview(Element el, String uniqueId, String currentVersion) {
+    private  boolean isPreview(Element el, String uniqueId, String currentVersion) {
         while (el != null) {
             Symbol s = (Symbol) el;
             if ((s.flags() & Flags.PREVIEW_API) != 0) {
@@ -107,12 +106,12 @@ public class Main {
         return legacyPreview;
     }
 
-    public static Version checkElement(TypeElement clazz, Element element, Types types, JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
+    public  Version checkElement(TypeElement clazz, Element element, Types types, JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
         String uniqueId = getElementName(clazz, element, types);
         return checkElement(javadocHelper, uniqueId, currentVersion, enclosingVersion, element);
     }
 
-    private static Version extractSinceVersion(String documentation) {
+    private  Version extractSinceVersion(String documentation) {
         Pattern pattern = Pattern.compile("@since\\s+(\\d+(?:\\.\\d+)?)");
         Matcher matcher = pattern.matcher(documentation);
         if (matcher.find()) {
@@ -136,61 +135,9 @@ public class Main {
         }
     }
 
-    public static void main(String[] args) throws IOException {
-        String sourcePath = args[0];
-        String outputPath = args[1];
-        JavaCompiler tool = ToolProvider.getSystemJavaCompiler();
-        for (int i = 9; i <= 23; i++) {
-            try {
-                JavacTask ct =
-                        (JavacTask)
-                                tool.getTask(
-                                        null,
-                                        null,
-                                        null,
-                                        List.of("--release", String.valueOf(i)),
-                                        null,
-                                        Collections.singletonList(new JavaSource()));
-                ct.analyze();
-
-                String version = String.valueOf(i);
-                ct.getElements().getAllModuleElements().forEach(me -> processModuleRecord(me, version, ct));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
 
 
-            JavacTask ct =
-                    (JavacTask)
-                            tool.getTask(
-                                    null,
-                                  tool.getStandardFileManager(null, null, null), //XXX: close!
-                                    null,
-                                    List.of(
-                                            "--limit-modules",
-                                            "jdk.attach",
-                                            "-d",
-                                            outputPath),
-                                    null,
-                                    Collections.singletonList(new JavaSource()));
-            ct.analyze();
-
-            Path sourcesRoot = Paths.get(sourcePath);
-            List<Path> sources = new ArrayList<>();
-            try (DirectoryStream<Path> ds = Files.newDirectoryStream(sourcesRoot)) {
-                for (Path p : ds) {
-                    if (Files.isDirectory(p)) {
-                        sources.add(p);
-                    }
-                }
-            }
-            ct.getElements().getAllModuleElements().stream()
-                    .forEach(me -> processModuleCheck(me, ct, sources));
-
-    }
-
-    private static void checkEquals(
+    private  void checkEquals(
             Version sinceVersion, String mappedVersion, String elementSimpleName) {
         try {
             //      System.err.println("For  Element: " + simpleName);
@@ -215,11 +162,8 @@ public class Main {
     }
 
 
-    private static void processModuleCheck(ModuleElement moduleElement, JavacTask ct, List<Path> sources) {
-        processModuleCheck(moduleElement, null, ct, sources);
-    }
 
-    private static void processModuleRecord(
+    public void processModuleRecord(
             ModuleElement moduleElement,
             String releaseVersion,
             JavacTask ct) {
@@ -231,7 +175,7 @@ public class Main {
         }
     }
 
-    private static void analyzePackageRecord(
+    private  void analyzePackageRecord(
             PackageElement pe, String s, JavacTask ct) {
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
@@ -239,7 +183,7 @@ public class Main {
         }
     }
 
-    private static void analyzeClassRecord(
+    private  void analyzeClassRecord(
             TypeElement te,
             String version,
             Types types,
@@ -265,7 +209,7 @@ public class Main {
                                 analyzeClassRecord(nestedClass, version, types, elements));
     }
 
-    private static void processModuleCheck(
+    public   void processModuleCheck(
             ModuleElement moduleElement,
             String releaseVersion,
             JavacTask ct,
@@ -278,7 +222,7 @@ public class Main {
         }
     }
 
-    private static void analyzePackageCheck(
+    private  void analyzePackageCheck(
             PackageElement pe, String s, JavacTask ct, List<Path> sources) {
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
@@ -290,7 +234,7 @@ public class Main {
         }
     }
 
-    private static void analyzeClassCheck(
+    private  void analyzeClassCheck(
             TypeElement te,
             String version,
             JavadocHelper javadocHelper,
@@ -319,7 +263,7 @@ public class Main {
                                 analyzeClassCheck(nestedClass, version, javadocHelper, types, currentVersion));
     }
 
-    public static String getElementName(TypeElement te, Element element, Types types) {
+    public  String getElementName(TypeElement te, Element element, Types types) {
         String prefix = "";
         String suffix = "";
 
@@ -357,7 +301,7 @@ public class Main {
         }
     }
 
-    public static record IntroducedIn {
+    public static class IntroducedIn {
         public String introducedPreview;
         public String introducedStable;
     }
