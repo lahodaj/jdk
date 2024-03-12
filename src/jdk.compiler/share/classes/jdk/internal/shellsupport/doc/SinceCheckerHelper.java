@@ -41,7 +41,10 @@ public class SinceCheckerHelper {
 
     //these are methods that were preview in JDK 13 and JDK 14, before the introduction
     //of the @PreviewFeature
-    static final Set<String> LEGACY_PREVIEW_METHODS = Set.of("method:java.lang.String:stripIndent:()", "method:java.lang.String:translateEscapes:()", "method:java.lang.String:formatted:(java.lang.Object[])");
+    static final Set<String> LEGACY_PREVIEW_METHODS = Set.of(
+            "method:java.lang.String:stripIndent:()",
+            "method:java.lang.String:translateEscapes:()",
+            "method:java.lang.String:formatted:(java.lang.Object[])");
 
     Map<String, IntroducedIn> classDictionary = new HashMap<>();
 
@@ -63,7 +66,8 @@ public class SinceCheckerHelper {
     }
 
 
-    public Version checkElement(JavadocHelper javadocHelper, String uniqueId, String currentVersion, Version enclosingVersion, Element element) {
+    public Version checkElement(JavadocHelper javadocHelper, String uniqueId, String currentVersion,
+                                Version enclosingVersion, Element element) {
         String comment = null;
         try {
             comment = javadocHelper.getResolvedDocComment(element);
@@ -73,7 +77,9 @@ public class SinceCheckerHelper {
             }
             IntroducedIn mappedVersion = classDictionary.get(uniqueId);
             try {
-                String realMappedVersion = isPreview(element, uniqueId, currentVersion) ? mappedVersion.introducedPreview() : mappedVersion.introducedStable();
+                String realMappedVersion = isPreview(element, uniqueId, currentVersion) ?
+                        mappedVersion.introducedPreview() :
+                        mappedVersion.introducedStable();
                 checkEquals(sinceVersion, realMappedVersion, uniqueId);
             } catch (Exception e) {
                 System.err.println("Error for " + uniqueId + " " + e.getMessage());
@@ -92,11 +98,13 @@ public class SinceCheckerHelper {
             }
             el = el.getEnclosingElement();
         }
-        boolean legacyPreview = LEGACY_PREVIEW_METHODS.contains(uniqueId) && ("13".equals(currentVersion) || "14".equals(currentVersion));
+        boolean legacyPreview = LEGACY_PREVIEW_METHODS.contains(uniqueId) && ("13".equals(currentVersion) ||
+                "14".equals(currentVersion));
         return legacyPreview;
     }
 
-    public Version checkElement(TypeElement clazz, Element element, Types types, JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
+    public Version checkElement(TypeElement clazz, Element element, Types types, JavadocHelper javadocHelper,
+                                String currentVersion, Version enclosingVersion) {
         String uniqueId = getElementName(clazz, element, types);
         return checkElement(javadocHelper, uniqueId, currentVersion, enclosingVersion, element);
     }
@@ -154,7 +162,7 @@ public class SinceCheckerHelper {
         processModuleCheck(moduleElement, null, ct, sources);
     }
 
-    public  void processModuleRecord(ModuleElement moduleElement, String releaseVersion, JavacTask ct) {
+    public void processModuleRecord(ModuleElement moduleElement, String releaseVersion, JavacTask ct) {
         for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(moduleElement.getDirectives())) {
             if (ed.getTargetModules() == null) {
                 analyzePackageRecord(ed.getPackage(), releaseVersion, ct);
@@ -174,8 +182,16 @@ public class SinceCheckerHelper {
             return;
         }
         persistElement(te, te, types, version);
-        elements.getAllMembers(te).stream().filter(element -> element.getModifiers().contains(Modifier.PUBLIC)).filter(element -> element.getKind().isField() || element.getKind() == ElementKind.METHOD || element.getKind() == ElementKind.CONSTRUCTOR).forEach(element -> persistElement(te, element, types, version));
-        te.getEnclosedElements().stream().filter(element -> element.getKind().isClass()).map(TypeElement.class::cast).forEach(nestedClass -> analyzeClassRecord(nestedClass, version, types, elements));
+        elements.getAllMembers(te).stream().filter(element -> element.getModifiers()
+                        .contains(Modifier.PUBLIC))
+                .filter(element -> element.getKind()
+                        .isField() || element.getKind() == ElementKind.METHOD ||
+                        element.getKind() == ElementKind.CONSTRUCTOR)
+                .forEach(element -> persistElement(te, element, types, version));
+        te.getEnclosedElements().stream()
+                .filter(element -> element.getKind().isClass())
+                .map(TypeElement.class::cast)
+                .forEach(nestedClass -> analyzeClassRecord(nestedClass, version, types, elements));
     }
 
     private void processModuleCheck(ModuleElement moduleElement, String releaseVersion, JavacTask ct, List<Path> sources) {
@@ -202,8 +218,16 @@ public class SinceCheckerHelper {
             return;
         }
         Version currentVersion = checkElement(te, te, types, javadocHelper, version, enclosingVersion);
-        te.getEnclosedElements().stream().filter(element -> element.getModifiers().contains(Modifier.PUBLIC)).filter(element -> element.getKind().isField() || element.getKind() == ElementKind.METHOD || element.getKind() == ElementKind.CONSTRUCTOR).forEach(element -> checkElement(te, element, types, javadocHelper, version, currentVersion));
-        te.getEnclosedElements().stream().filter(element -> element.getKind().isClass()).map(TypeElement.class::cast).forEach(nestedClass -> analyzeClassCheck(nestedClass, version, javadocHelper, types, currentVersion));
+        te.getEnclosedElements()
+                .stream()
+                .filter(element -> element.getModifiers().contains(Modifier.PUBLIC))
+                .filter(element -> element.getKind().isField() || element.getKind() == ElementKind.METHOD || element.getKind() == ElementKind.CONSTRUCTOR)
+                .forEach(element -> checkElement(te, element, types, javadocHelper, version, currentVersion));
+        te.getEnclosedElements()
+                .stream()
+                .filter(element -> element.getKind().isClass())
+                .map(TypeElement.class::cast)
+                .forEach(nestedClass -> analyzeClassCheck(nestedClass, version, javadocHelper, types, currentVersion));
     }
 
     public String getElementName(TypeElement te, Element element, Types types) {
@@ -217,7 +241,9 @@ public class SinceCheckerHelper {
             prefix = "method";
             ExecutableElement executableElement = (ExecutableElement) element;
             String methodName = executableElement.getSimpleName().toString();
-            String descriptor = executableElement.getParameters().stream().map(p -> types.erasure(p.asType()).toString()).collect(Collectors.joining(",", "(", ")"));
+            String descriptor = executableElement.getParameters()
+                    .stream().map(p -> types.erasure(p.asType()).toString())
+                    .collect(Collectors.joining(",", "(", ")"));
             suffix = ":" + te.getQualifiedName() + ":" + methodName + ":" + descriptor;
         } else if (element.getKind().isDeclaredType()) {
             prefix = "class";

@@ -52,8 +52,6 @@ import java.util.List;
 
 public class JavaBaseSinceCheckerTest {
     public static String moduleToTest = "java.base";
-    //these are methods that were preview in JDK 13 and JDK 14, before the introduction
-    //of the @PreviewFeature
     public SinceCheckerHelper sinceCheckerTestHelper;
 
     @Test
