@@ -1,37 +1,20 @@
-package jdk.internal.shellsupport.doc;/*
- * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
- */
-
 import com.sun.source.util.JavacTask;
 import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.Symbol;
+import jdk.internal.shellsupport.doc.JavadocHelper;
 
 import javax.lang.model.element.*;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
+import javax.tools.JavaCompiler;
+import javax.tools.SimpleJavaFileObject;
+import javax.tools.StandardJavaFileManager;
+import javax.tools.ToolProvider;
 import java.io.IOException;
 import java.lang.Runtime.Version;
-import java.nio.file.Path;
+import java.net.URI;
+import java.nio.file.*;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -46,33 +29,104 @@ public class SinceCheckerHelper {
             "method:java.lang.String:translateEscapes:()",
             "method:java.lang.String:formatted:(java.lang.Object[])");
 
-    Map<String, IntroducedIn> classDictionary = new HashMap<>();
+    static final int JDK_RELEASE_9 = 9, JDK_RELEASE_23 = 23;
+
+    // only one hashmap is enough for now
+    public static Map<String, IntroducedIn> classDictionary = new HashMap<>();
+    public JavaCompiler tool;
+    StringBuilder sb = new StringBuilder();
+
+    public SinceCheckerHelper() {
+        tool = ToolProvider.getSystemJavaCompiler();
+        for (int i = JDK_RELEASE_9; i <= JDK_RELEASE_23; i++) {
+            try {
+                JavacTask ct = (JavacTask) tool.getTask(null, null, null,
+                        List.of("--release", String.valueOf(i)), null,
+                        Collections.singletonList(new JavaSource()));
+                ct.analyze();
+                String version = String.valueOf(i);
+                ct.getElements().getAllModuleElements().forEach(me ->
+                        processModuleRecord(me, version, ct));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public void testThisModule(String moduleName) {
+        try (StandardJavaFileManager fileManager = tool.getStandardFileManager(null, null, null)) {
+            JavacTask ct = (JavacTask) tool.getTask(null,
+                    fileManager,
+                    null,
+                    List.of("--limit-modules", moduleName, "-d", "."),
+                    null,
+                    Collections.singletonList(new JavaSource()));
+
+        try {
+            ct.analyze();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        Path home = Paths.get(System.getProperty("java.home"));
+        Path srcZip = home.resolve("lib").resolve("src.zip");
+        //TODO fix srcZip path
+        System.out.println(home);
+        List<Path> sources = new ArrayList<>();
+        if (Files.isReadable(srcZip)) {
+            URI uri = URI.create("jar:" + srcZip.toUri());
+            try (FileSystem zipFO = FileSystems.newFileSystem(uri, Collections.emptyMap())) {
+                Path root = zipFO.getRootDirectories().iterator().next();
+                try (DirectoryStream<Path> ds = Files.newDirectoryStream(root)) {
+                    for (Path p : ds) {
+                        if (Files.isDirectory(p)) {
+                            sources.add(p);
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        ct.getElements().getAllModuleElements().stream()
+                .forEach(me -> processModuleCheck(me, ct, sources));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        if (!sb.isEmpty()) {
+            throw new IllegalArgumentException(sb.toString());
+        }
+    }
+
 
     public void persistElement(TypeElement clazz, Element element, Types types, String version) {
         String uniqueId = getElementName(clazz, element, types);
-        classDictionary.computeIfAbsent(uniqueId, i -> new IntroducedIn(null, null));
+        classDictionary.computeIfAbsent(uniqueId,
+                i -> new IntroducedIn(null, null));
 
         IntroducedIn introduced = classDictionary.get(uniqueId);
 
         if (isPreview(element, uniqueId, version)) {
             if (introduced.introducedPreview() == null) {
-                classDictionary.put(uniqueId, new IntroducedIn(version, introduced.introducedStable()));
+                classDictionary.put(uniqueId,
+                        new IntroducedIn(version, introduced.introducedStable()));
             }
         } else {
             if (introduced.introducedStable() == null) {
-                classDictionary.put(uniqueId, new IntroducedIn(introduced.introducedPreview(), version));
+                classDictionary.put(uniqueId,
+                        new IntroducedIn(introduced.introducedPreview(), version));
             }
         }
     }
 
 
-    public Version checkElement(JavadocHelper javadocHelper, String uniqueId, String currentVersion,
-                                Version enclosingVersion, Element element) {
+    public Version checkElement(JavadocHelper javadocHelper, String uniqueId,
+                                String currentVersion, Version enclosingVersion, Element element) {
         String comment = null;
         try {
             comment = javadocHelper.getResolvedDocComment(element);
             Version sinceVersion = comment != null ? extractSinceVersion(comment) : null;
-            if (sinceVersion == null || (enclosingVersion != null && /*TODO: only when element overrides*/enclosingVersion.compareTo(sinceVersion) > 0)) {
+            if (sinceVersion == null ||
+                    (enclosingVersion != null && /*TODO: only when element overrides*/enclosingVersion.compareTo(sinceVersion) > 0)) {
                 sinceVersion = enclosingVersion;
             }
             IntroducedIn mappedVersion = classDictionary.get(uniqueId);
@@ -98,13 +152,14 @@ public class SinceCheckerHelper {
             }
             el = el.getEnclosingElement();
         }
-        boolean legacyPreview = LEGACY_PREVIEW_METHODS.contains(uniqueId) && ("13".equals(currentVersion) ||
-                "14".equals(currentVersion));
+        boolean legacyPreview = LEGACY_PREVIEW_METHODS.contains(uniqueId)
+                &&
+                ("13".equals(currentVersion) || "14".equals(currentVersion));
         return legacyPreview;
     }
 
-    public Version checkElement(TypeElement clazz, Element element, Types types, JavadocHelper javadocHelper,
-                                String currentVersion, Version enclosingVersion) {
+    public Version checkElement(TypeElement clazz, Element element, Types types,
+                                JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
         String uniqueId = getElementName(clazz, element, types);
         return checkElement(javadocHelper, uniqueId, currentVersion, enclosingVersion, element);
     }
@@ -149,8 +204,8 @@ public class SinceCheckerHelper {
                 sinceVersion = Version.parse("9"); //TODO: handle baseline version better
             }
             if (!sinceVersion.equals(Version.parse(mappedVersion))) {
-                System.err.println("For  Element: " + elementSimpleName);
-                System.err.println("Wrong since version " + sinceVersion + " instead of " + mappedVersion);
+                sb.append("For  Element: " + elementSimpleName
+                        + " Wrong since version " + sinceVersion + " instead of " + mappedVersion + "\n");
             }
         } catch (NumberFormatException e) {
             System.err.println("Element: " + elementSimpleName + "\t Invalid number: " + sinceVersion);
@@ -182,11 +237,11 @@ public class SinceCheckerHelper {
             return;
         }
         persistElement(te, te, types, version);
-        elements.getAllMembers(te).stream().filter(element -> element.getModifiers()
-                        .contains(Modifier.PUBLIC))
-                .filter(element -> element.getKind()
-                        .isField() || element.getKind() == ElementKind.METHOD ||
-                        element.getKind() == ElementKind.CONSTRUCTOR)
+        elements.getAllMembers(te).stream()
+                .filter(element -> element.getModifiers().contains(Modifier.PUBLIC))
+                .filter(element -> element.getKind().isField()
+                        || element.getKind() == ElementKind.METHOD
+                        || element.getKind() == ElementKind.CONSTRUCTOR)
                 .forEach(element -> persistElement(te, element, types, version));
         te.getEnclosedElements().stream()
                 .filter(element -> element.getKind().isClass())
@@ -213,18 +268,18 @@ public class SinceCheckerHelper {
         }
     }
 
-    private void analyzeClassCheck(TypeElement te, String version, JavadocHelper javadocHelper, Types types, Version enclosingVersion) {
+    private void analyzeClassCheck(TypeElement te, String version, JavadocHelper javadocHelper,
+                                   Types types, Version enclosingVersion) {
         if (!te.getModifiers().contains(Modifier.PUBLIC)) {
             return;
         }
         Version currentVersion = checkElement(te, te, types, javadocHelper, version, enclosingVersion);
-        te.getEnclosedElements()
-                .stream()
-                .filter(element -> element.getModifiers().contains(Modifier.PUBLIC))
-                .filter(element -> element.getKind().isField() || element.getKind() == ElementKind.METHOD || element.getKind() == ElementKind.CONSTRUCTOR)
+        te.getEnclosedElements().stream().filter(element -> element.getModifiers().contains(Modifier.PUBLIC))
+                .filter(element -> element.getKind().isField()
+                        || element.getKind() == ElementKind.METHOD
+                        || element.getKind() == ElementKind.CONSTRUCTOR)
                 .forEach(element -> checkElement(te, element, types, javadocHelper, version, currentVersion));
-        te.getEnclosedElements()
-                .stream()
+        te.getEnclosedElements().stream()
                 .filter(element -> element.getKind().isClass())
                 .map(TypeElement.class::cast)
                 .forEach(nestedClass -> analyzeClassCheck(nestedClass, version, javadocHelper, types, currentVersion));
@@ -241,8 +296,8 @@ public class SinceCheckerHelper {
             prefix = "method";
             ExecutableElement executableElement = (ExecutableElement) element;
             String methodName = executableElement.getSimpleName().toString();
-            String descriptor = executableElement.getParameters()
-                    .stream().map(p -> types.erasure(p.asType()).toString())
+            String descriptor = executableElement.getParameters().stream()
+                    .map(p -> types.erasure(p.asType()).toString())
                     .collect(Collectors.joining(",", "(", ")"));
             suffix = ":" + te.getQualifiedName() + ":" + methodName + ":" + descriptor;
         } else if (element.getKind().isDeclaredType()) {
@@ -251,6 +306,19 @@ public class SinceCheckerHelper {
         }
 
         return prefix + suffix;
+    }
+
+    private static class JavaSource extends SimpleJavaFileObject {
+        private static final String TEXT = "";
+
+        public JavaSource() {
+            super(URI.create("myfo:/Test.java"), Kind.SOURCE);
+        }
+
+        @Override
+        public CharSequence getCharContent(boolean ignoreEncodingErrors) {
+            return TEXT;
+        }
     }
 
     public record IntroducedIn(String introducedPreview, String introducedStable) {
