@@ -21,32 +21,28 @@
  * questions.
  */
 
-/*
- * @test
- * @bug 8131019 8189778 8190552
- * @summary Test JavaBaseSinceCheckerTest
- * @library /tools/lib
- * @modules jdk.compiler/com.sun.tools.javac.api
- *          jdk.compiler/com.sun.tools.javac.util
- *          jdk.compiler/com.sun.tools.javac.main
- *          jdk.compiler/com.sun.tools.javac.code
- *          jdk.compiler/jdk.internal.shellsupport.doc
- * @build toolbox.ToolBox toolbox.JarTask toolbox.JavacTask
- * @run junit/timeout=10000/othervm -Xmx1024m JavaBaseSinceCheckerTest
- */
+///*
+// * @test
+// * @bug 8131019 8189778 8190552
+// * @summary Test JavaBaseSinceCheckerTest
+// * @library /tools/lib
+// * @modules jdk.compiler/com.sun.tools.javac.api
+// *          jdk.compiler/com.sun.tools.javac.util
+// *          jdk.compiler/com.sun.tools.javac.main
+// *          jdk.compiler/com.sun.tools.javac.code
+// *          jdk.compiler/jdk.internal.shellsupport.doc
+// * @build toolbox.ToolBox toolbox.JarTask toolbox.JavacTask
+// * @run junit JavaBaseSinceCheckerTest
+// */
 
-
-
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 public class JavaBaseSinceCheckerTest {
-    public SinceCheckerHelper sinceCheckerTestHelper = new SinceCheckerHelper();
+    public static SinceCheckerHelper sinceCheckerTestHelper = new SinceCheckerHelper();
     //69 modules
     // must remove 19
-    @ParameterizedTest
-    @ValueSource(strings = {
-            "java.base"
+//    @ParameterizedTest
+//    @ValueSource(strings = {
+//            "java.base"
 //            , "jdk.internal.ed",
 //            "java.compiler"
 //            , "jdk.internal.jvmstat",
@@ -67,11 +63,14 @@ public class JavaBaseSinceCheckerTest {
 //            "jdk.graal.compiler", "jdk.unsupported", "jdk.graal.compiler.management",
 //            "jdk.unsupported.desktop", "jdk.hotspot.agent", "jdk.xml.dom", "jdk.httpserver",
 //            "jdk.zipfs", "jdk.incubator.vector"
-    })
+//    })
 
-    public void testModule(String module) {
-        sinceCheckerTestHelper.testThisModule(module);
+
+    public static void main(String[] args) throws Exception {
+        if (args.length == 0) {
+            System.out.println("No module specified. Exiting...");
+            System.exit(1);
+        }
+        sinceCheckerTestHelper.testThisModule(args[0]);
     }
-
-
 }

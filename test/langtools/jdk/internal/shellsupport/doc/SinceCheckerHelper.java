@@ -7,10 +7,7 @@ import javax.lang.model.element.*;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
-import javax.tools.JavaCompiler;
-import javax.tools.SimpleJavaFileObject;
-import javax.tools.StandardJavaFileManager;
-import javax.tools.ToolProvider;
+import javax.tools.*;
 import java.io.IOException;
 import java.lang.Runtime.Version;
 import java.net.URI;
@@ -29,16 +26,17 @@ public class SinceCheckerHelper {
             "method:java.lang.String:translateEscapes:()",
             "method:java.lang.String:formatted:(java.lang.Object[])");
 
-    static final int JDK_RELEASE_9 = 9, JDK_RELEASE_23 = 23;
+    static final int JDK9 = 9, JDK23 = 23;
+    static final String JDK13 = "13",JDK14="14";
 
     // only one hashmap is enough for now
     public static Map<String, IntroducedIn> classDictionary = new HashMap<>();
     public JavaCompiler tool;
-    StringBuilder sb = new StringBuilder();
+    StringBuilder sb = new StringBuilder("");
 
     public SinceCheckerHelper() {
         tool = ToolProvider.getSystemJavaCompiler();
-        for (int i = JDK_RELEASE_9; i <= JDK_RELEASE_23; i++) {
+        for (int i = JDK9; i <= JDK23; i++) {
             try {
                 JavacTask ct = (JavacTask) tool.getTask(null, null, null,
                         List.of("--release", String.valueOf(i)), null,
@@ -53,25 +51,11 @@ public class SinceCheckerHelper {
         }
     }
 
-    public void testThisModule(String moduleName) {
-        try (StandardJavaFileManager fileManager = tool.getStandardFileManager(null, null, null)) {
-            JavacTask ct = (JavacTask) tool.getTask(null,
-                    fileManager,
-                    null,
-                    List.of("--limit-modules", moduleName, "-d", "."),
-                    null,
-                    Collections.singletonList(new JavaSource()));
-
-        try {
-            ct.analyze();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+    public void testThisModule(String moduleName) throws Exception {
+        List<Path> sources = new ArrayList<>();
+        JavacTask ct = null;
         Path home = Paths.get(System.getProperty("java.home"));
         Path srcZip = home.resolve("lib").resolve("src.zip");
-        //TODO fix srcZip path
-        System.out.println(home);
-        List<Path> sources = new ArrayList<>();
         if (Files.isReadable(srcZip)) {
             URI uri = URI.create("jar:" + srcZip.toUri());
             try (FileSystem zipFO = FileSystems.newFileSystem(uri, Collections.emptyMap())) {
@@ -82,18 +66,25 @@ public class SinceCheckerHelper {
                             sources.add(p);
                         }
                     }
+                    try (StandardJavaFileManager fm =
+                                 tool.getStandardFileManager(null, null, null)) {
+                        ct = (JavacTask) tool.getTask(null,
+                                fm,
+                                null,
+                                List.of("--limit-modules", moduleName, "-d", "."),
+                                null,
+                                Collections.singletonList(new JavaSource()));
+                        ct.analyze();
+                        JavacTask finalCt = ct;
+                        ct.getElements().getAllModuleElements().stream()
+                                .forEach(me -> processModuleCheck(me, finalCt, sources));
+                        if (!sb.isEmpty()) {
+                            throw new Exception("works");
+                        }
+                    }
+
                 }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
             }
-        }
-        ct.getElements().getAllModuleElements().stream()
-                .forEach(me -> processModuleCheck(me, ct, sources));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        if (!sb.isEmpty()) {
-            throw new IllegalArgumentException(sb.toString());
         }
     }
 
@@ -154,7 +145,7 @@ public class SinceCheckerHelper {
         }
         boolean legacyPreview = LEGACY_PREVIEW_METHODS.contains(uniqueId)
                 &&
-                ("13".equals(currentVersion) || "14".equals(currentVersion));
+                (JDK13.equals(currentVersion) || JDK14.equals(currentVersion));
         return legacyPreview;
     }
 
@@ -322,6 +313,5 @@ public class SinceCheckerHelper {
     }
 
     public record IntroducedIn(String introducedPreview, String introducedStable) {
-
     }
 }
