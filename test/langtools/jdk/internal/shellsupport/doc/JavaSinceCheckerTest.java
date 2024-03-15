@@ -22,30 +22,14 @@
  */
 
 
-/*
- * @test
- * @summary Test JavaBaseSinceCheckerTest
- * @library /tools/lib
- * @modules jdk.compiler/com.sun.tools.javac.api
- *          jdk.compiler/com.sun.tools.javac.util
- *          jdk.compiler/com.sun.tools.javac.main
- *          jdk.compiler/com.sun.tools.javac.code
- *          jdk.compiler/jdk.internal.shellsupport.doc
- * @run main JavaSinceCheckerTest java.base
- */
+public class JavaSinceCheckerTest {
+    public static SinceCheckerHelper sinceCheckerTestHelper = new SinceCheckerHelper();
 
-/*
- * @test
- * @summary Test JavaBaseSinceCheckerTest
- * @library /tools/lib
- * @modules jdk.compiler/com.sun.tools.javac.api
- *          jdk.compiler/com.sun.tools.javac.util
- *          jdk.compiler/com.sun.tools.javac.main
- *          jdk.compiler/com.sun.tools.javac.code
- *          jdk.compiler/jdk.internal.shellsupport.doc
- * @run main JavaSinceCheckerTest java.desktop
- */
-
-public class JavaSinceCheckerTests {
-
+    public static void main(String[] args) throws Exception {
+        if (args.length == 0) {
+            System.out.println("No module specified. Exiting...");
+            System.exit(1);
+        }
+        sinceCheckerTestHelper.testThisModule(args[0]);
+    }
 }

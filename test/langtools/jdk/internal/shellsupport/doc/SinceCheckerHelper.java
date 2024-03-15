@@ -56,7 +56,7 @@ public class SinceCheckerHelper {
         JavacTask ct = null;
         Path home = Paths.get(System.getProperty("java.home"));
         Path srcZip = home.resolve("lib").resolve("src.zip");
-        if (Files.isReadable(srcZip)) {
+        if (Files.isReadable(srcZip)){
             URI uri = URI.create("jar:" + srcZip.toUri());
             try (FileSystem zipFO = FileSystems.newFileSystem(uri, Collections.emptyMap())) {
                 Path root = zipFO.getRootDirectories().iterator().next();
@@ -79,7 +79,7 @@ public class SinceCheckerHelper {
                         ct.getElements().getAllModuleElements().stream()
                                 .forEach(me -> processModuleCheck(me, finalCt, sources));
                         if (!sb.isEmpty()) {
-                            throw new Exception("works");
+                            throw new Exception(sb.toString());
                         }
                     }
 
