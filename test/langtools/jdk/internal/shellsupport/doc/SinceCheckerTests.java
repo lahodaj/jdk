@@ -31,7 +31,7 @@
  *          jdk.compiler/com.sun.tools.javac.main
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
- * @run main JavaSinceCheckerTest java.base
+ * @run main SinceCheckerHelper java.base
  */
 
 /*
@@ -43,9 +43,9 @@
  *          jdk.compiler/com.sun.tools.javac.main
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
- * @run main JavaSinceCheckerTest java.desktop
+ * @run main SinceCheckerHelper java.desktop
  */
 
-public class JavaSinceCheckerTests {
+public class SinceCheckerTests {
 
 }
