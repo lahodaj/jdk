@@ -53,7 +53,7 @@ public class SinceCheckerHelper {
     static final String JDK13 = "13",JDK14="14";
 
     // only one hashmap is enough for now
-    public static Map<String, IntroducedIn> classDictionary = new HashMap<>();
+    public Map<String, IntroducedIn> classDictionary = new HashMap<>();
     public JavaCompiler tool;
     StringBuilder sb = new StringBuilder("");
     public static SinceCheckerHelper sinceCheckerTestHelper = new SinceCheckerHelper();
