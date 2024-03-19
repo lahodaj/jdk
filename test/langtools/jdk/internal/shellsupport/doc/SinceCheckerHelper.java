@@ -26,7 +26,6 @@ import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.Symbol;
 import jdk.internal.shellsupport.doc.JavadocHelper;
 //import jtreg.SkippedException;
-
 import javax.lang.model.element.*;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
@@ -51,7 +50,8 @@ public class SinceCheckerHelper {
             "method:java.lang.String:translateEscapes:()",
             "method:java.lang.String:formatted:(java.lang.Object[])");
 
-    static final int JdkStart = 9, currJDK = Runtime.version().feature();
+    static final int JDK_START = 9;
+    static final int CURR_JDK = Runtime.version().feature();
     static final String JDK13 = "13";
     static final String JDK14 = "14";
     public Map<String, IntroducedIn> classDictionary = new HashMap<>();
@@ -70,7 +70,7 @@ public class SinceCheckerHelper {
 
     public SinceCheckerHelper() throws IOException {
         tool = ToolProvider.getSystemJavaCompiler();
-        for (int i = JdkStart; i <= currJDK; i++) {
+        for (int i = JDK_START; i <= CURR_JDK; i++) {
             JavacTask ct = (JavacTask) tool.getTask(null, null, null,
                     List.of("--release", String.valueOf(i)), null,
                     Collections.singletonList(new JavaSource()));
@@ -164,7 +164,7 @@ public class SinceCheckerHelper {
                                 null,
                                 Collections.singletonList(new JavaSource()));
                         ct.analyze();
-                        processModuleCheck(ct.getElements().getModuleElement(moduleName), null, ct, sources);
+                        processModuleCheck(ct.getElements().getModuleElement(moduleName), ct, sources);
                         if (!errors.isEmpty()) {
                             throw new Exception(errors.toString());
                         }
@@ -177,9 +177,8 @@ public class SinceCheckerHelper {
 
     public Version checkElement(JavadocHelper javadocHelper, String uniqueId,
                                 String currentVersion, Version enclosingVersion, Element element) {
-        String comment = null;
         try {
-            comment = javadocHelper.getResolvedDocComment(element);
+            String comment = javadocHelper.getResolvedDocComment(element);
             Version sinceVersion = comment != null ? extractSinceVersion(comment) : null;
             if (sinceVersion == null ||
                     (enclosingVersion != null && enclosingVersion.compareTo(sinceVersion) > 0)) {
@@ -226,6 +225,7 @@ public class SinceCheckerHelper {
         if (matcher.find()) {
             String versionString = matcher.group(1);
 
+            assert versionString != null;
             if (versionString.equals("1.0")) {
                 //XXX
                 versionString = "1";
@@ -267,19 +267,19 @@ public class SinceCheckerHelper {
     }
 
 
-    private void processModuleCheck(ModuleElement moduleElement, String releaseVersion, JavacTask ct, List<Path> sources) {
+    private void processModuleCheck(ModuleElement moduleElement, JavacTask ct, List<Path> sources) {
         for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(moduleElement.getDirectives())) {
             if (ed.getTargetModules() == null) {
-                analyzePackageCheck(ed.getPackage(), releaseVersion, ct, sources);
+                analyzePackageCheck(ed.getPackage(), ct, sources);
             }
         }
     }
 
-    private void analyzePackageCheck(PackageElement pe, String s, JavacTask ct, List<Path> sources) {
+    private void analyzePackageCheck(PackageElement pe, JavacTask ct, List<Path> sources) {
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
             try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
-                analyzeClassCheck(te, s, javadocHelper, ct.getTypes(), null); /*XXX: since tag from package-info (?!)*/
+                analyzeClassCheck(te, null, javadocHelper, ct.getTypes(), null); /*XXX: since tag from package-info (?!)*/
             } catch (Exception e) {
                 e.printStackTrace();
             }
