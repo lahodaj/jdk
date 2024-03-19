@@ -135,7 +135,7 @@ public class SinceCheckerHelper {
     }
     public void testThisModule(String moduleName) throws Exception {
         List<Path> sources = new ArrayList<>();
-        JavacTask ct = null;
+
         Path home = Paths.get(System.getProperty("java.home"));
         Path srcZip = home.resolve("lib").resolve("src.zip");
         if (Files.isReadable(srcZip)) {
@@ -150,16 +150,15 @@ public class SinceCheckerHelper {
                     }
                     try (StandardJavaFileManager fm =
                                  tool.getStandardFileManager(null, null, null)) {
-                        ct = (JavacTask) tool.getTask(null,
+                        JavacTask ct = (JavacTask) tool.getTask(null,
                                 fm,
                                 null,
                                 List.of("--limit-modules", moduleName, "-d", "."),
                                 null,
                                 Collections.singletonList(new JavaSource()));
                         ct.analyze();
-                        JavacTask finalCt = ct;
                         ct.getElements().getAllModuleElements().stream()
-                                .forEach(me -> processModuleCheck(me, finalCt, sources));
+                                .forEach(me -> processModuleCheck(me, ct, sources));
                         if (!sb.isEmpty()) {
                             throw new Exception(sb.toString());
                         }
