@@ -25,7 +25,7 @@ import com.sun.source.util.JavacTask;
 import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.Symbol;
 import jdk.internal.shellsupport.doc.JavadocHelper;
-import jtreg.SkippedException;
+//import jtreg.SkippedException;
 
 import javax.lang.model.element.*;
 import javax.lang.model.util.ElementFilter;
@@ -141,8 +141,9 @@ public class SinceCheckerHelper {
         Path srcZip = home.resolve("lib").resolve("src.zip");
 
         File f = new File(srcZip.toUri());
-        if (f.exists() && !f.isDirectory()) {
-            throw new SkippedException("Skipping Test because src.zip wasn't found");
+        if (!f.exists() && !f.isDirectory()) {
+//            throw new SkippedException("Skipping Test because src.zip wasn't found");
+            throw new Exception("Skipping Test because src.zip wasn't found");
         }
         if (Files.isReadable(srcZip)) {
             URI uri = URI.create("jar:" + srcZip.toUri());

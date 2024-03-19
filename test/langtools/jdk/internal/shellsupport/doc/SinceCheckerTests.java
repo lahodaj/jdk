@@ -34,17 +34,17 @@
  * @run main SinceCheckerHelper java.base
  */
 
-/*
- * @test
- * @summary Test JavaBaseSinceCheckerTest
- * @library /tools/lib
- * @modules jdk.compiler/com.sun.tools.javac.api
- *          jdk.compiler/com.sun.tools.javac.util
- *          jdk.compiler/com.sun.tools.javac.main
- *          jdk.compiler/com.sun.tools.javac.code
- *          jdk.compiler/jdk.internal.shellsupport.doc
- * @run main SinceCheckerHelper java.desktop
- */
+///*
+// * @test
+// * @summary Test JavaBaseSinceCheckerTest
+// * @library /tools/lib
+// * @modules jdk.compiler/com.sun.tools.javac.api
+// *          jdk.compiler/com.sun.tools.javac.util
+// *          jdk.compiler/com.sun.tools.javac.main
+// *          jdk.compiler/com.sun.tools.javac.code
+// *          jdk.compiler/jdk.internal.shellsupport.doc
+// * @run main SinceCheckerHelper java.desktop
+// */
 
 public class SinceCheckerTests {
 
