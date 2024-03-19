@@ -49,7 +49,7 @@ public class SinceCheckerHelper {
             "method:java.lang.String:translateEscapes:()",
             "method:java.lang.String:formatted:(java.lang.Object[])");
 
-    static final int JDK9 = 9, JDK23 = 23;
+    static final int JDK9 = 9, currJDK = Runtime.version().feature();
     static final String JDK13 = "13", JDK14 = "14";
 
     // only one hashmap is enough for now
@@ -68,7 +68,7 @@ public class SinceCheckerHelper {
 
     public SinceCheckerHelper() {
         tool = ToolProvider.getSystemJavaCompiler();
-        for (int i = JDK9; i <= JDK23; i++) {
+        for (int i = JDK9; i <= currJDK; i++) {
             try {
                 JavacTask ct = (JavacTask) tool.getTask(null, null, null,
                         List.of("--release", String.valueOf(i)), null,
@@ -177,7 +177,7 @@ public class SinceCheckerHelper {
             comment = javadocHelper.getResolvedDocComment(element);
             Version sinceVersion = comment != null ? extractSinceVersion(comment) : null;
             if (sinceVersion == null ||
-                    (enclosingVersion != null && /*TODO: only when element overrides*/enclosingVersion.compareTo(sinceVersion) > 0)) {
+                    (enclosingVersion != null && enclosingVersion.compareTo(sinceVersion) > 0)) {
                 sinceVersion = enclosingVersion;
             }
             IntroducedIn mappedVersion = classDictionary.get(uniqueId);
