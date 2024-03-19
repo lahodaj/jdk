@@ -60,6 +60,7 @@ public class TestPackageHtml extends JavadocTester {
         checkExit(Exit.OK);
         checkOutput("index-all.html", true,
               """
+                  
                   <dl class="index">
                   <dt><a href="pkg2/package-summary.html">pkg2</a> - package pkg2</dt>
                   <dt><a href="pkg3/package-summary.html">pkg3</a> - package pkg3</dt>
