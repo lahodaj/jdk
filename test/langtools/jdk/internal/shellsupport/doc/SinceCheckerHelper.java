@@ -164,8 +164,7 @@ public class SinceCheckerHelper {
                                 null,
                                 Collections.singletonList(new JavaSource()));
                         ct.analyze();
-                        ct.getElements().getAllModuleElements().stream()
-                                .forEach(me -> processModuleCheck(me, null, ct, sources));
+                        processModuleCheck(ct.getElements().getModuleElement(moduleName), null, ct, sources);
                         if (!errors.isEmpty()) {
                             throw new Exception(errors.toString());
                         }
