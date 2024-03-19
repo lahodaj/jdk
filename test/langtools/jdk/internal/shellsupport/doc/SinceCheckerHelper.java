@@ -49,16 +49,17 @@ public class SinceCheckerHelper {
             "method:java.lang.String:translateEscapes:()",
             "method:java.lang.String:formatted:(java.lang.Object[])");
 
-    static final int JDK9 = 9, currJDK = Runtime.version().feature();
-    static final String JDK13 = "13", JDK14 = "14";
-
-    // only one hashmap is enough for now
+    static final int JdkStart = 9, currJDK = Runtime.version().feature();
+    static final String JDK13 = "13";
+    static final String JDK14 = "14";
     public Map<String, IntroducedIn> classDictionary = new HashMap<>();
     public JavaCompiler tool;
     StringBuilder sb = new StringBuilder("");
-    public static SinceCheckerHelper sinceCheckerTestHelper = new SinceCheckerHelper();
+    List<String> errors = new ArrayList<>();
 
     public static void main(String[] args) throws Exception {
+        SinceCheckerHelper sinceCheckerTestHelper = new SinceCheckerHelper();
+
         if (args.length == 0) {
             System.out.println("No module specified. Exiting...");
             System.exit(1);
@@ -66,20 +67,17 @@ public class SinceCheckerHelper {
         sinceCheckerTestHelper.testThisModule(args[0]);
     }
 
-    public SinceCheckerHelper() {
+    public SinceCheckerHelper() throws IOException {
         tool = ToolProvider.getSystemJavaCompiler();
-        for (int i = JDK9; i <= currJDK; i++) {
-            try {
-                JavacTask ct = (JavacTask) tool.getTask(null, null, null,
-                        List.of("--release", String.valueOf(i)), null,
-                        Collections.singletonList(new JavaSource()));
-                ct.analyze();
-                String version = String.valueOf(i);
-                ct.getElements().getAllModuleElements().forEach(me ->
-                        processModuleRecord(me, version, ct));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        for (int i = JdkStart; i <= currJDK; i++) {
+            JavacTask ct = (JavacTask) tool.getTask(null, null, null,
+                    List.of("--release", String.valueOf(i)), null,
+                    Collections.singletonList(new JavaSource()));
+            ct.analyze();
+            String version = String.valueOf(i);
+            ct.getElements().getAllModuleElements().forEach(me ->
+                    processModuleRecord(me, version, ct));
+
         }
     }
 
@@ -114,6 +112,7 @@ public class SinceCheckerHelper {
                 .map(TypeElement.class::cast)
                 .forEach(nestedClass -> analyzeClassRecord(nestedClass, version, types, elements));
     }
+
     public void persistElement(TypeElement clazz, Element element, Types types, String version) {
         String uniqueId = getElementName(clazz, element, types);
         classDictionary.computeIfAbsent(uniqueId,
@@ -133,6 +132,7 @@ public class SinceCheckerHelper {
             }
         }
     }
+
     public void testThisModule(String moduleName) throws Exception {
         List<Path> sources = new ArrayList<>();
 
