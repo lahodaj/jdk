@@ -56,7 +56,6 @@ public class SinceCheckerHelper {
     static final String JDK14 = "14";
     public Map<String, IntroducedIn> classDictionary = new HashMap<>();
     public JavaCompiler tool;
-    StringBuilder sb = new StringBuilder("");
     List<String> errors = new ArrayList<>();
 
     public static void main(String[] args) throws Exception {
@@ -166,8 +165,8 @@ public class SinceCheckerHelper {
                         ct.analyze();
                         ct.getElements().getAllModuleElements().stream()
                                 .forEach(me -> processModuleCheck(me, ct, sources));
-                        if (!sb.isEmpty()) {
-                            throw new Exception(sb.toString());
+                        if (!errors.isEmpty()) {
+                            throw new Exception(errors.toString());
                         }
                     }
 
@@ -261,7 +260,7 @@ public class SinceCheckerHelper {
                 sinceVersion = Version.parse("9"); //TODO: handle baseline version better
             }
             if (!sinceVersion.equals(Version.parse(mappedVersion))) {
-                sb.append("For  Element: " + elementSimpleName
+                errors.add("For  Element: " + elementSimpleName
                         + " Wrong since version " + sinceVersion + " instead of " + mappedVersion + "\n");
             }
         } catch (NumberFormatException e) {
