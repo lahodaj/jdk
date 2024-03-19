@@ -54,7 +54,7 @@ public class SinceCheckerHelper {
     static final String JDK14 = "14";
     public Map<String, IntroducedIn> classDictionary = new HashMap<>();
     public JavaCompiler tool;
-    StringBuilder sb = new StringBuilder("");
+    StringBuilder sb = new StringBuilder();
     List<String> errors = new ArrayList<>();
 
     public static void main(String[] args) throws Exception {
@@ -116,7 +116,7 @@ public class SinceCheckerHelper {
     public void persistElement(TypeElement clazz, Element element, Types types, String version) {
         String uniqueId = getElementName(clazz, element, types);
         classDictionary.computeIfAbsent(uniqueId,
-                i -> new IntroducedIn(null, null));
+                _ -> new IntroducedIn(null, null));
 
         IntroducedIn introduced = classDictionary.get(uniqueId);
 
@@ -133,7 +133,7 @@ public class SinceCheckerHelper {
         }
     }
 
-    public void testThisModule(String moduleName) throws Exception {
+    public void testThisModule(String moduleName) throws Exception ,IOException {
         List<Path> sources = new ArrayList<>();
 
         Path home = Paths.get(System.getProperty("java.home"));
@@ -157,8 +157,8 @@ public class SinceCheckerHelper {
                                 null,
                                 Collections.singletonList(new JavaSource()));
                         ct.analyze();
-                        ct.getElements().getAllModuleElements().stream()
-                                .forEach(me -> processModuleCheck(me, ct, sources));
+                        ct.getElements().getAllModuleElements()
+                                .forEach(me ->{ processModuleCheck(me, ct, sources);});
                         if (!sb.isEmpty()) {
                             throw new Exception(sb.toString());
                         }
@@ -171,9 +171,9 @@ public class SinceCheckerHelper {
 
     public Version checkElement(JavadocHelper javadocHelper, String uniqueId,
                                 String currentVersion, Version enclosingVersion, Element element) {
-        String comment = null;
+
         try {
-            comment = javadocHelper.getResolvedDocComment(element);
+            String comment = javadocHelper.getResolvedDocComment(element);
             Version sinceVersion = comment != null ? extractSinceVersion(comment) : null;
             if (sinceVersion == null ||
                     (enclosingVersion != null && enclosingVersion.compareTo(sinceVersion) > 0)) {
@@ -241,8 +241,6 @@ public class SinceCheckerHelper {
 
     private void checkEquals(Version sinceVersion, String mappedVersion, String elementSimpleName) {
         try {
-            //      System.err.println("For  Element: " + simpleName);
-            //      System.err.println("sinceVersion: " + sinceVersion + "\t mappedVersion: " +mappedVersion);
             if (sinceVersion == null) {
                 return;
             }
@@ -263,11 +261,11 @@ public class SinceCheckerHelper {
     }
 
 
-    public void processModuleCheck(ModuleElement moduleElement, JavacTask ct, List<Path> sources) {
+    public void processModuleCheck(ModuleElement moduleElement, JavacTask ct, List<Path> sources)throws IOException {
         processModuleCheck(moduleElement, null, ct, sources);
     }
 
-    private void processModuleCheck(ModuleElement moduleElement, String releaseVersion, JavacTask ct, List<Path> sources) {
+    private void processModuleCheck(ModuleElement moduleElement, String releaseVersion, JavacTask ct, List<Path> sources) throws IOException {
         for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(moduleElement.getDirectives())) {
             if (ed.getTargetModules() == null) {
                 analyzePackageCheck(ed.getPackage(), releaseVersion, ct, sources);
@@ -275,13 +273,11 @@ public class SinceCheckerHelper {
         }
     }
 
-    private void analyzePackageCheck(PackageElement pe, String s, JavacTask ct, List<Path> sources) {
+    private void analyzePackageCheck(PackageElement pe, String s, JavacTask ct, List<Path> sources) throws IOException {
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
             try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
                 analyzeClassCheck(te, s, javadocHelper, ct.getTypes(), null); /*XXX: since tag from package-info (?!)*/
-            } catch (Exception e) {
-                e.printStackTrace();
             }
         }
     }
