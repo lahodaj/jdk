@@ -164,7 +164,7 @@ public class SinceCheckerHelper {
                                 Collections.singletonList(new JavaSource()));
                         ct.analyze();
                         ct.getElements().getAllModuleElements().stream()
-                                .forEach(me -> processModuleCheck(me, ct, sources));
+                                .forEach(me -> processModuleCheck(me, null, ct, sources));
                         if (!errors.isEmpty()) {
                             throw new Exception(errors.toString());
                         }
@@ -247,8 +247,6 @@ public class SinceCheckerHelper {
 
     private void checkEquals(Version sinceVersion, String mappedVersion, String elementSimpleName) {
         try {
-            //      System.err.println("For  Element: " + simpleName);
-            //      System.err.println("sinceVersion: " + sinceVersion + "\t mappedVersion: " +mappedVersion);
             if (sinceVersion == null) {
                 return;
             }
@@ -268,10 +266,6 @@ public class SinceCheckerHelper {
         }
     }
 
-
-    public void processModuleCheck(ModuleElement moduleElement, JavacTask ct, List<Path> sources) {
-        processModuleCheck(moduleElement, null, ct, sources);
-    }
 
     private void processModuleCheck(ModuleElement moduleElement, String releaseVersion, JavacTask ct, List<Path> sources) {
         for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(moduleElement.getDirectives())) {
