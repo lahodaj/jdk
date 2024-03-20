@@ -56,7 +56,7 @@ public class SinceCheckerHelper {
     static final String JDK13 = "13";
     static final String JDK14 = "14";
     private Map<String, IntroducedIn> classDictionary = new HashMap<>();
-    private JavaCompiler tool;
+    private final JavaCompiler tool;
     private List<String> wrongTagsList = new ArrayList<>();
 
     public static void main(String[] args) throws Exception {
@@ -138,7 +138,7 @@ public class SinceCheckerHelper {
         List<Path> sources = new ArrayList<>();
 
         Path home = Paths.get(System.getProperty("java.home"));
-        Path srcZip = home.resolve("lib").resolve("src.zip");
+        Path srcZip = Path.of("/Users/nizarbenalla/IdeaProjects/jdk/build/macosx-aarch64-server-release/images/jdk/lib/src.zip");
 
         File f = new File(srcZip.toUri());
         if (!f.exists() && !f.isDirectory()) {
@@ -176,7 +176,7 @@ public class SinceCheckerHelper {
     }
 
     private Version checkElement(TypeElement clazz, Element element, Types types,
-                                JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
+                                 JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
         String uniqueId = getElementName(clazz, element, types);
 
 
@@ -247,7 +247,7 @@ public class SinceCheckerHelper {
         if (!sinceVersion.equals(Version.parse(mappedVersion))) {
             String message = (Version.parse(mappedVersion).compareTo(Version.parse("9")) > 0) ?
                     "Wrong since version " + sinceVersion + " instead of " + mappedVersion :
-                    "Existed in JDK 9 or older, instead of " + sinceVersion;
+                    "Wrong since version " + sinceVersion + " but existed in JDK 9 or older";
             wrongTagsList.add("For Element: " + elementSimpleName + " " + message + "\n");
         }
     }
