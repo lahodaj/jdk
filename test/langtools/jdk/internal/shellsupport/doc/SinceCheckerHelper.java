@@ -73,7 +73,7 @@ public class SinceCheckerHelper {
         for (int i = JDK_START; i <= CURR_JDK; i++) {
             JavacTask ct = (JavacTask) tool.getTask(null, null, null,
                     List.of("--release", String.valueOf(i)), null,
-                    Collections.singletonList(new JavaSource()));
+                    Collections.singletonList(new SimpleJavaFileObject().f);
             ct.analyze();
             String version = String.valueOf(i);
             ct.getElements().getAllModuleElements().forEach(me ->
@@ -162,7 +162,7 @@ public class SinceCheckerHelper {
                                 null,
                                 List.of("--limit-modules", moduleName, "-d", "."),
                                 null,
-                                Collections.singletonList(new JavaSource()));
+                                Collections.singletonList(SimpleJavaFileObject.forSource(URI.create("CompiledCode.java"), "")));
                         ct.analyze();
                         processModuleCheck(ct.getElements().getModuleElement(moduleName), ct, sources);
                         if (!errors.isEmpty()) {
@@ -323,19 +323,6 @@ public class SinceCheckerHelper {
             suffix = ":" + te.getQualifiedName();
         }
         return prefix + suffix;
-    }
-
-    private static class JavaSource extends SimpleJavaFileObject {
-        private static final String TEXT = "";
-
-        public JavaSource() {
-            super(URI.create("myfo:/Test.java"), Kind.SOURCE);
-        }
-
-        @Override
-        public CharSequence getCharContent(boolean ignoreEncodingErrors) {
-            return TEXT;
-        }
     }
 
     public record IntroducedIn(String introducedPreview, String introducedStable) {
