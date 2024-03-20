@@ -45,6 +45,7 @@ public class SinceCheckerHelper {
 
     //these are methods that were preview in JDK 13 and JDK 14, before the introduction
     //of the @PreviewFeature
+    // TODO add a bit more to include  java.compiler and jdk.compiler
     static final Set<String> LEGACY_PREVIEW_METHODS = Set.of(
             "method:java.lang.String:stripIndent:()",
             "method:java.lang.String:translateEscapes:()",
@@ -173,6 +174,7 @@ public class SinceCheckerHelper {
             }
         }
     }
+
     public Version checkElement(TypeElement clazz, Element element, Types types,
                                 JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
         String uniqueId = getElementName(clazz, element, types);
@@ -182,7 +184,7 @@ public class SinceCheckerHelper {
         try {
             comment = javadocHelper.getResolvedDocComment(element);
         } catch (IOException e) {
-            throw new RuntimeException("JavadocHelper failed for "+element);
+            throw new RuntimeException("JavadocHelper failed for " + element);
         }
         Version sinceVersion = comment != null ? extractSinceVersion(comment) : null;
         if (sinceVersion == null ||
@@ -196,6 +198,7 @@ public class SinceCheckerHelper {
         checkEquals(sinceVersion, realMappedVersion, uniqueId);
         return sinceVersion;
     }
+
     private boolean isPreview(Element el, String uniqueId, String currentVersion) {
         while (el != null) {
             Symbol s = (Symbol) el;
@@ -211,25 +214,19 @@ public class SinceCheckerHelper {
     }
 
 
-
     private Version extractSinceVersion(String documentation) {
         Pattern pattern = Pattern.compile("@since\\s+(\\d+(?:\\.\\d+)?)");
         Matcher matcher = pattern.matcher(documentation);
         if (matcher.find()) {
             String versionString = matcher.group(1);
             assert versionString != null;
-            if (versionString.equals("1.0")) {
-                //XXX
-                versionString = "1";
-            } else if (versionString.startsWith("1.")) {
+            if (versionString.startsWith("1.")) {
                 versionString = versionString.substring(2);
             }
-
             try {
                 return Version.parse(versionString);
             } catch (NumberFormatException ex) {
-                System.err.println("@since value that cannot be parsed: " + versionString);
-                return null;
+                throw new IllegalArgumentException("@since value that cannot be parsed: " + versionString);
             }
         } else {
             return null;
@@ -238,19 +235,19 @@ public class SinceCheckerHelper {
 
 
     private void checkEquals(Version sinceVersion, String mappedVersion, String elementSimpleName) {
-            if (sinceVersion == null) {
-                return;
-            }
-            if (mappedVersion == null) {
-                throw new IllegalArgumentException("check for why mapped version is null for" + elementSimpleName);
-            }
-            if (Version.parse("9").compareTo(sinceVersion) > 0) {
-                sinceVersion = Version.parse("Existed since JDK 9 or older");
-            }
-            if (!sinceVersion.equals(Version.parse(mappedVersion))) {
-                wrongTagsList.add("For  Element: " + elementSimpleName
-                        + " Wrong since version " + sinceVersion + " instead of " + mappedVersion + "\n");
-            }
+        if (sinceVersion == null) {
+            return;
+        }
+        if (mappedVersion == null) {
+            throw new IllegalArgumentException("check for why mapped version is null for" + elementSimpleName);
+        }
+        if (Version.parse("9").compareTo(sinceVersion) > 0) {
+            sinceVersion = Version.parse("Existed since JDK 9 or older");
+        }
+        if (!sinceVersion.equals(Version.parse(mappedVersion))) {
+            wrongTagsList.add("For  Element: " + elementSimpleName
+                    + " Wrong since version " + sinceVersion + " instead of " + mappedVersion + "\n");
+        }
     }
 
 
