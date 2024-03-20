@@ -57,7 +57,7 @@ public class SinceCheckerHelper {
     static final String JDK14 = "14";
     private Map<String, IntroducedIn> classDictionary = new HashMap<>();
     private JavaCompiler tool;
-    List<String> wrongTagsList = new ArrayList<>();
+    private List<String> wrongTagsList = new ArrayList<>();
 
     public static void main(String[] args) throws Exception {
         SinceCheckerHelper sinceCheckerTestHelper = new SinceCheckerHelper();
@@ -69,7 +69,7 @@ public class SinceCheckerHelper {
         sinceCheckerTestHelper.testThisModule(args[0]);
     }
 
-    public SinceCheckerHelper() throws IOException {
+    private SinceCheckerHelper() throws IOException {
         tool = ToolProvider.getSystemJavaCompiler();
         for (int i = JDK_START; i <= CURR_JDK; i++) {
             JavacTask ct = (JavacTask) tool.getTask(null, null, null,
@@ -117,7 +117,7 @@ public class SinceCheckerHelper {
     private void persistElement(TypeElement clazz, Element element, Types types, String version) {
         String uniqueId = getElementName(clazz, element, types);
         classDictionary.computeIfAbsent(uniqueId,
-                i -> new IntroducedIn(null, null));
+                _ -> new IntroducedIn(null, null));
 
         IntroducedIn introduced = classDictionary.get(uniqueId);
 
