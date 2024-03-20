@@ -55,8 +55,8 @@ public class SinceCheckerHelper {
     static final int CURR_JDK = Runtime.version().feature();
     static final String JDK13 = "13";
     static final String JDK14 = "14";
-    public Map<String, IntroducedIn> classDictionary = new HashMap<>();
-    public JavaCompiler tool;
+    private Map<String, IntroducedIn> classDictionary = new HashMap<>();
+    private JavaCompiler tool;
     List<String> wrongTagsList = new ArrayList<>();
 
     public static void main(String[] args) throws Exception {
@@ -82,7 +82,7 @@ public class SinceCheckerHelper {
         }
     }
 
-    public void processModuleRecord(ModuleElement moduleElement, String releaseVersion, JavacTask ct) {
+    private void processModuleRecord(ModuleElement moduleElement, String releaseVersion, JavacTask ct) {
         for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(moduleElement.getDirectives())) {
             if (ed.getTargetModules() == null) {
                 analyzePackageRecord(ed.getPackage(), releaseVersion, ct);
@@ -114,7 +114,7 @@ public class SinceCheckerHelper {
                 .forEach(nestedClass -> analyzeClassRecord(nestedClass, version, types, elements));
     }
 
-    public void persistElement(TypeElement clazz, Element element, Types types, String version) {
+    private void persistElement(TypeElement clazz, Element element, Types types, String version) {
         String uniqueId = getElementName(clazz, element, types);
         classDictionary.computeIfAbsent(uniqueId,
                 i -> new IntroducedIn(null, null));
@@ -175,7 +175,7 @@ public class SinceCheckerHelper {
         }
     }
 
-    public Version checkElement(TypeElement clazz, Element element, Types types,
+    private Version checkElement(TypeElement clazz, Element element, Types types,
                                 JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
         String uniqueId = getElementName(clazz, element, types);
 
@@ -287,7 +287,7 @@ public class SinceCheckerHelper {
                 .forEach(nestedClass -> analyzeClassCheck(nestedClass, version, javadocHelper, types, currentVersion));
     }
 
-    public String getElementName(TypeElement te, Element element, Types types) {
+    private String getElementName(TypeElement te, Element element, Types types) {
         String prefix = "";
         String suffix = "";
 
@@ -309,6 +309,6 @@ public class SinceCheckerHelper {
         return prefix + suffix;
     }
 
-    public record IntroducedIn(String introducedPreview, String introducedStable) {
+    private record IntroducedIn(String introducedPreview, String introducedStable) {
     }
 }
