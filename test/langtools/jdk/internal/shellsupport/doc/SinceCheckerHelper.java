@@ -138,7 +138,7 @@ public class SinceCheckerHelper {
         List<Path> sources = new ArrayList<>();
 
         Path home = Paths.get(System.getProperty("java.home"));
-        Path srcZip = Path.of("/Users/nizarbenalla/IdeaProjects/jdk/build/macosx-aarch64-server-release/images/jdk/lib/src.zip");
+        Path srcZip = home.resolve("lib").resolve("src.zip");
 
         File f = new File(srcZip.toUri());
         if (!f.exists() && !f.isDirectory()) {
