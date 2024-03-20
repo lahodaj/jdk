@@ -138,7 +138,7 @@ public class SinceCheckerHelper {
         List<Path> sources = new ArrayList<>();
 
         Path home = Paths.get(System.getProperty("java.home"));
-        Path srcZip = Path.of("/Users/nizarbenalla/IdeaProjects/jdk/build/macosx-aarch64-server-release/images/jdk/lib/src.zip");
+        Path srcZip = home.resolve("lib").resolve("src.zip");
 
         File f = new File(srcZip.toUri());
         if (!f.exists() && !f.isDirectory()) {
@@ -245,8 +245,10 @@ public class SinceCheckerHelper {
             sinceVersion = Version.parse("9");
         }
         if (!sinceVersion.equals(Version.parse(mappedVersion))) {
-            wrongTagsList.add("For  Element: " + elementSimpleName
-                    + " Wrong since version " + sinceVersion + " instead of " + mappedVersion + "\n");
+            String message = (Version.parse(mappedVersion).compareTo(Version.parse("9")) > 0) ?
+                    "Wrong since version " + sinceVersion + " instead of " + mappedVersion :
+                    "Existed in JDK 9 or older, instead of " + sinceVersion;
+            wrongTagsList.add("For Element: " + elementSimpleName + " " + message + "\n");
         }
     }
 
