@@ -182,7 +182,7 @@ public class SinceCheckerHelper {
         try {
             comment = javadocHelper.getResolvedDocComment(element);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("JavadocHelper failed for "+element);
         }
         Version sinceVersion = comment != null ? extractSinceVersion(comment) : null;
         if (sinceVersion == null ||
@@ -204,10 +204,10 @@ public class SinceCheckerHelper {
             }
             el = el.getEnclosingElement();
         }
-        boolean legacyPreview = LEGACY_PREVIEW_METHODS.contains(uniqueId)
+        return LEGACY_PREVIEW_METHODS.contains(uniqueId)
                 &&
                 (JDK13.equals(currentVersion) || JDK14.equals(currentVersion));
-        return legacyPreview;
+
     }
 
 
