@@ -134,7 +134,7 @@ public class SinceCheckerHelper {
         }
     }
 
-    public void testThisModule(String moduleName) throws Exception {
+    private void testThisModule(String moduleName) throws Exception {
         List<Path> sources = new ArrayList<>();
 
         Path home = Paths.get(System.getProperty("java.home"));
