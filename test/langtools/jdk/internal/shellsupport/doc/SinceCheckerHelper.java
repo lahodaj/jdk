@@ -73,12 +73,11 @@ public class SinceCheckerHelper {
         for (int i = JDK_START; i <= CURR_JDK; i++) {
             JavacTask ct = (JavacTask) tool.getTask(null, null, null,
                     List.of("--release", String.valueOf(i)), null,
-                    Collections.singletonList(new SimpleJavaFileObject().f);
+                    Collections.singletonList(SimpleJavaFileObject.forSource(URI.create("myfo:/Test.java"), "")));
             ct.analyze();
             String version = String.valueOf(i);
             ct.getElements().getAllModuleElements().forEach(me ->
                     processModuleRecord(me, version, ct));
-
         }
     }
 
@@ -162,7 +161,7 @@ public class SinceCheckerHelper {
                                 null,
                                 List.of("--limit-modules", moduleName, "-d", "."),
                                 null,
-                                Collections.singletonList(SimpleJavaFileObject.forSource(URI.create("CompiledCode.java"), "")));
+                                Collections.singletonList(SimpleJavaFileObject.forSource(URI.create("myfo:/Test.java"), "")));
                         ct.analyze();
                         processModuleCheck(ct.getElements().getModuleElement(moduleName), ct, sources);
                         if (!errors.isEmpty()) {
