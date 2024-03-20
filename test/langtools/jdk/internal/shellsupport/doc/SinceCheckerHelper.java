@@ -56,7 +56,7 @@ public class SinceCheckerHelper {
     static final String JDK14 = "14";
     public Map<String, IntroducedIn> classDictionary = new HashMap<>();
     public JavaCompiler tool;
-    List<String> errors = new ArrayList<>();
+    List<String> wrongTagsList = new ArrayList<>();
 
     public static void main(String[] args) throws Exception {
         SinceCheckerHelper sinceCheckerTestHelper = new SinceCheckerHelper();
@@ -164,8 +164,8 @@ public class SinceCheckerHelper {
                                 Collections.singletonList(SimpleJavaFileObject.forSource(URI.create("myfo:/Test.java"), "")));
                         ct.analyze();
                         processModuleCheck(ct.getElements().getModuleElement(moduleName), ct, sources);
-                        if (!errors.isEmpty()) {
-                            throw new Exception(errors.toString());
+                        if (!wrongTagsList.isEmpty()) {
+                            throw new Exception(wrongTagsList.toString());
                         }
                     }
 
@@ -173,31 +173,29 @@ public class SinceCheckerHelper {
             }
         }
     }
+    public Version checkElement(TypeElement clazz, Element element, Types types,
+                                JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
+        String uniqueId = getElementName(clazz, element, types);
 
-    public Version checkElement(JavadocHelper javadocHelper, String uniqueId,
-                                String currentVersion, Version enclosingVersion, Element element) {
+
+        String comment = null;
         try {
-            String comment = javadocHelper.getResolvedDocComment(element);
-            Version sinceVersion = comment != null ? extractSinceVersion(comment) : null;
-            if (sinceVersion == null ||
-                    (enclosingVersion != null && enclosingVersion.compareTo(sinceVersion) > 0)) {
-                sinceVersion = enclosingVersion;
-            }
-            IntroducedIn mappedVersion = classDictionary.get(uniqueId);
-            try {
-                String realMappedVersion = isPreview(element, uniqueId, currentVersion) ?
-                        mappedVersion.introducedPreview() :
-                        mappedVersion.introducedStable();
-                checkEquals(sinceVersion, realMappedVersion, uniqueId);
-            } catch (Exception e) {
-                System.err.println("Error for " + uniqueId + " " + e.getMessage());
-            }
-            return sinceVersion;
+            comment = javadocHelper.getResolvedDocComment(element);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        Version sinceVersion = comment != null ? extractSinceVersion(comment) : null;
+        if (sinceVersion == null ||
+                (enclosingVersion != null && enclosingVersion.compareTo(sinceVersion) > 0)) {
+            sinceVersion = enclosingVersion;
+        }
+        IntroducedIn mappedVersion = classDictionary.get(uniqueId);
+        String realMappedVersion = isPreview(element, uniqueId, currentVersion) ?
+                mappedVersion.introducedPreview() :
+                mappedVersion.introducedStable();
+        checkEquals(sinceVersion, realMappedVersion, uniqueId);
+        return sinceVersion;
     }
-
     private boolean isPreview(Element el, String uniqueId, String currentVersion) {
         while (el != null) {
             Symbol s = (Symbol) el;
@@ -212,18 +210,13 @@ public class SinceCheckerHelper {
         return legacyPreview;
     }
 
-    public Version checkElement(TypeElement clazz, Element element, Types types,
-                                JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
-        String uniqueId = getElementName(clazz, element, types);
-        return checkElement(javadocHelper, uniqueId, currentVersion, enclosingVersion, element);
-    }
+
 
     private Version extractSinceVersion(String documentation) {
         Pattern pattern = Pattern.compile("@since\\s+(\\d+(?:\\.\\d+)?)");
         Matcher matcher = pattern.matcher(documentation);
         if (matcher.find()) {
             String versionString = matcher.group(1);
-
             assert versionString != null;
             if (versionString.equals("1.0")) {
                 //XXX
@@ -245,24 +238,19 @@ public class SinceCheckerHelper {
 
 
     private void checkEquals(Version sinceVersion, String mappedVersion, String elementSimpleName) {
-        try {
             if (sinceVersion == null) {
                 return;
             }
             if (mappedVersion == null) {
-                System.out.println("check for why mapped version is null for" + elementSimpleName);
-                return;
+                throw new IllegalArgumentException("check for why mapped version is null for" + elementSimpleName);
             }
             if (Version.parse("9").compareTo(sinceVersion) > 0) {
-                sinceVersion = Version.parse("9"); //TODO: handle baseline version better
+                sinceVersion = Version.parse("Existed since JDK 9 or older");
             }
             if (!sinceVersion.equals(Version.parse(mappedVersion))) {
-                errors.add("For  Element: " + elementSimpleName
+                wrongTagsList.add("For  Element: " + elementSimpleName
                         + " Wrong since version " + sinceVersion + " instead of " + mappedVersion + "\n");
             }
-        } catch (NumberFormatException e) {
-            System.err.println("Element: " + elementSimpleName + "\t Invalid number: " + sinceVersion);
-        }
     }
 
 
