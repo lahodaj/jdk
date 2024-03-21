@@ -164,8 +164,7 @@ public class SinceCheckerHelper {
                                 null,
                                 Collections.singletonList(SimpleJavaFileObject.forSource(URI.create("myfo:/Test.java"), "")));
                         ct.analyze();
-                        ct.getElements().getAllModuleElements().stream()
-                                .forEach(me -> processModuleCheck(me, ct, sources));
+                        processModuleCheck(ct.getElements().getModuleElement(moduleName), ct, sources);
                         if (!wrongTagsList.isEmpty()) {
                             throw new Exception(wrongTagsList.toString());
                         }
