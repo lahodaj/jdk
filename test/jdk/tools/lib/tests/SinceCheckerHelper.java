@@ -47,10 +47,16 @@ public class SinceCheckerHelper {
     //of the @PreviewFeature
     // TODO add a bit more to include  java.compiler and jdk.compiler
     static final Set<String> LEGACY_PREVIEW_METHODS = Set.of(
+            //13
             "method:java.lang.String:stripIndent:()",
             "method:java.lang.String:translateEscapes:()",
-            "method:java.lang.String:formatted:(java.lang.Object[])");
-
+            "method:java.lang.String:formatted:(java.lang.Object[])",
+            "method:com.sun.source.util.SimpleTreeVisitor:visitYield:(com.sun.source.tree.YieldTree,java.lang.Object)",
+            "method:com.sun.source.util.TreeScanner:visitYield:(com.sun.source.tree.YieldTree,java.lang.Object)",
+            "method:com.sun.source.tree.TreeVisitor:visitYield:(com.sun.source.tree.YieldTree,java.lang.Object)",
+            "field:com.sun.source.tree.Tree.Kind:YIELD"
+//           , "interface:com.sun.source.tree.YieldTree"
+            );
 
     static final String JDK13 = "13";
     static final String JDK14 = "14";
@@ -68,7 +74,7 @@ public class SinceCheckerHelper {
         sinceCheckerTestHelper.testThisModule(args[0]);
     }
 
-    private SinceCheckerHelper() throws IOException {
+    private SinceCheckerHelper() throws Exception {
         tool = ToolProvider.getSystemJavaCompiler();
         for (int i = 9; i <= Runtime.version().feature(); i++) {
             JavacTask ct = (JavacTask) tool.getTask(null, null, null,
@@ -218,12 +224,12 @@ public class SinceCheckerHelper {
         if (matcher.find()) {
             String versionString = matcher.group(1);
             try {
-            if (versionString.equals("1.0")) {
-                //XXX
-                versionString = "1";
-            } else if (versionString.startsWith("1.")) {
-                versionString = versionString.substring(2);
-            }
+                if (versionString.equals("1.0")) {
+                    //XXX
+                    versionString = "1";
+                } else if (versionString.startsWith("1.")) {
+                    versionString = versionString.substring(2);
+                }
                 return Version.parse(versionString);
             } catch (NumberFormatException ex) {
                 System.err.println("@since value that cannot be parsed: " + versionString);
@@ -303,7 +309,8 @@ public class SinceCheckerHelper {
                     .map(p -> types.erasure(p.asType()).toString())
                     .collect(Collectors.joining(",", "(", ")"));
             suffix = ":" + te.getQualifiedName() + ":" + methodName + ":" + descriptor;
-        } else if (element.getKind().isDeclaredType()) {
+        } else if (element.getKind().isClass()) {
+            //TODO should I be using getDeclared type? and split .isClass and isInterface here?
             prefix = "class";
             suffix = ":" + te.getQualifiedName();
         }
