@@ -51,8 +51,7 @@ public class SinceCheckerHelper {
             "method:java.lang.String:translateEscapes:()",
             "method:java.lang.String:formatted:(java.lang.Object[])");
 
-    static final int JDK_START = 9;
-    static final int CURR_JDK = Runtime.version().feature();
+
     static final String JDK13 = "13";
     static final String JDK14 = "14";
     private Map<String, IntroducedIn> classDictionary = new HashMap<>();
@@ -71,7 +70,7 @@ public class SinceCheckerHelper {
 
     private SinceCheckerHelper() throws IOException {
         tool = ToolProvider.getSystemJavaCompiler();
-        for (int i = JDK_START; i <= CURR_JDK; i++) {
+        for (int i = 9; i <= Runtime.version().feature(); i++) {
             JavacTask ct = (JavacTask) tool.getTask(null, null, null,
                     List.of("--release", String.valueOf(i)), null,
                     Collections.singletonList(SimpleJavaFileObject.forSource(URI.create("myfo:/Test.java"), "")));
@@ -139,7 +138,7 @@ public class SinceCheckerHelper {
 
 //        Path home = Paths.get(System.getProperty("java.home"));
 //        Path srcZip = home.resolve("lib").resolve("src.zip");
-        Path srcZip = Path.of(pathAPIKEY.pathToSRC);
+        Path srcZip = Path.of(pathToAPIKEY.pathToSRC);
         File f = new File(srcZip.toUri());
         if (!f.exists() && !f.isDirectory()) {
 //            throw new SkippedException("Skipping Test because src.zip wasn't found");
