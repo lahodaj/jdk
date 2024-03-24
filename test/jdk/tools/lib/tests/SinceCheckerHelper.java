@@ -46,7 +46,7 @@ public class SinceCheckerHelper {
     //these are methods that were preview in JDK 13 and JDK 14, before the introduction
     //of the @PreviewFeature
     // TODO add a bit more to include  java.compiler and jdk.compiler
-    static final Set<String> LEGACY_PREVIEW_METHODS = Set.of(
+    private final Set<String> LEGACY_PREVIEW_METHODS = Set.of(
             //13
             "method:java.lang.String:stripIndent:()",
             "method:java.lang.String:translateEscapes:()",
@@ -55,14 +55,85 @@ public class SinceCheckerHelper {
             "method:com.sun.source.util.TreeScanner:visitYield:(com.sun.source.tree.YieldTree,java.lang.Object)",
             "method:com.sun.source.tree.TreeVisitor:visitYield:(com.sun.source.tree.YieldTree,java.lang.Object)",
             "field:com.sun.source.tree.Tree.Kind:YIELD"
-//           , "interface:com.sun.source.tree.YieldTree"
-            );
+//            , "interface:com.sun.source.tree.YieldTree"
 
-    static final String JDK13 = "13";
-    static final String JDK14 = "14";
-    private Map<String, IntroducedIn> classDictionary = new HashMap<>();
+            //12
+
+    );
+
+//    JDK 9
+//./jdk/src/java.base/share/classes/jdk/internal/reflect/Reflection.java:    @Deprecated(forRemoval=true)
+//./jdk/src/jdk.unsupported/share/classes/sun/reflect/Reflection.java:    @Deprecated(forRemoval=true)
+
+//    JDK 10 and 11 = nothing found
+// JDK 12
+
+//./src/jdk.compiler/share/classes/com/sun/source/tree/Tree.java:        @Deprecated(forRemoval=true, since="12")
+//./src/jdk.compiler/share/classes/com/sun/source/tree/CaseTree.java:    @Deprecated(forRemoval=true, since="12")
+//./src/jdk.compiler/share/classes/com/sun/source/tree/CaseTree.java:    @Deprecated(forRemoval=true, since="12")
+//./src/jdk.compiler/share/classes/com/sun/source/tree/CaseTree.java:    @Deprecated(forRemoval=true, since="12")
+//./src/jdk.compiler/share/classes/com/sun/source/tree/CaseTree.java:    @Deprecated(forRemoval=true, since="12")
+//./src/jdk.compiler/share/classes/com/sun/source/tree/SwitchExpressionTree.java:@Deprecated(forRemoval=true, since="12")
+//./src/jdk.compiler/share/classes/com/sun/source/tree/TreeVisitor.java:    @Deprecated(forRemoval=true, since="12")
+//./src/jdk.compiler/share/classes/com/sun/source/tree/BreakTree.java:    @Deprecated(forRemoval=true, since="12")
+//./src/jdk.compiler/share/classes/com/sun/source/util/SimpleTreeVisitor.java:    @Deprecated(forRemoval=true, since="12")
+//./src/jdk.compiler/share/classes/com/sun/source/util/TreeScanner.java:    @Deprecated(forRemoval=true, since="12")
+
+
+    //JDK 14
+//    ./src/java.compiler/share/classes/javax/lang/model/util/AbstractElementVisitor14.java:@jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.compiler/share/classes/javax/lang/model/util/SimpleElementVisitor14.java:@jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.compiler/share/classes/javax/lang/model/util/ElementKindVisitor14.java:@jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.compiler/share/classes/javax/lang/model/util/ElementKindVisitor6.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.compiler/share/classes/javax/lang/model/util/Elements.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.compiler/share/classes/javax/lang/model/util/ElementFilter.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.compiler/share/classes/javax/lang/model/util/ElementFilter.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.compiler/share/classes/javax/lang/model/util/ElementScanner14.java:@jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.compiler/share/classes/javax/lang/model/element/ElementVisitor.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.compiler/share/classes/javax/lang/model/element/TypeElement.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.compiler/share/classes/javax/lang/model/element/ElementKind.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.compiler/share/classes/javax/lang/model/element/ElementKind.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.compiler/share/classes/javax/lang/model/element/ElementKind.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.PATTERN_MATCHING_IN_INSTANCEOF,
+//            ./src/java.compiler/share/classes/javax/lang/model/element/RecordComponentElement.java:@jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/jdk.compiler/share/classes/com/sun/source/tree/Tree.java:        @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.base/share/classes/sun/reflect/annotation/TypeAnnotation.java:        @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.base/share/classes/java/lang/reflect/RecordComponent.java:@jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.base/share/classes/java/lang/runtime/ObjectMethods.java:@jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.base/share/classes/java/lang/annotation/ElementType.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.base/share/classes/java/lang/Class.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.base/share/classes/java/lang/Class.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/java.base/share/classes/java/lang/String.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.TEXT_BLOCKS,
+//            ./src/java.base/share/classes/java/lang/String.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.TEXT_BLOCKS,
+//            ./src/java.base/share/classes/java/lang/String.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.TEXT_BLOCKS,
+//            ./src/java.base/share/classes/java/lang/Record.java:@jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
+//            ./src/jdk.jshell/share/classes/jdk/jshell/Snippet.java:        @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS)
+//            ./test/langtools/tools/javac/preview/PreviewErrors.java:                                @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.${preview}
+//            ./test/langtools/tools/javac/preview/PreviewErrors.java:                                @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.${preview}
+
+
+//    nizarbenalla@nizarbenalla-mac jdk15-master % grep -r '@Deprecated(forRemoval=true, since="15")' ./src/*
+//./src/java.rmi/share/classes/java/rmi/activation/ActivationGroup.java:@Deprecated(forRemoval=true, since="15")
+//./src/java.rmi/share/classes/java/rmi/activation/ActivateFailedException.java:@Deprecated(forRemoval=true, since="15")
+//./src/java.rmi/share/classes/java/rmi/activation/ActivationException.java:@Deprecated(forRemoval=true, since="15")
+//./src/java.rmi/share/classes/java/rmi/activation/ActivationDesc.java:@Deprecated(forRemoval=true, since="15")
+//./src/java.rmi/share/classes/java/rmi/activation/UnknownObjectException.java:@Deprecated(forRemoval=true, since="15")
+//./src/java.rmi/share/classes/java/rmi/activation/ActivationGroupDesc.java:@Deprecated(forRemoval=true, since="15")
+//./src/java.rmi/share/classes/java/rmi/activation/ActivationInstantiator.java:@Deprecated(forRemoval=true, since="15")
+//./src/java.rmi/share/classes/java/rmi/activation/ActivationSystem.java:@Deprecated(forRemoval=true, since="15")
+//./src/java.rmi/share/classes/java/rmi/activation/ActivationGroup_Stub.java:@Deprecated(forRemoval=true, since="15")
+//./src/java.rmi/share/classes/java/rmi/activation/ActivationID.java:@Deprecated(forRemoval=true, since="15")
+//./src/java.rmi/share/classes/java/rmi/activation/UnknownGroupException.java:@Deprecated(forRemoval=true, since="15")
+//./src/java.rmi/share/classes/java/rmi/activation/Activator.java:@Deprecated(forRemoval=true, since="15")
+//./src/java.rmi/share/classes/java/rmi/activation/ActivationMonitor.java:@Deprecated(forRemoval=true, since="15")
+//./src/java.rmi/share/classes/java/rmi/activation/Activatable.java:@Deprecated(forRemoval=true, since="15")
+//./src/java.rmi/share/classes/java/rmi/activation/ActivationGroupID.java:@Deprecated(forRemoval=true, since="15")
+//./src/java.rmi/share/classes/com/sun/rmi/rmid/ExecOptionPermission.java:@Deprecated(forRemoval=true, since="15")
+//./src/java.rmi/share/classes/com/sun/rmi/rmid/ExecPermission.java:@Deprecated(forRemoval=true, since="15")
+    private static final String JDK13 = "13";
+    private static final String JDK14 = "14";
+    private final  Map<String, IntroducedIn> classDictionary = new HashMap<>();
     private final JavaCompiler tool;
-    private List<String> wrongTagsList = new ArrayList<>();
+    private final List<String> wrongTagsList = new ArrayList<>();
 
     public static void main(String[] args) throws Exception {
         SinceCheckerHelper sinceCheckerTestHelper = new SinceCheckerHelper();
@@ -114,7 +185,7 @@ public class SinceCheckerHelper {
                         || element.getKind() == ElementKind.CONSTRUCTOR)
                 .forEach(element -> persistElement(te, element, types, version));
         te.getEnclosedElements().stream()
-                .filter(element -> element.getKind().isClass())
+                .filter(element -> element.getKind().isDeclaredType())
                 .map(TypeElement.class::cast)
                 .forEach(nestedClass -> analyzeClassRecord(nestedClass, version, types, elements));
     }
@@ -165,7 +236,7 @@ public class SinceCheckerHelper {
                         JavacTask ct = (JavacTask) tool.getTask(null,
                                 fm,
                                 null,
-                                List.of("-d", "."),
+                                List.of("--limit-modules", moduleName, "-d", "."),
                                 null,
                                 Collections.singletonList(SimpleJavaFileObject.forSource(URI.create("myfo:/Test.java"), "")));
                         ct.analyze();
@@ -242,11 +313,8 @@ public class SinceCheckerHelper {
 
 
     private void checkEquals(Version sinceVersion, String mappedVersion, String elementSimpleName) {
-        if (sinceVersion == null) {
-            return;
-        }
-        if (mappedVersion == null) {
-            throw new IllegalArgumentException("check for why mapped version is null for" + elementSimpleName);
+        if (sinceVersion == null || mappedVersion == null) {
+            throw new IllegalArgumentException("For " + elementSimpleName + " mapped is=" + mappedVersion + " since is= " + sinceVersion);
         }
         if (Version.parse("9").compareTo(sinceVersion) > 0) {
             sinceVersion = Version.parse("9");
@@ -289,7 +357,7 @@ public class SinceCheckerHelper {
                         || element.getKind() == ElementKind.CONSTRUCTOR)
                 .forEach(element -> checkElement(te, element, types, javadocHelper, version, currentVersion));
         te.getEnclosedElements().stream()
-                .filter(element -> element.getKind().isClass())
+                .filter(element -> element.getKind().isDeclaredType())
                 .map(TypeElement.class::cast)
                 .forEach(nestedClass -> analyzeClassCheck(nestedClass, version, javadocHelper, types, currentVersion));
     }
@@ -309,10 +377,17 @@ public class SinceCheckerHelper {
                     .map(p -> types.erasure(p.asType()).toString())
                     .collect(Collectors.joining(",", "(", ")"));
             suffix = ":" + te.getQualifiedName() + ":" + methodName + ":" + descriptor;
-        } else if (element.getKind().isClass()) {
-            //TODO should I be using getDeclared type? and split .isClass and isInterface here?
-            prefix = "class";
-            suffix = ":" + te.getQualifiedName();
+        }
+        // should I be using getDeclared type? and split .isClass and isInterface here? for discussion
+        else if (element.getKind().isDeclaredType()) {
+            if (element.getKind().isClass()) {
+                prefix = "class";
+                suffix = ":" + te.getQualifiedName();
+            } else if (element.getKind().isInterface()) {
+                prefix = "interface";
+                suffix = ":" + te.getQualifiedName();
+            }
+
         }
         return prefix + suffix;
     }

@@ -1,7 +1,7 @@
 * this is meant to be a draft and can be improved in the future,
 * this is a collection of guidelines and rules around and the use of `@since` to keep discussions about the topic consistent.
 
-# @since Rules and Guidelines for Java Source Code Documentation
+# `@since` Rules and Guidelines for Java Source Code Documentation
 
 When documenting Java source code, the `@since` tag serves as a crucial indicator of when an element, such as a class, method, field, or nested class, was introduced.
 
@@ -20,12 +20,12 @@ Adhering to the following rules ensures clarity and consistency in documenting c
 
 - If an element exists in JDK N, with an equivalent in JDK N-1, it should not include `@since N`.
 
-### Rule 3: Handling Missing @since Tags in methods if there is no @since
+### Rule 3: Handling Missing `@since` Tags in methods if there is no `@since`
 
 - When inspecting methods, prioritize the `@since` annotation of the supertype's overridden method.
 - If unavailable or if the enclosing class's `@since` is newer, use the enclosing element's `@since`.
 
-  I.e. if A extends B, and we add a method to B in JDK N, and add an override of the method to A in JDK M (M > N), we will use N as the effective @since for the method. I think, at least.
+  I.e. if A extends B, and we add a method to B in JDK N, and add an override of the method to A in JDK M (M > N), we will use N as the effective `@since` for the method.
   Here's an illustration using Markdown and Java code:
 
 ```java
