@@ -35,6 +35,7 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.Runtime.Version;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -45,7 +46,9 @@ public class SinceCheckerHelper {
 
     //these are methods that were preview in JDK 13 and JDK 14, before the introduction
     //of the @PreviewFeature
-    // TODO add a bit more to include  java.compiler and jdk.compiler
+    //TODO IIRC we will need a bit more of this when we include java.compiler and jdk.compiler. I think I would create
+    // a separated section for detection of "isPreview", which would include this set (which may need to be changed to a map,
+    // saying in which versions the given element was a preview).
     private final Set<String> LEGACY_PREVIEW_METHODS = Set.of(
             //13
             "method:java.lang.String:stripIndent:()",
@@ -57,7 +60,9 @@ public class SinceCheckerHelper {
             "field:com.sun.source.tree.Tree.Kind:YIELD"
 //            , "interface:com.sun.source.tree.YieldTree"
 
+
             //12
+
 
     );
 
@@ -65,7 +70,6 @@ public class SinceCheckerHelper {
 //./jdk/src/java.base/share/classes/jdk/internal/reflect/Reflection.java:    @Deprecated(forRemoval=true)
 //./jdk/src/jdk.unsupported/share/classes/sun/reflect/Reflection.java:    @Deprecated(forRemoval=true)
 
-//    JDK 10 and 11 = nothing found
 // JDK 12
 
 //./src/jdk.compiler/share/classes/com/sun/source/tree/Tree.java:        @Deprecated(forRemoval=true, since="12")
@@ -111,8 +115,7 @@ public class SinceCheckerHelper {
 //            ./test/langtools/tools/javac/preview/PreviewErrors.java:                                @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.${preview}
 
 
-//    nizarbenalla@nizarbenalla-mac jdk15-master % grep -r '@Deprecated(forRemoval=true, since="15")' ./src/*
-//./src/java.rmi/share/classes/java/rmi/activation/ActivationGroup.java:@Deprecated(forRemoval=true, since="15")
+    //./src/java.rmi/share/classes/java/rmi/activation/ActivationGroup.java:@Deprecated(forRemoval=true, since="15")
 //./src/java.rmi/share/classes/java/rmi/activation/ActivateFailedException.java:@Deprecated(forRemoval=true, since="15")
 //./src/java.rmi/share/classes/java/rmi/activation/ActivationException.java:@Deprecated(forRemoval=true, since="15")
 //./src/java.rmi/share/classes/java/rmi/activation/ActivationDesc.java:@Deprecated(forRemoval=true, since="15")
@@ -131,8 +134,9 @@ public class SinceCheckerHelper {
 //./src/java.rmi/share/classes/com/sun/rmi/rmid/ExecPermission.java:@Deprecated(forRemoval=true, since="15")
     private static final String JDK13 = "13";
     private static final String JDK14 = "14";
-    private final  Map<String, IntroducedIn> classDictionary = new HashMap<>();
+    private final Map<String, IntroducedIn> classDictionary = new HashMap<>();
     private final JavaCompiler tool;
+
     private final List<String> wrongTagsList = new ArrayList<>();
 
     public static void main(String[] args) throws Exception {
@@ -159,6 +163,7 @@ public class SinceCheckerHelper {
     }
 
     private void processModuleRecord(ModuleElement moduleElement, String releaseVersion, JavacTask ct) {
+        // handle exception here
         for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(moduleElement.getDirectives())) {
             if (ed.getTargetModules() == null) {
                 analyzePackageRecord(ed.getPackage(), releaseVersion, ct);
@@ -209,7 +214,18 @@ public class SinceCheckerHelper {
             }
         }
     }
-
+    private boolean isPreview(Element el, String uniqueId, String currentVersion) {
+        while (el != null) {
+            Symbol s = (Symbol) el;
+            if ((s.flags() & Flags.PREVIEW_API) != 0) {
+                return true;
+            }
+            el = el.getEnclosingElement();
+        }
+        return LEGACY_PREVIEW_METHODS.contains(uniqueId)
+                &&
+                (JDK13.equals(currentVersion) || JDK14.equals(currentVersion));
+    }
     private void testThisModule(String moduleName) throws Exception {
         List<Path> sources = new ArrayList<>();
 
@@ -218,13 +234,14 @@ public class SinceCheckerHelper {
         Path srcZip = Path.of(pathToAPIKEY.pathToSRC);
         File f = new File(srcZip.toUri());
         if (!f.exists() && !f.isDirectory()) {
-//            throw new SkippedException("Skipping Test because src.zip wasn't found");
+//          throw new SkippedException("Skipping Test because src.zip wasn't found");
             throw new Exception("Skipping Test because src.zip wasn't found");
         }
         if (Files.isReadable(srcZip)) {
             URI uri = URI.create("jar:" + srcZip.toUri());
             try (FileSystem zipFO = FileSystems.newFileSystem(uri, Collections.emptyMap())) {
                 Path root = zipFO.getRootDirectories().iterator().next();
+                Path packagePath = root.resolve(moduleName);
                 try (DirectoryStream<Path> ds = Files.newDirectoryStream(root)) {
                     for (Path p : ds) {
                         if (Files.isDirectory(p)) {
@@ -240,7 +257,7 @@ public class SinceCheckerHelper {
                                 null,
                                 Collections.singletonList(SimpleJavaFileObject.forSource(URI.create("myfo:/Test.java"), "")));
                         ct.analyze();
-                        processModuleCheck(ct.getElements().getModuleElement(moduleName), ct, sources);
+                        processModuleCheck(ct.getElements().getModuleElement(moduleName), ct, sources, packagePath);
                         if (!wrongTagsList.isEmpty()) {
                             throw new Exception(wrongTagsList.toString());
                         }
@@ -251,94 +268,40 @@ public class SinceCheckerHelper {
         }
     }
 
-    private Version checkElement(TypeElement clazz, Element element, Types types,
-                                 JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
-        String uniqueId = getElementName(clazz, element, types);
+    private void processModuleCheck(ModuleElement moduleElement, JavacTask ct, List<Path> sources, Path packagePath) {
+        //TODO handle expection here
 
-
-        String comment = null;
-        try {
-            comment = javadocHelper.getResolvedDocComment(element);
-        } catch (IOException e) {
-            throw new RuntimeException("JavadocHelper failed for " + element);
+        if (moduleElement == null) {
+            throw new RuntimeException("Module element was null here");
         }
-        Version sinceVersion = comment != null ? extractSinceVersion(comment) : null;
-        if (sinceVersion == null ||
-                (enclosingVersion != null && enclosingVersion.compareTo(sinceVersion) > 0)) {
-            sinceVersion = enclosingVersion;
-        }
-        IntroducedIn mappedVersion = classDictionary.get(uniqueId);
-        String realMappedVersion = isPreview(element, uniqueId, currentVersion) ?
-                mappedVersion.introducedPreview() :
-                mappedVersion.introducedStable();
-        checkEquals(sinceVersion, realMappedVersion, uniqueId);
-        return sinceVersion;
-    }
-
-    private boolean isPreview(Element el, String uniqueId, String currentVersion) {
-        while (el != null) {
-            Symbol s = (Symbol) el;
-            if ((s.flags() & Flags.PREVIEW_API) != 0) {
-                return true;
-            }
-            el = el.getEnclosingElement();
-        }
-        return LEGACY_PREVIEW_METHODS.contains(uniqueId)
-                &&
-                (JDK13.equals(currentVersion) || JDK14.equals(currentVersion));
-    }
-
-
-    private static Version extractSinceVersion(String documentation) {
-        Pattern pattern = Pattern.compile("@since\\s+(\\d+(?:\\.\\d+)?)");
-        Matcher matcher = pattern.matcher(documentation);
-        if (matcher.find()) {
-            String versionString = matcher.group(1);
-            try {
-                if (versionString.equals("1.0")) {
-                    //XXX
-                    versionString = "1";
-                } else if (versionString.startsWith("1.")) {
-                    versionString = versionString.substring(2);
-                }
-                return Version.parse(versionString);
-            } catch (NumberFormatException ex) {
-                System.err.println("@since value that cannot be parsed: " + versionString);
-                return null;
-            }
-        } else {
-            return null;
-        }
-    }
-
-
-    private void checkEquals(Version sinceVersion, String mappedVersion, String elementSimpleName) {
-        if (sinceVersion == null || mappedVersion == null) {
-            throw new IllegalArgumentException("For " + elementSimpleName + " mapped is=" + mappedVersion + " since is= " + sinceVersion);
-        }
-        if (Version.parse("9").compareTo(sinceVersion) > 0) {
-            sinceVersion = Version.parse("9");
-        }
-        if (!sinceVersion.equals(Version.parse(mappedVersion))) {
-            wrongTagsList.add("For  Element: " + elementSimpleName
-                    + " Wrong since version " + sinceVersion + " instead of " + mappedVersion + "\n");
-        }
-    }
-
-
-    private void processModuleCheck(ModuleElement moduleElement, JavacTask ct, List<Path> sources) {
         for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(moduleElement.getDirectives())) {
             if (ed.getTargetModules() == null) {
-                analyzePackageCheck(ed.getPackage(), ct, sources);
+                Path pkgInfo = packagePath.resolve(ed.getPackage().getQualifiedName().toString().replaceAll("\\.", "/")).resolve("package-info.java");
+                Files.exists(pkgInfo);
+                byte[] packageAsBytes;
+                try {
+                    packageAsBytes = Files.readAllBytes(pkgInfo);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                String packageContent = new String(packageAsBytes, StandardCharsets.UTF_8);
+                Version packageTopVersion = getSinceFromPackage(packageContent);
+                ed.getPackage().getModifiers();
+                analyzePackageCheck(ed.getPackage(), ct, sources, packageTopVersion);
             }
         }
     }
 
-    private void analyzePackageCheck(PackageElement pe, JavacTask ct, List<Path> sources) {
+    private Version getSinceFromPackage(String packageContent) {
+        return extractSinceVersion(packageContent);
+    }
+
+    private void analyzePackageCheck(PackageElement pe, JavacTask ct, List<Path> sources, Version packageTopVersion) {
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
             try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
-                analyzeClassCheck(te, null, javadocHelper, ct.getTypes(), null); /*XXX: since tag from package-info (?!)*/
+            // TODO package version should equal @since when a class doesn't have @since
+                analyzeClassCheck(te, null, javadocHelper, ct.getTypes(), null);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -362,6 +325,78 @@ public class SinceCheckerHelper {
                 .forEach(nestedClass -> analyzeClassCheck(nestedClass, version, javadocHelper, types, currentVersion));
     }
 
+
+    private Version checkElement(TypeElement clazz, Element element, Types types,
+                                 JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
+        String uniqueId = getElementName(clazz, element, types);
+
+        String comment = null;
+        try {
+            comment = javadocHelper.getResolvedDocComment(element);
+        } catch (IOException e) {
+            throw new RuntimeException("JavadocHelper failed for " + element);
+        }
+        Version sinceVersion = comment != null ? extractSinceVersion(comment) : null;
+        if (sinceVersion == null ||
+                (enclosingVersion != null && enclosingVersion.compareTo(sinceVersion) > 0)) {
+            sinceVersion = enclosingVersion;
+        }
+        IntroducedIn mappedVersion = classDictionary.get(uniqueId);
+        //TODO handle expection here
+        String realMappedVersion = null;
+        try {
+            realMappedVersion = isPreview(element, uniqueId, currentVersion) ?
+                    mappedVersion.introducedPreview() :
+                    mappedVersion.introducedStable();
+        } catch (Exception e) {
+        }
+        checkEquals(sinceVersion, realMappedVersion, uniqueId);
+        return sinceVersion;
+    }
+
+
+
+
+    private static Version extractSinceVersion(String documentation) {
+        Pattern pattern = Pattern.compile("@since\\s+(\\d+(?:\\.\\d+)?)");
+        Matcher matcher = pattern.matcher(documentation);
+        if (matcher.find()) {
+            String versionString = matcher.group(1);
+            //TODO Won't the next condition (.startsWith("1.")) handle this?
+            try {
+                if (versionString.equals("1.0")) {
+                    //XXX
+                    versionString = "1";
+                } else if (versionString.startsWith("1.")) {
+                    versionString = versionString.substring(2);
+                }
+                return Version.parse(versionString);
+            } catch (NumberFormatException ex) {
+                System.err.println("@since value that cannot be parsed: " + versionString);
+                return null;
+            }
+        } else {
+            return null;
+        }
+    }
+
+
+    private void checkEquals(Version sinceVersion, String mappedVersion, String elementSimpleName) {
+        if (sinceVersion == null || mappedVersion == null) {
+            throw new IllegalArgumentException("For " + elementSimpleName + " mapped is=" + mappedVersion + " since is= " + sinceVersion);
+        }
+        //TODO Handle base line better
+        if (Version.parse("9").compareTo(sinceVersion) > 0) {
+            sinceVersion = Version.parse("9");
+        }
+        // TODO For consideration - if the since version if not a number, should we try to verify it is one of known (existing) patterns,
+        //  and fail if it is not? So that we would find out if some new non-number version would be introduced?
+        if (!sinceVersion.equals(Version.parse(mappedVersion))) {
+            wrongTagsList.add("For  Element: " + elementSimpleName
+                    + " Wrong since version " + sinceVersion + " instead of " + mappedVersion + "\n");
+        }
+    }
+
     private String getElementName(TypeElement te, Element element, Types types) {
         String prefix = "";
         String suffix = "";
@@ -377,9 +412,7 @@ public class SinceCheckerHelper {
                     .map(p -> types.erasure(p.asType()).toString())
                     .collect(Collectors.joining(",", "(", ")"));
             suffix = ":" + te.getQualifiedName() + ":" + methodName + ":" + descriptor;
-        }
-        // should I be using getDeclared type? and split .isClass and isInterface here? for discussion
-        else if (element.getKind().isDeclaredType()) {
+        } else if (element.getKind().isDeclaredType()) {
             if (element.getKind().isClass()) {
                 prefix = "class";
                 suffix = ":" + te.getQualifiedName();
@@ -387,7 +420,6 @@ public class SinceCheckerHelper {
                 prefix = "interface";
                 suffix = ":" + te.getQualifiedName();
             }
-
         }
         return prefix + suffix;
     }
