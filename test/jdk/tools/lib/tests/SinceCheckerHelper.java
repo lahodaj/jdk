@@ -57,81 +57,11 @@ public class SinceCheckerHelper {
             "method:com.sun.source.util.SimpleTreeVisitor:visitYield:(com.sun.source.tree.YieldTree,java.lang.Object)",
             "method:com.sun.source.util.TreeScanner:visitYield:(com.sun.source.tree.YieldTree,java.lang.Object)",
             "method:com.sun.source.tree.TreeVisitor:visitYield:(com.sun.source.tree.YieldTree,java.lang.Object)",
-            "field:com.sun.source.tree.Tree.Kind:YIELD"
-//            , "interface:com.sun.source.tree.YieldTree"
-
-
-            //12
-
-
+            "field:com.sun.source.tree.Tree.Kind:YIELD",
+            "interface:com.sun.source.tree.YieldTree"
+             //14
     );
 
-//    JDK 9
-//./jdk/src/java.base/share/classes/jdk/internal/reflect/Reflection.java:    @Deprecated(forRemoval=true)
-//./jdk/src/jdk.unsupported/share/classes/sun/reflect/Reflection.java:    @Deprecated(forRemoval=true)
-
-// JDK 12
-
-//./src/jdk.compiler/share/classes/com/sun/source/tree/Tree.java:        @Deprecated(forRemoval=true, since="12")
-//./src/jdk.compiler/share/classes/com/sun/source/tree/CaseTree.java:    @Deprecated(forRemoval=true, since="12")
-//./src/jdk.compiler/share/classes/com/sun/source/tree/CaseTree.java:    @Deprecated(forRemoval=true, since="12")
-//./src/jdk.compiler/share/classes/com/sun/source/tree/CaseTree.java:    @Deprecated(forRemoval=true, since="12")
-//./src/jdk.compiler/share/classes/com/sun/source/tree/CaseTree.java:    @Deprecated(forRemoval=true, since="12")
-//./src/jdk.compiler/share/classes/com/sun/source/tree/SwitchExpressionTree.java:@Deprecated(forRemoval=true, since="12")
-//./src/jdk.compiler/share/classes/com/sun/source/tree/TreeVisitor.java:    @Deprecated(forRemoval=true, since="12")
-//./src/jdk.compiler/share/classes/com/sun/source/tree/BreakTree.java:    @Deprecated(forRemoval=true, since="12")
-//./src/jdk.compiler/share/classes/com/sun/source/util/SimpleTreeVisitor.java:    @Deprecated(forRemoval=true, since="12")
-//./src/jdk.compiler/share/classes/com/sun/source/util/TreeScanner.java:    @Deprecated(forRemoval=true, since="12")
-
-
-    //JDK 14
-//    ./src/java.compiler/share/classes/javax/lang/model/util/AbstractElementVisitor14.java:@jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.compiler/share/classes/javax/lang/model/util/SimpleElementVisitor14.java:@jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.compiler/share/classes/javax/lang/model/util/ElementKindVisitor14.java:@jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.compiler/share/classes/javax/lang/model/util/ElementKindVisitor6.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.compiler/share/classes/javax/lang/model/util/Elements.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.compiler/share/classes/javax/lang/model/util/ElementFilter.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.compiler/share/classes/javax/lang/model/util/ElementFilter.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.compiler/share/classes/javax/lang/model/util/ElementScanner14.java:@jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.compiler/share/classes/javax/lang/model/element/ElementVisitor.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.compiler/share/classes/javax/lang/model/element/TypeElement.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.compiler/share/classes/javax/lang/model/element/ElementKind.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.compiler/share/classes/javax/lang/model/element/ElementKind.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.compiler/share/classes/javax/lang/model/element/ElementKind.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.PATTERN_MATCHING_IN_INSTANCEOF,
-//            ./src/java.compiler/share/classes/javax/lang/model/element/RecordComponentElement.java:@jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/jdk.compiler/share/classes/com/sun/source/tree/Tree.java:        @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.base/share/classes/sun/reflect/annotation/TypeAnnotation.java:        @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.base/share/classes/java/lang/reflect/RecordComponent.java:@jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.base/share/classes/java/lang/runtime/ObjectMethods.java:@jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.base/share/classes/java/lang/annotation/ElementType.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.base/share/classes/java/lang/Class.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.base/share/classes/java/lang/Class.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/java.base/share/classes/java/lang/String.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.TEXT_BLOCKS,
-//            ./src/java.base/share/classes/java/lang/String.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.TEXT_BLOCKS,
-//            ./src/java.base/share/classes/java/lang/String.java:    @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.TEXT_BLOCKS,
-//            ./src/java.base/share/classes/java/lang/Record.java:@jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS,
-//            ./src/jdk.jshell/share/classes/jdk/jshell/Snippet.java:        @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.RECORDS)
-//            ./test/langtools/tools/javac/preview/PreviewErrors.java:                                @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.${preview}
-//            ./test/langtools/tools/javac/preview/PreviewErrors.java:                                @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.${preview}
-
-
-    //./src/java.rmi/share/classes/java/rmi/activation/ActivationGroup.java:@Deprecated(forRemoval=true, since="15")
-//./src/java.rmi/share/classes/java/rmi/activation/ActivateFailedException.java:@Deprecated(forRemoval=true, since="15")
-//./src/java.rmi/share/classes/java/rmi/activation/ActivationException.java:@Deprecated(forRemoval=true, since="15")
-//./src/java.rmi/share/classes/java/rmi/activation/ActivationDesc.java:@Deprecated(forRemoval=true, since="15")
-//./src/java.rmi/share/classes/java/rmi/activation/UnknownObjectException.java:@Deprecated(forRemoval=true, since="15")
-//./src/java.rmi/share/classes/java/rmi/activation/ActivationGroupDesc.java:@Deprecated(forRemoval=true, since="15")
-//./src/java.rmi/share/classes/java/rmi/activation/ActivationInstantiator.java:@Deprecated(forRemoval=true, since="15")
-//./src/java.rmi/share/classes/java/rmi/activation/ActivationSystem.java:@Deprecated(forRemoval=true, since="15")
-//./src/java.rmi/share/classes/java/rmi/activation/ActivationGroup_Stub.java:@Deprecated(forRemoval=true, since="15")
-//./src/java.rmi/share/classes/java/rmi/activation/ActivationID.java:@Deprecated(forRemoval=true, since="15")
-//./src/java.rmi/share/classes/java/rmi/activation/UnknownGroupException.java:@Deprecated(forRemoval=true, since="15")
-//./src/java.rmi/share/classes/java/rmi/activation/Activator.java:@Deprecated(forRemoval=true, since="15")
-//./src/java.rmi/share/classes/java/rmi/activation/ActivationMonitor.java:@Deprecated(forRemoval=true, since="15")
-//./src/java.rmi/share/classes/java/rmi/activation/Activatable.java:@Deprecated(forRemoval=true, since="15")
-//./src/java.rmi/share/classes/java/rmi/activation/ActivationGroupID.java:@Deprecated(forRemoval=true, since="15")
-//./src/java.rmi/share/classes/com/sun/rmi/rmid/ExecOptionPermission.java:@Deprecated(forRemoval=true, since="15")
-//./src/java.rmi/share/classes/com/sun/rmi/rmid/ExecPermission.java:@Deprecated(forRemoval=true, since="15")
     private static final String JDK13 = "13";
     private static final String JDK14 = "14";
     private final Map<String, IntroducedIn> classDictionary = new HashMap<>();
@@ -214,6 +144,7 @@ public class SinceCheckerHelper {
             }
         }
     }
+
     private boolean isPreview(Element el, String uniqueId, String currentVersion) {
         while (el != null) {
             Symbol s = (Symbol) el;
@@ -226,6 +157,7 @@ public class SinceCheckerHelper {
                 &&
                 (JDK13.equals(currentVersion) || JDK14.equals(currentVersion));
     }
+
     private void testThisModule(String moduleName) throws Exception {
         List<Path> sources = new ArrayList<>();
 
@@ -270,7 +202,6 @@ public class SinceCheckerHelper {
 
     private void processModuleCheck(ModuleElement moduleElement, JavacTask ct, List<Path> sources, Path packagePath) {
         //TODO handle expection here
-
         if (moduleElement == null) {
             throw new RuntimeException("Module element was null here");
         }
@@ -300,8 +231,8 @@ public class SinceCheckerHelper {
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
             try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
-            // TODO package version should equal @since when a class doesn't have @since
-                analyzeClassCheck(te, null, javadocHelper, ct.getTypes(), null);
+                // TODO package version should equal @since when a class doesn't have @since
+                analyzeClassCheck(te, null, javadocHelper, ct.getTypes(), packageTopVersion);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -329,7 +260,6 @@ public class SinceCheckerHelper {
     private Version checkElement(TypeElement clazz, Element element, Types types,
                                  JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
         String uniqueId = getElementName(clazz, element, types);
-
         String comment = null;
         try {
             comment = javadocHelper.getResolvedDocComment(element);
@@ -349,12 +279,11 @@ public class SinceCheckerHelper {
                     mappedVersion.introducedPreview() :
                     mappedVersion.introducedStable();
         } catch (Exception e) {
+            System.err.println(mappedVersion + " is null");
         }
         checkEquals(sinceVersion, realMappedVersion, uniqueId);
         return sinceVersion;
     }
-
-
 
 
     private static Version extractSinceVersion(String documentation) {
@@ -365,7 +294,7 @@ public class SinceCheckerHelper {
             //TODO Won't the next condition (.startsWith("1.")) handle this?
             try {
                 if (versionString.equals("1.0")) {
-                    //XXX
+                    //deals with @since version 0
                     versionString = "1";
                 } else if (versionString.startsWith("1.")) {
                     versionString = versionString.substring(2);
@@ -398,6 +327,9 @@ public class SinceCheckerHelper {
     }
 
     private String getElementName(TypeElement te, Element element, Types types) {
+        if(element.equals("javax.lang.model.util.ElementFilter")){
+            System.out.println("i am here");
+        }
         String prefix = "";
         String suffix = "";
 

@@ -37,7 +37,7 @@
 // * @library /test/jdk/tools/lib/tests
 // * @run main SinceCheckerHelper java.desktop
 // */
-//
+
 ////====================
 //
 //
@@ -65,7 +65,6 @@
 // * @library /test/jdk/tools/lib/tests
 // * @run main SinceCheckerHelper jdk.graal.compiler
 // */
-
 
 
 ///*
@@ -141,8 +140,8 @@
 // * @library /test/jdk/tools/lib/tests
 // * @run main SinceCheckerHelper jdk.naming.dns
 // */
-//
-//
+
+
 ///*
 // * @test
 // * @summary Test JavaBaseSinceCheckerTest
@@ -185,8 +184,8 @@
 // * @run main SinceCheckerHelper jdk.jpackage
 // */
 
-//
-//
+
+
 ///*
 // * @test
 // * @summary Test JavaBaseSinceCheckerTest
@@ -282,7 +281,6 @@
 // * @library /test/jdk/tools/lib/tests
 // * @run main SinceCheckerHelper jdk.jcmd
 // */
-
 
 
 //
@@ -429,7 +427,7 @@
 // * @run main SinceCheckerHelper jdk.unsupported.desktop
 // */
 //
-//
+
 ///*
 // * @test
 // * @summary Test JavaBaseSinceCheckerTest
@@ -455,18 +453,18 @@ public class SinceCheckerTests {
 //
 //
 //
-/*
- * @test
- * @summary Test JavaBaseSinceCheckerTest
- * @library /tools/lib
- * @modules jdk.compiler/com.sun.tools.javac.api
- *          jdk.compiler/com.sun.tools.javac.util
- *          jdk.compiler/com.sun.tools.javac.main
- *          jdk.compiler/com.sun.tools.javac.code
- *          jdk.compiler/jdk.internal.shellsupport.doc
- * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper java.base
- */
+///*
+// * @test
+// * @summary Test JavaBaseSinceCheckerTest
+// * @library /tools/lib
+// * @modules jdk.compiler/com.sun.tools.javac.api
+// *          jdk.compiler/com.sun.tools.javac.util
+// *          jdk.compiler/com.sun.tools.javac.main
+// *          jdk.compiler/com.sun.tools.javac.code
+// *          jdk.compiler/jdk.internal.shellsupport.doc
+// * @library /test/jdk/tools/lib/tests
+// * @run main SinceCheckerHelper java.base
+// */
 
 //
 ///*
@@ -509,7 +507,7 @@ public class SinceCheckerTests {
 // * @library /test/jdk/tools/lib/tests
 // * @run main SinceCheckerHelper java.management.rmi
 // */
-//
+
 ///*
 // * @test
 // * @summary Test JavaBaseSinceCheckerTest
@@ -551,19 +549,19 @@ public class SinceCheckerTests {
 // * @run main SinceCheckerHelper jdk.jshell
 // */
 //
-///*
-// * @test
-// * @summary Test JavaBaseSinceCheckerTest
-// * @library /tools/lib
-// * @modules jdk.compiler/com.sun.tools.javac.api
-// *          jdk.compiler/com.sun.tools.javac.util
-// *          jdk.compiler/com.sun.tools.javac.main
-// *          jdk.compiler/com.sun.tools.javac.code
-// *          jdk.compiler/jdk.internal.shellsupport.doc
-// * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.dynalink
-// */
-//
+/*
+ * @test
+ * @summary Test JavaBaseSinceCheckerTest
+ * @library /tools/lib
+ * @modules jdk.compiler/com.sun.tools.javac.api
+ *          jdk.compiler/com.sun.tools.javac.util
+ *          jdk.compiler/com.sun.tools.javac.main
+ *          jdk.compiler/com.sun.tools.javac.code
+ *          jdk.compiler/jdk.internal.shellsupport.doc
+ * @library /test/jdk/tools/lib/tests
+ * @run main SinceCheckerHelper jdk.dynalink
+ */
+
 //
 ///*
 // * @test
