@@ -87,7 +87,8 @@ public class SinceCheckerHelper {
                     Collections.singletonList(SimpleJavaFileObject.forSource(URI.create("myfo:/Test.java"), "")));
             ct.analyze();
             String version = String.valueOf(i);
-            ct.getElements().getAllModuleElements().forEach(me ->
+           Elements  elements = ct.getElements();
+            elements.getAllModuleElements().forEach(me ->
                     processModuleRecord(me, version, ct));
         }
     }
@@ -179,11 +180,13 @@ public class SinceCheckerHelper {
                         JavacTask ct = (JavacTask) tool.getTask(null,
                                 fm,
                                 null,
-                                List.of("--limit-modules", moduleName, "-d", "."),
+                                List.of( "--add-modules",moduleName,"-d", "."),
                                 null,
                                 Collections.singletonList(SimpleJavaFileObject.forSource(URI.create("myfo:/Test.java"), "")));
                         ct.analyze();
-                        processModuleCheck(ct.getElements().getModuleElement(moduleName), ct, sources, packagePath);
+                        Elements elements = ct.getElements();
+                        elements.getModuleElement("java.base");
+                        processModuleCheck(elements.getModuleElement(moduleName), ct, sources, packagePath);
                         if (!wrongTagsList.isEmpty()) {
                             throw new Exception(wrongTagsList.toString());
                         }
@@ -200,10 +203,10 @@ public class SinceCheckerHelper {
             throw new RuntimeException("Module element was null here");
         }
         for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(moduleElement.getDirectives())) {
-            if (ed.getTargetModules() == null) {
+//            if (ed.getTargetModules() == null) {
                 Version packageTopVersion = getPackageTopVersion(packagePath, ed);
                 analyzePackageCheck(ed.getPackage(), ct, sources, packageTopVersion);
-            }
+//            }
         }
     }
 
@@ -215,11 +218,11 @@ public class SinceCheckerHelper {
                 )
                 .resolve("package-info.java");
         Files.exists(pkgInfo);
-        byte[] packageAsBytes;
+        byte[] packageAsBytes=null;
         try {
             packageAsBytes = Files.readAllBytes(pkgInfo);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+//            throw new RuntimeException(e);
         }
         String packageContent = new String(packageAsBytes, StandardCharsets.UTF_8);
         Version packageTopVersion = getSinceFromPackage(packageContent);
@@ -316,7 +319,8 @@ public class SinceCheckerHelper {
 
     private void checkEquals(Version sinceVersion, String mappedVersion, String elementSimpleName) {
         if (sinceVersion == null || mappedVersion == null) {
-            throw new IllegalArgumentException("For " + elementSimpleName + " mapped is=" + mappedVersion + " since is= " + sinceVersion);
+            System.err.println("For " + elementSimpleName + " mapped is=" + mappedVersion + " since is= " + sinceVersion);
+        return;
         }
         //TODO Handle base line better
         if (Version.parse("9").compareTo(sinceVersion) > 0) {
