@@ -59,7 +59,7 @@ public class SinceCheckerHelper {
             "method:com.sun.source.tree.TreeVisitor:visitYield:(com.sun.source.tree.YieldTree,java.lang.Object)",
             "field:com.sun.source.tree.Tree.Kind:YIELD",
             "interface:com.sun.source.tree.YieldTree"
-             //14
+            //14
     );
 
     private static final String JDK13 = "13";
@@ -125,22 +125,16 @@ public class SinceCheckerHelper {
                 .forEach(nestedClass -> analyzeClassRecord(nestedClass, version, types, elements));
     }
 
-    private void persistElement(TypeElement clazz, Element element, Types types, String version) {
+    public  void persistElement(TypeElement clazz, Element element, Types types, String version) {
         String uniqueId = getElementName(clazz, element, types);
-        classDictionary.computeIfAbsent(uniqueId,
-                _ -> new IntroducedIn(null, null));
-
-        IntroducedIn introduced = classDictionary.get(uniqueId);
-
+        IntroducedIn introduced = classDictionary.computeIfAbsent(uniqueId, i -> new IntroducedIn());
         if (isPreview(element, uniqueId, version)) {
-            if (introduced.introducedPreview() == null) {
-                classDictionary.put(uniqueId,
-                        new IntroducedIn(version, introduced.introducedStable()));
+            if (introduced.introducedPreview == null) {
+                introduced.introducedPreview = version;
             }
         } else {
-            if (introduced.introducedStable() == null) {
-                classDictionary.put(uniqueId,
-                        new IntroducedIn(introduced.introducedPreview(), version));
+            if (introduced.introducedStable == null) {
+                introduced.introducedStable = version;
             }
         }
     }
@@ -207,20 +201,30 @@ public class SinceCheckerHelper {
         }
         for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(moduleElement.getDirectives())) {
             if (ed.getTargetModules() == null) {
-                Path pkgInfo = packagePath.resolve(ed.getPackage().getQualifiedName().toString().replaceAll("\\.", "/")).resolve("package-info.java");
-                Files.exists(pkgInfo);
-                byte[] packageAsBytes;
-                try {
-                    packageAsBytes = Files.readAllBytes(pkgInfo);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-                String packageContent = new String(packageAsBytes, StandardCharsets.UTF_8);
-                Version packageTopVersion = getSinceFromPackage(packageContent);
-                ed.getPackage().getModifiers();
+                Version packageTopVersion = getPackageTopVersion(packagePath, ed);
                 analyzePackageCheck(ed.getPackage(), ct, sources, packageTopVersion);
             }
         }
+    }
+
+    private Version getPackageTopVersion(Path packagePath, ModuleElement.ExportsDirective ed) {
+        Path pkgInfo = packagePath.resolve(ed.getPackage()
+                        .getQualifiedName()
+                        .toString()
+                        .replaceAll("\\.", "/")
+                )
+                .resolve("package-info.java");
+        Files.exists(pkgInfo);
+        byte[] packageAsBytes;
+        try {
+            packageAsBytes = Files.readAllBytes(pkgInfo);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        String packageContent = new String(packageAsBytes, StandardCharsets.UTF_8);
+        Version packageTopVersion = getSinceFromPackage(packageContent);
+        ed.getPackage().getModifiers();
+        return packageTopVersion;
     }
 
     private Version getSinceFromPackage(String packageContent) {
@@ -276,8 +280,8 @@ public class SinceCheckerHelper {
         String realMappedVersion = null;
         try {
             realMappedVersion = isPreview(element, uniqueId, currentVersion) ?
-                    mappedVersion.introducedPreview() :
-                    mappedVersion.introducedStable();
+                    mappedVersion.introducedPreview :
+                    mappedVersion.introducedStable;
         } catch (Exception e) {
             System.err.println(mappedVersion + " is null");
         }
@@ -327,9 +331,6 @@ public class SinceCheckerHelper {
     }
 
     private String getElementName(TypeElement te, Element element, Types types) {
-        if(element.equals("javax.lang.model.util.ElementFilter")){
-            System.out.println("i am here");
-        }
         String prefix = "";
         String suffix = "";
 
@@ -356,6 +357,8 @@ public class SinceCheckerHelper {
         return prefix + suffix;
     }
 
-    private record IntroducedIn(String introducedPreview, String introducedStable) {
+    public static class IntroducedIn {
+        public String introducedPreview;
+        public String introducedStable;
     }
 }
