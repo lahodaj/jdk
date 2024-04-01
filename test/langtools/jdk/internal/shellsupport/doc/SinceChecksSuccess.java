@@ -22,7 +22,6 @@
  */
 
 
-
 /*
  * @test
  * @summary Test JavaBaseSinceCheckerTest
@@ -52,19 +51,6 @@
 
 
 
-
-/*
- * @test
- * @summary Test JavaBaseSinceCheckerTest
- * @library /tools/lib
- * @modules jdk.compiler/com.sun.tools.javac.api
- *          jdk.compiler/com.sun.tools.javac.util
- *          jdk.compiler/com.sun.tools.javac.main
- *          jdk.compiler/com.sun.tools.javac.code
- *          jdk.compiler/jdk.internal.shellsupport.doc
- * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper java.compiler
- */
 /*
  * @test
  * @summary Test JavaBaseSinceCheckerTest
@@ -132,20 +118,6 @@
  * @run main SinceCheckerHelper jdk.dynalink
  */
 
-
-/*
- * @test
- * @summary Test JavaBaseSinceCheckerTest
- * @library /tools/lib
- * @modules jdk.compiler/com.sun.tools.javac.api
- *          jdk.compiler/com.sun.tools.javac.util
- *          jdk.compiler/com.sun.tools.javac.main
- *          jdk.compiler/com.sun.tools.javac.code
- *          jdk.compiler/jdk.internal.shellsupport.doc
- * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.compiler
- */
-
 /*
  * @test
  * @summary Test JavaBaseSinceCheckerTest
@@ -159,18 +131,6 @@
  * @run main SinceCheckerHelper jdk.httpserver
  */
 
-/*
- * @test
- * @summary Test JavaBaseSinceCheckerTest
- * @library /tools/lib
- * @modules jdk.compiler/com.sun.tools.javac.api
- *          jdk.compiler/com.sun.tools.javac.util
- *          jdk.compiler/com.sun.tools.javac.main
- *          jdk.compiler/com.sun.tools.javac.code
- *          jdk.compiler/jdk.internal.shellsupport.doc
- * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.javadoc
- */
 
 
 /*

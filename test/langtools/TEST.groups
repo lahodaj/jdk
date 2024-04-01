@@ -84,8 +84,9 @@ tier1 = \
 tier2 = \
     :langtools_jshell_unstable
 
-# No langtools tests are tier 3 either.
-tier3 =
+# (Almost) no langtools tests are tier 3.
+tier3 = \
+    jdk/javadoc/sincechecker/SinceCheckerLangTools.java
 
 # No langtools tests are tier 4 either.
 tier4 =
