@@ -44,48 +44,10 @@ import java.util.stream.Collectors;
 
 public class SinceCheckerHelper {
 
-    //these are methods that were preview in JDK 13 and JDK 14, before the introduction
-    //of the @PreviewFeature
-    //I believe an array will be better for small n
-    private final Set<String> LEGACY_PREVIEW_METHODS = Set.of(
-            //13
-            "method:java.lang.String:stripIndent:()",
-            "method:java.lang.String:translateEscapes:()",
-            "method:java.lang.String:formatted:(java.lang.Object[])",
-            //14
-            "method:com.sun.source.util.SimpleTreeVisitor:visitYield:(com.sun.source.tree.YieldTree,java.lang.Object)",
-            "method:com.sun.source.util.TreeScanner:visitYield:(com.sun.source.tree.YieldTree,java.lang.Object)",
-            "method:com.sun.source.tree.TreeVisitor:visitYield:(com.sun.source.tree.YieldTree,java.lang.Object)",
-            "field:com.sun.source.tree.Tree.Kind:YIELD",
-            "interface:com.sun.source.tree.YieldTree",
-            "class:javax.lang.model.element.RecordComponentElement",
-            "method:javax.lang.model.element.ElementVisitor:visitRecordComponent:(javax.lang.model.element.RecordComponentElement,P)",
-            "class:javax.lang.model.util.ElementScanner14",
-            "class:javax.lang.model.util.AbstractElementVisitor14",
-            "class:javax.lang.model.util.SimpleElementVisitor14",
-            "class:javax.lang.model.util.ElementKindVisitor6",
-            "class:javax.lang.model.util.ElementKindVisitor14",
-            "method:javax.lang.model.util.Elements:recordComponentFor:(javax.lang.model.element.ExecutableElement)",
-            "method:javax.lang.model.util.ElementFilter:recordComponentsIn:(java.lang.Iterable)",
-            "method:javax.lang.model.util.ElementFilter:recordComponentsIn:(java.util.Set)",
-            "method:javax.lang.model.element.TypeElement:getRecordComponents:()",
-            "field:javax.lang.model.element.ElementKind:RECORD",
-            "field:javax.lang.model.element.ElementKind:RECORD_COMPONENT",
-            "field:javax.lang.model.element.ElementKind:BINDING_VARIABLE",
-            "field:com.sun.source.tree.Tree.Kind:RECORD",
-            //"field:sun.reflect.annotation.TypeAnnotation.TypeAnnotationTarget:RECORD_COMPONENT"
-            "class:java.lang.reflect.RecordComponent",
-            "class:java.lang.runtime.ObjectMethods",
-            "field:java.lang.annotation.ElementType:RECORD_COMPONENT",
-            "method:java.lang.Class:isRecord:()",
-            "method:java.lang.Class:getRecordComponents:()",
-            "class:java.lang.Record",
-            "field:jdk.jshell.Snippet.SubKind:RECORD_SUBKIND"
-    );
+    //these are methods that were preview in before the introduction of the @PreviewFeature
+    private final Map<String, Set<String>> LEGACY_PREVIEW_METHODS = new HashMap<>();
 
 
-    private static final String JDK13 = "13";
-    private static final String JDK14 = "14";
     private final Map<String, IntroducedIn> classDictionary = new HashMap<>();
     private final JavaCompiler tool;
     private final List<String> wrongTagsList = new ArrayList<>();
@@ -178,9 +140,10 @@ public class SinceCheckerHelper {
             }
             el = el.getEnclosingElement();
         }
-        return LEGACY_PREVIEW_METHODS.contains(uniqueId)
-                &&
-                (JDK13.equals(currentVersion) || JDK14.equals(currentVersion));
+
+        return LEGACY_PREVIEW_METHODS.containsKey(currentVersion)
+                && LEGACY_PREVIEW_METHODS.get(currentVersion).contains(uniqueId);
+
     }
 
     private void testThisModule(String moduleName) throws Exception {
@@ -254,7 +217,7 @@ public class SinceCheckerHelper {
                             + " Wrong since version " + moduleVersion + " instead of " + introducedVersion + "\n");
                 }
             } catch (IOException e) {
-                wrongTagsList.add("module-info.java not found or couldn't be opened AND this module has no unqualified exports");
+                wrongTagsList.add("module-info.java not found or couldn't be opened AND this module has no unqualified exports\n");
             }
 
         }
@@ -276,10 +239,9 @@ public class SinceCheckerHelper {
                 String packageContent = new String(packageAsBytes, StandardCharsets.UTF_8);
                 packageTopVersion = extractSinceVersionFromText(packageContent);
             } catch (IOException e) {
-                wrongTagsList.add("package-info.java not found or couldn't be opened");
+                wrongTagsList.add("package-info.java not found or couldn't be opened\n");
             }
         }
-
         return packageTopVersion;
     }
 
@@ -321,7 +283,7 @@ public class SinceCheckerHelper {
         try {
             comment = javadocHelper.getResolvedDocComment(element);
         } catch (IOException e) {
-            wrongTagsList.add("JavadocHelper failed for " + element);
+            wrongTagsList.add("JavadocHelper failed for " + element + "\n");
         }
         Version sinceVersion = comment != null ? extractSinceVersionFromText(comment) : null;
         if (sinceVersion == null ||
@@ -335,14 +297,14 @@ public class SinceCheckerHelper {
                     mappedVersion.introducedPreview :
                     mappedVersion.introducedStable;
         } catch (Exception e) {
-            wrongTagsList.add("For element " + element + "mappedVersion" + mappedVersion + " is null\n" + e.toString());
+            wrongTagsList.add("For element " + element + "mappedVersion" + mappedVersion + " is null" + e + "\n");
         }
         checkEquals(sinceVersion, realMappedVersion, uniqueId);
         return sinceVersion;
     }
 
 
-    private  Version extractSinceVersionFromText(String documentation) {
+    private Version extractSinceVersionFromText(String documentation) {
         Pattern pattern = Pattern.compile("@since\\s+(\\d+(?:\\.\\d+)?)");
         Matcher matcher = pattern.matcher(documentation);
         if (matcher.find()) {
@@ -355,7 +317,7 @@ public class SinceCheckerHelper {
                 }
                 return Version.parse(versionString);
             } catch (NumberFormatException ex) {
-                wrongTagsList.add("@since value that cannot be parsed: " + versionString);
+                wrongTagsList.add("@since value that cannot be parsed: " + versionString + "\n");
                 return null;
             }
         } else {
@@ -373,9 +335,25 @@ public class SinceCheckerHelper {
             sinceVersion = Version.parse("9");
         }
         if (!sinceVersion.equals(Version.parse(mappedVersion))) {
-            wrongTagsList.add("For  Element: " + elementSimpleName
-                    + " Wrong since version " + sinceVersion + " instead of " + mappedVersion + "\n");
+            String message = getWrongSinceMessage(sinceVersion, mappedVersion, elementSimpleName);
+            wrongTagsList.add(message);
         }
+
+    }
+
+    private static String getWrongSinceMessage(Version sinceVersion, String mappedVersion, String elementSimpleName) {
+        String message;
+        if (mappedVersion.toString().equals("9")) {
+            message = "For Element: " + elementSimpleName +
+                    " Wrong @since version " + sinceVersion + " But the element exists before JDK 10\n";
+        } else if (sinceVersion.toString().equals("9")) {
+            message = "For Element: " + elementSimpleName +
+                    " Wrong @since version is 9 or older instead of " + mappedVersion + "\n";
+        } else {
+            message = "For Element: " + elementSimpleName +
+                    " Wrong @since version " + sinceVersion + " instead of " + mappedVersion + "\n";
+        }
+        return message;
     }
 
     private String getElementName(TypeElement te, Element element, Types types) {
@@ -407,5 +385,113 @@ public class SinceCheckerHelper {
     public static class IntroducedIn {
         public String introducedPreview;
         public String introducedStable;
+    }
+
+    {
+        LEGACY_PREVIEW_METHODS.put("12", Set.of(
+                "method:com.sun.source.tree.BreakTree:getValue:()",
+                "method:com.sun.source.tree.CaseTree:getExpressions:()",
+                "method:com.sun.source.tree.CaseTree:getBody:()",
+                "method:com.sun.source.tree.CaseTree:getCaseKind:()",
+                "class:com.sun.source.tree.CaseTree.CaseKind",
+                "field:com.sun.source.tree.Tree.Kind:SWITCH_EXPRESSION",
+                "interface:com.sun.source.tree.SwitchExpressionTree",
+                "method:com.sun.source.tree.TreeVisitor:visitSwitchExpression:(com.sun.source.tree.SwitchExpressionTree,java.lang.Object)",
+                "method:com.sun.source.util.TreeScanner:visitSwitchExpression:(com.sun.source.tree.SwitchExpressionTree,java.lang.Object)",
+                "method:com.sun.source.util.SimpleTreeVisitor:visitSwitchExpression:(com.sun.source.tree.SwitchExpressionTree,java.lang.Object)"
+        ));
+
+        LEGACY_PREVIEW_METHODS.put("13", Set.of(
+                "method:com.sun.source.tree.CaseTree:getExpressions:()",
+                "method:com.sun.source.tree.CaseTree:getBody:()",
+                "method:com.sun.source.tree.CaseTree:getCaseKind:()",
+                "class:com.sun.source.tree.CaseTree.CaseKind",
+                "field:com.sun.source.tree.Tree.Kind:SWITCH_EXPRESSION",
+                "interface:com.sun.source.tree.SwitchExpressionTree",
+                "method:com.sun.source.tree.TreeVisitor:visitSwitchExpression:(com.sun.source.tree.SwitchExpressionTree,java.lang.Object)",
+                "method:com.sun.source.util.TreeScanner:visitSwitchExpression:(com.sun.source.tree.SwitchExpressionTree,java.lang.Object)",
+                "method:com.sun.source.util.SimpleTreeVisitor:visitSwitchExpression:(com.sun.source.tree.SwitchExpressionTree,java.lang.Object)",
+                "method:java.lang.String:stripIndent:()",
+                "method:java.lang.String:translateEscapes:()",
+                "method:java.lang.String:formatted:(java.lang.Object[])",
+                "class:javax.swing.plaf.basic.motif.MotifLookAndFeel",
+                "field:com.sun.source.tree.Tree.Kind:YIELD",
+                "interface:com.sun.source.tree.YieldTree",
+                "method:com.sun.source.tree.TreeVisitor:visitYield:(com.sun.source.tree.YieldTree,java.lang.Object)",
+                "method:com.sun.source.util.SimpleTreeVisitor:visitYield:(com.sun.source.tree.YieldTree,java.lang.Object)",
+                "method:com.sun.source.util.TreeScanner:visitYield:(com.sun.source.tree.YieldTree,java.lang.Object)"
+        ));
+
+        LEGACY_PREVIEW_METHODS.put("14", Set.of(
+                "class:javax.swing.plaf.basic.motif.MotifLookAndFeel",
+                "method:java.lang.String:stripIndent:()",
+                "method:java.lang.String:translateEscapes:()",
+                "method:java.lang.String:formatted:(java.lang.Object[])",
+                "field:jdk.jshell.Snippet.SubKind:RECORD_SUBKIND",
+                "class:javax.lang.model.element.RecordComponentElement",
+                "method:javax.lang.model.element.ElementVisitor:visitRecordComponent:(javax.lang.model.element.RecordComponentElement,P)",
+                "class:javax.lang.model.util.ElementScanner14",
+                "class:javax.lang.model.util.AbstractElementVisitor14",
+                "class:javax.lang.model.util.SimpleElementVisitor14",
+                "method:javax.lang.model.util.ElementKindVisitor6:visitTypeAsRecord:(javax.lang.model.element.TypeElement,java.lang.Object)",
+                "class:javax.lang.model.util.ElementKindVisitor14",
+                "method:javax.lang.model.util.Elements:recordComponentFor:(javax.lang.model.element.ExecutableElement)",
+                "method:javax.lang.model.util.ElementFilter:recordComponentsIn:(java.lang.Iterable)",
+                "method:javax.lang.model.util.ElementFilter:recordComponentsIn:(java.util.Set)",
+                "method:javax.lang.model.element.TypeElement:getRecordComponents:()",
+                "field:javax.lang.model.element.ElementKind:RECORD",
+                "field:javax.lang.model.element.ElementKind:RECORD_COMPONENT",
+                "field:javax.lang.model.element.ElementKind:BINDING_VARIABLE",
+                "field:com.sun.source.tree.Tree.Kind:RECORD",
+                "field:sun.reflect.annotation.TypeAnnotation.TypeAnnotationTarget:RECORD_COMPONENT",
+                "class:java.lang.reflect.RecordComponent",
+                "class:java.lang.runtime.ObjectMethods",
+                "field:java.lang.annotation.ElementType:RECORD_COMPONENT",
+                "method:java.lang.Class:isRecord:()",
+                "method:java.lang.Class:getRecordComponents:()",
+                "class:java.lang.Record"
+        ));
+
+        LEGACY_PREVIEW_METHODS.put("15", Set.of(
+                "field:jdk.jshell.Snippet.SubKind:RECORD_SUBKIND",
+                "class:javax.lang.model.element.RecordComponentElement",
+                "method:javax.lang.model.element.ElementVisitor:visitRecordComponent:(javax.lang.model.element.RecordComponentElement,P)",
+                "class:javax.lang.model.util.ElementScanner14",
+                "class:javax.lang.model.util.AbstractElementVisitor14",
+                "class:javax.lang.model.util.SimpleElementVisitor14",
+                "method:javax.lang.model.util.ElementKindVisitor6:visitTypeAsRecord:(javax.lang.model.element.TypeElement,java.lang.Object)",
+                "class:javax.lang.model.util.ElementKindVisitor14",
+                "method:javax.lang.model.util.Elements:recordComponentFor:(javax.lang.model.element.ExecutableElement)",
+                "method:javax.lang.model.util.ElementFilter:recordComponentsIn:(java.lang.Iterable)",
+                "method:javax.lang.model.util.ElementFilter:recordComponentsIn:(java.util.Set)",
+                "method:javax.lang.model.element.TypeElement:getRecordComponents:()",
+                "field:javax.lang.model.element.ElementKind:RECORD",
+                "field:javax.lang.model.element.ElementKind:RECORD_COMPONENT",
+                "field:javax.lang.model.element.ElementKind:BINDING_VARIABLE",
+                "field:com.sun.source.tree.Tree.Kind:RECORD",
+                "field:sun.reflect.annotation.TypeAnnotation.TypeAnnotationTarget:RECORD_COMPONENT",
+                "class:java.lang.reflect.RecordComponent",
+                "class:java.lang.runtime.ObjectMethods",
+                "field:java.lang.annotation.ElementType:RECORD_COMPONENT",
+                "class:java.lang.Record",
+                "method:java.lang.Class:isRecord:()",
+                "method:java.lang.Class:getRecordComponents:()",
+                "field:javax.lang.model.element.Modifier:SEALED",
+                "field:javax.lang.model.element.Modifier:NON_SEALED",
+                "method:javax.lang.model.element.TypeElement:getPermittedSubclasses:()",
+                "method:com.sun.source.tree.ClassTree:getPermitsClause:()",
+                "method:java.lang.Class:isSealed:()",
+                "method:java.lang.Class:permittedSubclasses:()"
+        ));
+
+        LEGACY_PREVIEW_METHODS.put("16", Set.of(
+                "field:jdk.jshell.Snippet.SubKind:RECORD_SUBKIND",
+                "field:javax.lang.model.element.Modifier:SEALED",
+                "field:javax.lang.model.element.Modifier:NON_SEALED",
+                "method:javax.lang.model.element.TypeElement:getPermittedSubclasses:()",
+                "method:com.sun.source.tree.ClassTree:getPermitsClause:()",
+                "method:java.lang.Class:isSealed:()",
+                "method:java.lang.Class:getPermittedSubclasses:()"
+        ));
     }
 }

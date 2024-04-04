@@ -62,3 +62,7 @@ In this scenario:
 - The `B` class is the superclass with a method annotated with `@since JDK N`.
 - The `A` class is the subclass and is annotated with `@since JDK N`, it overrides the method from `B` in `JDK M`.
 - Since `M > N`, the effective `@since` for the overridden method in class `A` will be `JDK N`, following the guideline described.
+
+### Rule 4: Handling `@since` in Preview versions
+* When an element is still marked as preview, the `@since` should be the first JDK release where the element was added.
+* If the element is no longer marked as preview, the `@since` should be the first JDK release where it was no longer preview.
