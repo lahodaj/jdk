@@ -32,7 +32,7 @@
  *          jdk.compiler/jdk.internal.shellsupport.doc
  * @modules java.smartcardio
  * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper java.smartcardio
+ * @run main SinceValidator java.smartcardio
  */
 
 public class SinceChecker {

@@ -21,9 +21,12 @@
  * questions.
  */
 
+
+
+
 /*
  * @test
- * @summary Test for `@since` for module addressed by the LangTools team - java.compiler
+ * @summary Test JavaBaseSinceCheckerTest
  * @library /tools/lib
  * @modules jdk.compiler/com.sun.tools.javac.api
  *          jdk.compiler/com.sun.tools.javac.util
@@ -31,12 +34,13 @@
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
  * @library /test/jdk/tools/lib/tests
- * @run main SinceValidator java.compiler
+ * @run main SinceValidator jdk.httpserver
  */
+
 
 /*
  * @test
- * @summary Test for `@since` for module addressed by the LangTools team - jdk.compiler
+ * @summary Test JavaBaseSinceCheckerTest
  * @library /tools/lib
  * @modules jdk.compiler/com.sun.tools.javac.api
  *          jdk.compiler/com.sun.tools.javac.util
@@ -44,22 +48,11 @@
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
  * @library /test/jdk/tools/lib/tests
- * @run main SinceValidator jdk.compiler
- */
-
-/*
- * @test
- * @summary Test for `@since` for module addressed by the LangTools team - jdk.javadoc
- * @library /tools/lib
- * @modules jdk.compiler/com.sun.tools.javac.api
- *          jdk.compiler/com.sun.tools.javac.util
- *          jdk.compiler/com.sun.tools.javac.main
- *          jdk.compiler/com.sun.tools.javac.code
- *          jdk.compiler/jdk.internal.shellsupport.doc
- * @library /test/jdk/tools/lib/tests
- * @run main SinceValidator jdk.javadoc
+ * @run main SinceValidator java.net.http
  */
 
 
-public class SinceCheckerLangTools {
+
+public class SinceChecker {
+
 }

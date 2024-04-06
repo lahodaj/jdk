@@ -32,7 +32,7 @@
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
  * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.nio.mapmode
+ * @run main SinceValidator jdk.nio.mapmode
  */
 
 
@@ -46,7 +46,7 @@
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
  * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.jfr
+ * @run main SinceValidator jdk.jfr
  */
 
 /*
@@ -59,7 +59,7 @@
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
  * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.jshell
+ * @run main SinceValidator jdk.jshell
  */
 
 /*
@@ -72,7 +72,7 @@
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
  * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.dynalink
+ * @run main SinceValidator jdk.dynalink
  */
 
 /*
@@ -85,7 +85,7 @@
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
  * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.httpserver
+ * @run main SinceValidator jdk.httpserver
  */
 
 /*
@@ -98,34 +98,7 @@
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
  * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.management.jfr
- */
-
-
-/*
- * @test
- * @summary Test JavaBaseSinceCheckerTest
- * @library /tools/lib
- * @modules jdk.compiler/com.sun.tools.javac.api
- *          jdk.compiler/com.sun.tools.javac.util
- *          jdk.compiler/com.sun.tools.javac.main
- *          jdk.compiler/com.sun.tools.javac.code
- *          jdk.compiler/jdk.internal.shellsupport.doc
- * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.jconsole
- */
-
-/*
- * @test
- * @summary Test JavaBaseSinceCheckerTest
- * @library /tools/lib
- * @modules jdk.compiler/com.sun.tools.javac.api
- *          jdk.compiler/com.sun.tools.javac.util
- *          jdk.compiler/com.sun.tools.javac.main
- *          jdk.compiler/com.sun.tools.javac.code
- *          jdk.compiler/jdk.internal.shellsupport.doc
- * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.jartool
+ * @run main SinceValidator jdk.management.jfr
  */
 
 
@@ -139,7 +112,7 @@
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
  * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.sctp
+ * @run main SinceValidator jdk.jconsole
  */
 
 /*
@@ -152,21 +125,7 @@
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
  * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.jdi
- */
-
-
-/*
- * @test
- * @summary Test JavaBaseSinceCheckerTest
- * @library /tools/lib
- * @modules jdk.compiler/com.sun.tools.javac.api
- *          jdk.compiler/com.sun.tools.javac.util
- *          jdk.compiler/com.sun.tools.javac.main
- *          jdk.compiler/com.sun.tools.javac.code
- *          jdk.compiler/jdk.internal.shellsupport.doc
- * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.security.auth
+ * @run main SinceValidator jdk.jartool
  */
 
 
@@ -180,7 +139,7 @@
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
  * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.security.jgss
+ * @run main SinceValidator jdk.sctp
  */
 
 /*
@@ -193,7 +152,35 @@
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
  * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.jsobject
+ * @run main SinceValidator jdk.jdi
+ */
+
+
+/*
+ * @test
+ * @summary Test JavaBaseSinceCheckerTest
+ * @library /tools/lib
+ * @modules jdk.compiler/com.sun.tools.javac.api
+ *          jdk.compiler/com.sun.tools.javac.util
+ *          jdk.compiler/com.sun.tools.javac.main
+ *          jdk.compiler/com.sun.tools.javac.code
+ *          jdk.compiler/jdk.internal.shellsupport.doc
+ * @library /test/jdk/tools/lib/tests
+ * @run main SinceValidator jdk.security.auth
+ */
+
+
+/*
+ * @test
+ * @summary Test JavaBaseSinceCheckerTest
+ * @library /tools/lib
+ * @modules jdk.compiler/com.sun.tools.javac.api
+ *          jdk.compiler/com.sun.tools.javac.util
+ *          jdk.compiler/com.sun.tools.javac.main
+ *          jdk.compiler/com.sun.tools.javac.code
+ *          jdk.compiler/jdk.internal.shellsupport.doc
+ * @library /test/jdk/tools/lib/tests
+ * @run main SinceValidator jdk.security.jgss
  */
 
 /*
@@ -206,7 +193,7 @@
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
  * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.xml.dom
+ * @run main SinceValidator jdk.jsobject
  */
 
 /*
@@ -219,7 +206,20 @@
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
  * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.net
+ * @run main SinceValidator jdk.xml.dom
+ */
+
+/*
+ * @test
+ * @summary Test JavaBaseSinceCheckerTest
+ * @library /tools/lib
+ * @modules jdk.compiler/com.sun.tools.javac.api
+ *          jdk.compiler/com.sun.tools.javac.util
+ *          jdk.compiler/com.sun.tools.javac.main
+ *          jdk.compiler/com.sun.tools.javac.code
+ *          jdk.compiler/jdk.internal.shellsupport.doc
+ * @library /test/jdk/tools/lib/tests
+ * @run main SinceValidator jdk.net
  */
 
 

@@ -35,7 +35,7 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper java.desktop
+// * @run main SinceValidator java.desktop
 // */
 
 ////====================
@@ -50,8 +50,8 @@
 ////Export directives is null
 
 
-//
-//
+
+
 ///*
 // * @test
 // * @summary Test JavaBaseSinceCheckerTest
@@ -62,10 +62,10 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.graal.compiler
+// * @run main SinceValidator jdk.graal.compiler
 // */
-//
-//
+
+
 ///*
 // * @test
 // * @summary Test JavaBaseSinceCheckerTest
@@ -76,27 +76,12 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.charsets
-// */
-//
-//
-//
-//
-///*
-// * @test
-// * @summary Test JavaBaseSinceCheckerTest
-// * @library /tools/lib
-// * @modules jdk.compiler/com.sun.tools.javac.api
-// *          jdk.compiler/com.sun.tools.javac.util
-// *          jdk.compiler/com.sun.tools.javac.main
-// *          jdk.compiler/com.sun.tools.javac.code
-// *          jdk.compiler/jdk.internal.shellsupport.doc
-// * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.crypto.cryptoki
+// * @run main SinceValidator jdk.charsets
 // */
 //
 //
 //
+//
 ///*
 // * @test
 // * @summary Test JavaBaseSinceCheckerTest
@@ -107,7 +92,7 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.editpad
+// * @run main SinceValidator jdk.crypto.cryptoki
 // */
 //
 //
@@ -122,7 +107,7 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.crypto.ec
+// * @run main SinceValidator jdk.editpad
 // */
 //
 //
@@ -137,35 +122,7 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.naming.dns
-// */
-//
-//
-///*
-// * @test
-// * @summary Test JavaBaseSinceCheckerTest
-// * @library /tools/lib
-// * @modules jdk.compiler/com.sun.tools.javac.api
-// *          jdk.compiler/com.sun.tools.javac.util
-// *          jdk.compiler/com.sun.tools.javac.main
-// *          jdk.compiler/com.sun.tools.javac.code
-// *          jdk.compiler/jdk.internal.shellsupport.doc
-// * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.naming.rmi
-// */
-//
-//
-///*
-// * @test
-// * @summary Test JavaBaseSinceCheckerTest
-// * @library /tools/lib
-// * @modules jdk.compiler/com.sun.tools.javac.api
-// *          jdk.compiler/com.sun.tools.javac.util
-// *          jdk.compiler/com.sun.tools.javac.main
-// *          jdk.compiler/com.sun.tools.javac.code
-// *          jdk.compiler/jdk.internal.shellsupport.doc
-// * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.random
+// * @run main SinceValidator jdk.crypto.ec
 // */
 //
 //
@@ -180,7 +137,35 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.jpackage
+// * @run main SinceValidator jdk.naming.dns
+// */
+//
+//
+///*
+// * @test
+// * @summary Test JavaBaseSinceCheckerTest
+// * @library /tools/lib
+// * @modules jdk.compiler/com.sun.tools.javac.api
+// *          jdk.compiler/com.sun.tools.javac.util
+// *          jdk.compiler/com.sun.tools.javac.main
+// *          jdk.compiler/com.sun.tools.javac.code
+// *          jdk.compiler/jdk.internal.shellsupport.doc
+// * @library /test/jdk/tools/lib/tests
+// * @run main SinceValidator jdk.naming.rmi
+// */
+//
+//
+///*
+// * @test
+// * @summary Test JavaBaseSinceCheckerTest
+// * @library /tools/lib
+// * @modules jdk.compiler/com.sun.tools.javac.api
+// *          jdk.compiler/com.sun.tools.javac.util
+// *          jdk.compiler/com.sun.tools.javac.main
+// *          jdk.compiler/com.sun.tools.javac.code
+// *          jdk.compiler/jdk.internal.shellsupport.doc
+// * @library /test/jdk/tools/lib/tests
+// * @run main SinceValidator jdk.random
 // */
 //
 //
@@ -195,7 +180,22 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.localedata
+// * @run main SinceValidator jdk.jpackage
+// */
+//
+//
+//
+///*
+// * @test
+// * @summary Test JavaBaseSinceCheckerTest
+// * @library /tools/lib
+// * @modules jdk.compiler/com.sun.tools.javac.api
+// *          jdk.compiler/com.sun.tools.javac.util
+// *          jdk.compiler/com.sun.tools.javac.main
+// *          jdk.compiler/com.sun.tools.javac.code
+// *          jdk.compiler/jdk.internal.shellsupport.doc
+// * @library /test/jdk/tools/lib/tests
+// * @run main SinceValidator jdk.localedata
 // */
 //
 //
@@ -209,7 +209,7 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.jstatd
+// * @run main SinceValidator jdk.jstatd
 // */
 //
 //
@@ -223,7 +223,7 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper java.se
+// * @run main SinceValidator java.se
 // */
 //
 //
@@ -238,7 +238,7 @@
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // *          jdk.hotspot.agent/sun.jvm.hotspot
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.hotspot.agent
+// * @run main SinceValidator jdk.hotspot.agent
 // */
 
 ///*
@@ -251,7 +251,7 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.jlink
+// * @run main SinceValidator jdk.jlink
 // */
 //
 //
@@ -266,7 +266,7 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.graal.compiler.management
+// * @run main SinceValidator jdk.graal.compiler.management
 // */
 //
 //
@@ -281,7 +281,7 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.jcmd
+// * @run main SinceValidator jdk.jcmd
 // */
 //
 //
@@ -296,7 +296,7 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.jdeps
+// * @run main SinceValidator jdk.jdeps
 // */
 //
 //
@@ -314,7 +314,7 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper java.rmi
+// * @run main SinceValidator java.rmi
 // */
 //
 //
@@ -331,7 +331,7 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.accessibility
+// * @run main SinceValidator jdk.accessibility
 // */
 //
 //// TC
@@ -345,48 +345,7 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.attach
-// */
-//
-/*
- * @test
- * @summary Test JavaBaseSinceCheckerTest
- * @library /tools/lib
- * @modules jdk.compiler/com.sun.tools.javac.api
- *          jdk.compiler/com.sun.tools.javac.util
- *          jdk.compiler/com.sun.tools.javac.main
- *          jdk.compiler/com.sun.tools.javac.code
- *          jdk.compiler/jdk.internal.shellsupport.doc
- * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper jdk.incubator.vector
- */
-
-//
-///*
-// * @test
-// * @summary Test JavaBaseSinceCheckerTest
-// * @library /tools/lib
-// * @modules jdk.compiler/com.sun.tools.javac.api
-// *          jdk.compiler/com.sun.tools.javac.util
-// *          jdk.compiler/com.sun.tools.javac.main
-// *          jdk.compiler/com.sun.tools.javac.code
-// *          jdk.compiler/jdk.internal.shellsupport.doc
-// * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.jdwp.agent
-// */
-//
-//
-///*
-// * @test
-// * @summary Test JavaBaseSinceCheckerTest
-// * @library /tools/lib
-// * @modules jdk.compiler/com.sun.tools.javac.api
-// *          jdk.compiler/com.sun.tools.javac.util
-// *          jdk.compiler/com.sun.tools.javac.main
-// *          jdk.compiler/com.sun.tools.javac.code
-// *          jdk.compiler/jdk.internal.shellsupport.doc
-// * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.management
+// * @run main SinceValidator jdk.attach
 // */
 //
 ///*
@@ -399,7 +358,7 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.management.agent
+// * @run main SinceValidator jdk.incubator.vector
 // */
 //
 ///*
@@ -412,7 +371,7 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.unsupported
+// * @run main SinceValidator jdk.jdwp.agent
 // */
 //
 //
@@ -426,7 +385,33 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.unsupported.desktop
+// * @run main SinceValidator jdk.management
+// */
+//
+///*
+// * @test
+// * @summary Test JavaBaseSinceCheckerTest
+// * @library /tools/lib
+// * @modules jdk.compiler/com.sun.tools.javac.api
+// *          jdk.compiler/com.sun.tools.javac.util
+// *          jdk.compiler/com.sun.tools.javac.main
+// *          jdk.compiler/com.sun.tools.javac.code
+// *          jdk.compiler/jdk.internal.shellsupport.doc
+// * @library /test/jdk/tools/lib/tests
+// * @run main SinceValidator jdk.management.agent
+// */
+//
+///*
+// * @test
+// * @summary Test JavaBaseSinceCheckerTest
+// * @library /tools/lib
+// * @modules jdk.compiler/com.sun.tools.javac.api
+// *          jdk.compiler/com.sun.tools.javac.util
+// *          jdk.compiler/com.sun.tools.javac.main
+// *          jdk.compiler/com.sun.tools.javac.code
+// *          jdk.compiler/jdk.internal.shellsupport.doc
+// * @library /test/jdk/tools/lib/tests
+// * @run main SinceValidator jdk.unsupported
 // */
 //
 //
@@ -440,7 +425,21 @@
 // *          jdk.compiler/com.sun.tools.javac.code
 // *          jdk.compiler/jdk.internal.shellsupport.doc
 // * @library /test/jdk/tools/lib/tests
-// * @run main SinceCheckerHelper jdk.zipfs
+// * @run main SinceValidator jdk.unsupported.desktop
+// */
+//
+//
+///*
+// * @test
+// * @summary Test JavaBaseSinceCheckerTest
+// * @library /tools/lib
+// * @modules jdk.compiler/com.sun.tools.javac.api
+// *          jdk.compiler/com.sun.tools.javac.util
+// *          jdk.compiler/com.sun.tools.javac.main
+// *          jdk.compiler/com.sun.tools.javac.code
+// *          jdk.compiler/jdk.internal.shellsupport.doc
+// * @library /test/jdk/tools/lib/tests
+// * @run main SinceValidator jdk.zipfs
 // */
 
 public class SinceCheckerTests {

@@ -1,7 +1,11 @@
 * this is meant to be a draft and can be improved in the future,
 * this is a collection of guidelines and rules around and the use of `@since` to keep discussions about the topic consistent.
 
-# `@since` Rules and Guidelines for Java Source Code Documentation
+# Guidelines Around usage of `@since` for Author
+* All "top-level" declaration (i.e. for a module, package, class or interface) in any file should have an `@since` tag.
+* All member declarations in any class or interface should have an `@since` tag unless the value matches that for the enclosing class.
+
+# Rules used in the `@since` Checker for Java Source Code Documentation
 
 When documenting Java source code, the `@since` tag serves as a crucial indicator of when an element, such as a class, method, field, or nested class, was introduced.
 

@@ -42,18 +42,16 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-public class SinceCheckerHelper {
+public class SinceValidator {
 
     //these are methods that were preview in before the introduction of the @PreviewFeature
     private final Map<String, Set<String>> LEGACY_PREVIEW_METHODS = new HashMap<>();
-
-
     private final Map<String, IntroducedIn> classDictionary = new HashMap<>();
     private final JavaCompiler tool;
     private final List<String> wrongTagsList = new ArrayList<>();
 
     public static void main(String[] args) throws Exception {
-        SinceCheckerHelper sinceCheckerTestHelper = new SinceCheckerHelper(args[0]);
+        SinceValidator sinceCheckerTestHelper = new SinceValidator(args[0]);
         if (args.length == 0) {
             System.err.println("No module specified. Exiting...");
             System.exit(1);
@@ -61,15 +59,17 @@ public class SinceCheckerHelper {
         sinceCheckerTestHelper.testThisModule(args[0]);
     }
 
-    private SinceCheckerHelper(String moduleName) throws Exception {
+    private SinceValidator(String moduleName) throws IOException {
         tool = ToolProvider.getSystemJavaCompiler();
         for (int i = 9; i <= Runtime.version().feature(); i++) {
             //NOTE
-            //Modules such as java.smartcardio don't appear when using elements.getAllModuleElements() until jdk 11 even tho they existed before
+            //Certain modules are only resolved in jdk 11 or newer, even tho they existed before
             //--add-module is necessary
             //JDK-8205169
+            List<String> javacOptions = getJavacOptions(moduleName, i);
+//                    getJavacOptions(moduleName, i);
             JavacTask ct = (JavacTask) tool.getTask(null, null, null,
-                    List.of("--add-modules", moduleName, "--release", String.valueOf(i)), null,
+                    javacOptions, null,
                     Collections.singletonList(SimpleJavaFileObject.forSource(URI.create("myfo:/Test.java"), "")));
             ct.analyze();
             String version = String.valueOf(i);
@@ -78,6 +78,24 @@ public class SinceCheckerHelper {
             elements.getAllModuleElements().forEach(me ->
                     processModuleRecord(me, version, ct));
         }
+    }
+
+    private static List<String> getJavacOptions(String moduleName, int i) {
+        if (i > 10) {
+            return List.of("--release", String.valueOf(i));
+        }
+        // these do not appear as part of the root modules until JDK 11
+        Set<String> modules = Set.of(
+                "jdk.jcmd", "jdk.jdeps", "jdk.jfr", "jdk.jlink",
+                "java.smartcardio", "jdk.localedata", "jdk.management.jfr", "jdk.naming.dns",
+                "jdk.naming.rmi", "jdk.charsets", "jdk.crypto.cryptoki", "jdk.crypto.ec",
+                "jdk.editpad", "jdk.hotspot.agent", "jdk.zipfs"
+        );
+        if (modules.contains(modules)) {
+            return List.of("--add-modules", moduleName, "--release", String.valueOf(i));
+        }
+        return List.of("--release", String.valueOf(i));
+
     }
 
     private void processModuleRecord(ModuleElement moduleElement, String releaseVersion, JavacTask ct) {
@@ -198,12 +216,12 @@ public class SinceCheckerHelper {
                 Version packageTopVersion = getPackageTopVersion(packagePath, ed);
                 analyzePackageCheck(ed.getPackage(), ct, sources, packageTopVersion);
             } else {
-                checkerModuleVersion(moduleElement, packagePath);
+                checkModuleVersion(moduleElement, packagePath);
             }
         }
     }
 
-    private void checkerModuleVersion(ModuleElement moduleElement, Path packagePath) {
+    private void checkModuleVersion(ModuleElement moduleElement, Path packagePath) {
         Path moduleInfoFile = packagePath.resolve("module-info.java");
         if (Files.exists(moduleInfoFile)) {
             try {
@@ -252,7 +270,7 @@ public class SinceCheckerHelper {
             try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
                 analyzeClassCheck(te, null, javadocHelper, ct.getTypes(), packageTopVersion);
             } catch (Exception e) {
-                wrongTagsList.add(e.getMessage());
+                wrongTagsList.add("Initiating javadocHelperFailed" + e.getMessage());
             }
         }
     }
@@ -264,7 +282,8 @@ public class SinceCheckerHelper {
             return;
         }
         Version currentVersion = checkElement(te, te, types, javadocHelper, version, enclosingVersion);
-        te.getEnclosedElements().stream().filter(element -> element.getModifiers().contains(Modifier.PUBLIC) || element.getModifiers().contains(Modifier.PROTECTED))
+        te.getEnclosedElements().stream().filter(element -> element.getModifiers().contains(Modifier.PUBLIC)
+                                                                    || element.getModifiers().contains(Modifier.PROTECTED))
                 .filter(element -> element.getKind().isField()
                         || element.getKind() == ElementKind.METHOD
                         || element.getKind() == ElementKind.CONSTRUCTOR)
@@ -328,7 +347,8 @@ public class SinceCheckerHelper {
 
     private void checkEquals(Version sinceVersion, String mappedVersion, String elementSimpleName) {
         if (sinceVersion == null || mappedVersion == null) {
-            System.err.println("For " + elementSimpleName + " mapped is=" + mappedVersion + " since is= " + sinceVersion);
+            System.err.println("For " + elementSimpleName + " mapped version is="
+                    + mappedVersion + " while the @since in the source code is= " + sinceVersion);
             return;
         }
         if (Version.parse("9").compareTo(sinceVersion) > 0) {

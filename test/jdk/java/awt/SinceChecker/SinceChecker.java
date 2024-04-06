@@ -31,7 +31,7 @@
  *          jdk.compiler/com.sun.tools.javac.code
  *          jdk.compiler/jdk.internal.shellsupport.doc
  * @library /test/jdk/tools/lib/tests
- * @run main SinceCheckerHelper java.desktop
+ * @run main SinceValidator java.desktop
  */
 
 
