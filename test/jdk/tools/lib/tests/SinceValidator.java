@@ -267,7 +267,7 @@ public class SinceValidator {
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
             try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
-                analyzeClassCheck(te, null, javadocHelper, ct.getTypes(), packageTopVersion, ct.getElements());
+                analyzeClassCheck(te, null, javadocHelper, ct.getTypes(), null, ct.getElements());
             } catch (Exception e) {
                 wrongTagsList.add("Initiating javadocHelperFailed" + e.getMessage());
             }
@@ -316,24 +316,24 @@ public class SinceValidator {
 //            Boolean overrides = element instanceof ExecutableElement && ((ExecutableElement) element).getAnnotation(Override.class) != null;
 
 //            if (uniqueId.equals("method:java.security.interfaces.RSAPublicKey:getParams:()")) {
-                var superclasses = types.directSupertypes(clazz.asType());
-                if (superclasses != null) {
-                    for (int i = superclasses.size() - 1; i >= 0; i--) {
-                        var superclass = superclasses.get(i);
-                        if (!superclass.toString().equals("java.lang.Object") && !foundOverridingMethod) {
-                            List<? extends Element> superclassmethods = elementUtils.getAllMembers((TypeElement) types.asElement(superclass));
-                            for (Element method : superclassmethods) {
-                                if (method.getSimpleName().contentEquals(element.getSimpleName()) && method.asType().toString().equals(element.asType().toString())) {
-                                    overridenMethod = method;
-                                    foundOverridingMethod = true;
-                                    methodSuperClass = types.asElement(superclass);
-                                    overridenMethodID = getElementName((TypeElement) types.asElement(superclass), overridenMethod, types);
-                                }
+            var superclasses = types.directSupertypes(clazz.asType());
+            if (superclasses != null) {
+                for (int i = superclasses.size() - 1; i >= 0; i--) {
+                    var superclass = superclasses.get(i);
+                    if (!superclass.toString().equals("java.lang.Object") && !foundOverridingMethod) {
+                        List<? extends Element> superclassmethods = elementUtils.getAllMembers((TypeElement) types.asElement(superclass));
+                        for (Element method : superclassmethods) {
+                            if (method.getSimpleName().contentEquals(element.getSimpleName()) && method.asType().toString().equals(element.asType().toString())) {
+                                overridenMethod = method;
+                                foundOverridingMethod = true;
+                                methodSuperClass = types.asElement(superclass);
+                                overridenMethodID = getElementName((TypeElement) types.asElement(superclass), overridenMethod, types);
                             }
                         }
                     }
                 }
             }
+        }
 //        }
 
 
@@ -353,24 +353,33 @@ public class SinceValidator {
         }
         if (!foundOverridingMethod) {
             checkEquals(sinceVersion, realMappedVersion, uniqueId);
-        } else {
-            String versionOverridenMethod = null;
-            String versionOverridenClass = null;
-            try {
-                versionOverridenMethod = String.valueOf(extractSinceVersionFromText(javadocHelper.getResolvedDocComment(overridenMethod)));
-                versionOverridenClass = String.valueOf(extractSinceVersionFromText(javadocHelper.getResolvedDocComment(methodSuperClass)));
-                if (versionOverridenMethod == null && versionOverridenClass != null) {
-                    versionOverridenMethod = versionOverridenClass;
-                }
-            } catch (IOException e) {
-                wrongTagsList.add("JavadocHelper failed for " + overridenMethod + "\n");
-            }
-//            checkEqualsOverrides(enclosingVersion.toString(), sinceVersion.toString(),
-//                    realMappedVersion, uniqueId, overridenMethodID, overridenMethod,
-//                    versionOverridenMethod);
 
-            checkEquals(Version.parse(versionOverridenMethod), realMappedVersion,
-                    uniqueId);
+
+//        } else {
+//            String versionOverridenMethod = null;
+//            String versionOverridenClass = null;
+//            try {
+//                versionOverridenMethod = String.valueOf(extractSinceVersionFromText(javadocHelper.getResolvedDocComment(overridenMethod)));
+//                versionOverridenClass = String.valueOf(extractSinceVersionFromText(javadocHelper.getResolvedDocComment(methodSuperClass)));
+//                if (versionOverridenMethod == null && versionOverridenClass != null) {
+//                    versionOverridenMethod = versionOverridenClass;
+//                }
+//            } catch (IOException e) {
+////                wrongTagsList.add("JavadocHelper failed for " + overridenMethod + "\n");
+//            }
+////            checkEqualsOverrides(enclosingVersion.toString(), sinceVersion.toString(),
+////                    realMappedVersion, uniqueId, overridenMethodID, overridenMethod,
+////                    versionOverridenMethod);
+//
+//
+//            if (!sinceVersion.equals(enclosingVersion)) {
+//
+//            }
+//
+//            checkEquals(Version.parse(versionOverridenMethod), realMappedVersion,
+//                    uniqueId);
+
+
         }
         return sinceVersion;
     }
