@@ -304,7 +304,7 @@ public class SinceValidator {
         } catch (IOException e) {
             wrongTagsList.add("JavadocHelper failed for " + element + "\n");
         }
-
+// Needs to be split it up once it's at a good working version
 
         Boolean foundOverridingMethod = false;
         Element overridenMethod = null;
@@ -315,11 +315,11 @@ public class SinceValidator {
 //            and it is discarded by the compiler
 //            Boolean overrides = element instanceof ExecutableElement && ((ExecutableElement) element).getAnnotation(Override.class) != null;
 
-            if (uniqueId.equals("method:java.security.interfaces.RSAPublicKey:getParams:()")) {
+//            if (uniqueId.equals("method:java.security.interfaces.RSAPublicKey:getParams:()")) {
                 var superclasses = types.directSupertypes(clazz.asType());
                 if (superclasses != null) {
                     for (int i = superclasses.size() - 1; i >= 0; i--) {
-                        var superclass= superclasses.get(i);
+                        var superclass = superclasses.get(i);
                         if (!superclass.toString().equals("java.lang.Object") && !foundOverridingMethod) {
                             List<? extends Element> superclassmethods = elementUtils.getAllMembers((TypeElement) types.asElement(superclass));
                             for (Element method : superclassmethods) {
@@ -334,7 +334,9 @@ public class SinceValidator {
                     }
                 }
             }
-        }
+//        }
+
+
         IntroducedIn mappedVersion = classDictionary.get(uniqueId);
         String realMappedVersion = null;
         try {
@@ -353,20 +355,22 @@ public class SinceValidator {
             checkEquals(sinceVersion, realMappedVersion, uniqueId);
         } else {
             String versionOverridenMethod = null;
-            String versionOverridenClass=null;
+            String versionOverridenClass = null;
             try {
                 versionOverridenMethod = String.valueOf(extractSinceVersionFromText(javadocHelper.getResolvedDocComment(overridenMethod)));
                 versionOverridenClass = String.valueOf(extractSinceVersionFromText(javadocHelper.getResolvedDocComment(methodSuperClass)));
-                if (versionOverridenMethod == null ||
-                        (versionOverridenClass != null && versionOverridenClass.compareTo(versionOverridenMethod) > 0)) {
+                if (versionOverridenMethod == null && versionOverridenClass != null) {
                     versionOverridenMethod = versionOverridenClass;
                 }
             } catch (IOException e) {
                 wrongTagsList.add("JavadocHelper failed for " + overridenMethod + "\n");
             }
-            checkEqualsOverrides(enclosingVersion.toString(), sinceVersion.toString(),
-                    realMappedVersion, uniqueId, overridenMethodID, overridenMethod,
-                    versionOverridenMethod);
+//            checkEqualsOverrides(enclosingVersion.toString(), sinceVersion.toString(),
+//                    realMappedVersion, uniqueId, overridenMethodID, overridenMethod,
+//                    versionOverridenMethod);
+
+            checkEquals(Version.parse(versionOverridenMethod), realMappedVersion,
+                    uniqueId);
         }
         return sinceVersion;
     }
