@@ -27,6 +27,7 @@ import com.sun.tools.javac.code.Symbol;
 import jdk.internal.shellsupport.doc.JavadocHelper;
 //import jtreg.SkippedException;
 import javax.lang.model.element.*;
+import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
@@ -305,27 +306,27 @@ public class SinceValidator {
         }
 
 
-        Boolean useOveridddingbehavior = false;
+        Boolean foundOverridingMethod = false;
         Element overridenMethod = null;
         String overridenMethodID = null;
-
+        Element methodSuperClass = null;
         if (element instanceof ExecutableElement) {
-//            found this to not work as @Override is annoated with SOURCE
+//            found this to not work as @Override is annotated with SOURCE
 //            and it is discarded by the compiler
-
 //            Boolean overrides = element instanceof ExecutableElement && ((ExecutableElement) element).getAnnotation(Override.class) != null;
 
             if (uniqueId.equals("method:java.security.interfaces.RSAPublicKey:getParams:()")) {
                 var superclasses = types.directSupertypes(clazz.asType());
                 if (superclasses != null) {
-//                getElementName(superclass, element, types);
-                    for (var superclass : superclasses) {
-                        if (!superclass.toString().equals("java.lang.Object")) {
+                    for (int i = superclasses.size() - 1; i >= 0; i--) {
+                        var superclass= superclasses.get(i);
+                        if (!superclass.toString().equals("java.lang.Object") && !foundOverridingMethod) {
                             List<? extends Element> superclassmethods = elementUtils.getAllMembers((TypeElement) types.asElement(superclass));
                             for (Element method : superclassmethods) {
                                 if (method.getSimpleName().contentEquals(element.getSimpleName()) && method.asType().toString().equals(element.asType().toString())) {
                                     overridenMethod = method;
-                                    useOveridddingbehavior = true;
+                                    foundOverridingMethod = true;
+                                    methodSuperClass = types.asElement(superclass);
                                     overridenMethodID = getElementName((TypeElement) types.asElement(superclass), overridenMethod, types);
                                 }
                             }
@@ -333,12 +334,6 @@ public class SinceValidator {
                     }
                 }
             }
-        }
-
-        Version sinceVersion = comment != null ? extractSinceVersionFromText(comment) : null;
-        if (sinceVersion == null ||
-                (enclosingVersion != null && enclosingVersion.compareTo(sinceVersion) > 0)) {
-            sinceVersion = enclosingVersion;
         }
         IntroducedIn mappedVersion = classDictionary.get(uniqueId);
         String realMappedVersion = null;
@@ -349,16 +344,54 @@ public class SinceValidator {
         } catch (Exception e) {
             wrongTagsList.add("For element " + element + "mappedVersion" + mappedVersion + " is null" + e + "\n");
         }
-
-        if (!useOveridddingbehavior) {
+        Version sinceVersion = comment != null ? extractSinceVersionFromText(comment) : null;
+        if (sinceVersion == null ||
+                (enclosingVersion != null && enclosingVersion.compareTo(sinceVersion) > 0)) {
+            sinceVersion = enclosingVersion;
+        }
+        if (!foundOverridingMethod) {
             checkEquals(sinceVersion, realMappedVersion, uniqueId);
         } else {
-            checkEqualsOverrides(sinceVersion, realMappedVersion, uniqueId, overridenMethodID, overridenMethod);
+            String versionOverridenMethod = null;
+            String versionOverridenClass=null;
+            try {
+                versionOverridenMethod = String.valueOf(extractSinceVersionFromText(javadocHelper.getResolvedDocComment(overridenMethod)));
+                versionOverridenClass = String.valueOf(extractSinceVersionFromText(javadocHelper.getResolvedDocComment(methodSuperClass)));
+                if (versionOverridenMethod == null ||
+                        (versionOverridenClass != null && versionOverridenClass.compareTo(versionOverridenMethod) > 0)) {
+                    versionOverridenMethod = versionOverridenClass;
+                }
+            } catch (IOException e) {
+                wrongTagsList.add("JavadocHelper failed for " + overridenMethod + "\n");
+            }
+            checkEqualsOverrides(enclosingVersion.toString(), sinceVersion.toString(),
+                    realMappedVersion, uniqueId, overridenMethodID, overridenMethod,
+                    versionOverridenMethod);
         }
         return sinceVersion;
     }
 
-    private void checkEqualsOverrides(Version sinceVersion, String realMappedVersion, String uniqueId, String overridenMethodID, Element overridenMethod) {
+    private void checkEqualsOverrides(String enclosingVersion, String sinceVersion, String realMappedVersion, String uniqueId, String overriddenMethodId, Element overriddenMethod, String overriddenMethodSinceVersion) {
+
+        if (overriddenMethod != null && overriddenMethodId != null) {
+            if (overriddenMethodSinceVersion != null && sinceVersion != null) {
+                if (realMappedVersion.equals(overriddenMethodSinceVersion) && Integer.parseInt(enclosingVersion) <= Integer.parseInt(realMappedVersion)) { // mapping matches that of the supertype
+                    // comparison with the supertype is good
+                    if (enclosingVersion.equals(sinceVersion)) {
+                        wrongTagsList.add("@since should be removed for this method" + uniqueId + "\n");
+                    }
+                } else if (Integer.parseInt(sinceVersion) > Integer.parseInt(realMappedVersion)) {
+
+                }
+
+
+                if (sinceVersion.compareTo(overriddenMethodSinceVersion) > 0) {
+                    sinceVersion = overriddenMethodSinceVersion;
+                }
+            }
+        } else {
+            wrongTagsList.add("Checking @since failed for " + uniqueId);
+        }
     }
 
 
