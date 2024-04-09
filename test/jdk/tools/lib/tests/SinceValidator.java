@@ -43,6 +43,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+// this is experimental in case I need to get the `@since` from overriden methods
+// check revision f4cfaea1 for the working version
 public class SinceValidator {
 
     //these are methods that were preview in before the introduction of the @PreviewFeature
