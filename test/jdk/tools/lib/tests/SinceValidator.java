@@ -27,7 +27,6 @@ import com.sun.tools.javac.code.Symbol;
 import jdk.internal.shellsupport.doc.JavadocHelper;
 //import jtreg.SkippedException;
 import javax.lang.model.element.*;
-import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
@@ -43,8 +42,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-// this is experimental in case I need to get the `@since` from overriden methods
-// check revision f4cfaea1 for the working version
 public class SinceValidator {
 
     //these are methods that were preview in before the introduction of the @PreviewFeature
@@ -52,8 +49,6 @@ public class SinceValidator {
     private final Map<String, IntroducedIn> classDictionary = new HashMap<>();
     private final JavaCompiler tool;
     private final List<String> wrongTagsList = new ArrayList<>();
-
-    //should turn off compiler warning when running test on incubator module
 
     public static void main(String[] args) throws Exception {
         SinceValidator sinceCheckerTestHelper = new SinceValidator(args[0]);
@@ -72,6 +67,7 @@ public class SinceValidator {
             //--add-module is necessary
             //JDK-8205169
             List<String> javacOptions = getJavacOptions(moduleName, i);
+//                    getJavacOptions(moduleName, i);
             JavacTask ct = (JavacTask) tool.getTask(null, null, null,
                     javacOptions, null,
                     Collections.singletonList(SimpleJavaFileObject.forSource(URI.create("myfo:/Test.java"), "")));
@@ -99,6 +95,7 @@ public class SinceValidator {
             return List.of("--add-modules", moduleName, "--release", String.valueOf(i));
         }
         return List.of("--release", String.valueOf(i));
+
     }
 
     private void processModuleRecord(ModuleElement moduleElement, String releaseVersion, JavacTask ct) {
@@ -161,15 +158,17 @@ public class SinceValidator {
             }
             el = el.getEnclosingElement();
         }
+
         return LEGACY_PREVIEW_METHODS.containsKey(currentVersion)
                 && LEGACY_PREVIEW_METHODS.get(currentVersion).contains(uniqueId);
+
     }
 
     private void testThisModule(String moduleName) throws Exception {
         List<Path> sources = new ArrayList<>();
 //        Path home = Paths.get(System.getProperty("java.home"));
 //        Path srcZip = home.resolve("lib").resolve("src.zip");
-        Path srcZip = Path.of(pathToAPIKEY.pathToSRC); // local path to my src.zip file
+        Path srcZip = Path.of(pathToAPIKEY.pathToSRC);
         File f = new File(srcZip.toUri());
         if (!f.exists() && !f.isDirectory()) {
 //          throw new SkippedException("Skipping Test because src.zip wasn't found");
@@ -269,7 +268,7 @@ public class SinceValidator {
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
             try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
-                analyzeClassCheck(te, null, javadocHelper, ct.getTypes(), null, ct.getElements());
+                analyzeClassCheck(te, null, javadocHelper, ct.getTypes(), packageTopVersion);
             } catch (Exception e) {
                 wrongTagsList.add("Initiating javadocHelperFailed" + e.getMessage());
             }
@@ -277,68 +276,39 @@ public class SinceValidator {
     }
 
     private void analyzeClassCheck(TypeElement te, String version, JavadocHelper javadocHelper,
-                                   Types types, Version enclosingVersion, Elements elementUtils) {
+                                   Types types, Version enclosingVersion) {
         Set<Modifier> classModifiers = te.getModifiers();
         if (!(classModifiers.contains(Modifier.PUBLIC) || classModifiers.contains(Modifier.PROTECTED))) {
             return;
         }
-
-        Version currentVersion = checkElement(te, te, types, javadocHelper, version, enclosingVersion, elementUtils);
+        Version currentVersion = checkElement(te, te, types, javadocHelper, version, enclosingVersion);
         te.getEnclosedElements().stream().filter(element -> element.getModifiers().contains(Modifier.PUBLIC)
                         || element.getModifiers().contains(Modifier.PROTECTED))
                 .filter(element -> element.getKind().isField()
                         || element.getKind() == ElementKind.METHOD
                         || element.getKind() == ElementKind.CONSTRUCTOR)
-                .forEach(element -> checkElement(te, element, types, javadocHelper, version, currentVersion, elementUtils));
+                .forEach(element -> checkElement(te, element, types, javadocHelper, version, currentVersion));
         te.getEnclosedElements().stream()
                 .filter(element -> element.getKind().isDeclaredType())
                 .map(TypeElement.class::cast)
-                .forEach(nestedClass -> analyzeClassCheck(nestedClass, version, javadocHelper, types, currentVersion, elementUtils));
+                .forEach(nestedClass -> analyzeClassCheck(nestedClass, version, javadocHelper, types, currentVersion));
     }
 
-    private Version checkElement(TypeElement clazz, Element element, Types types,
-                                 JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion, Elements elementUtils) {
-        String uniqueId = getElementName(clazz, element, types);
 
+    private Version checkElement(TypeElement clazz, Element element, Types types,
+                                 JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
+        String uniqueId = getElementName(clazz, element, types);
         String comment = null;
         try {
             comment = javadocHelper.getResolvedDocComment(element);
         } catch (IOException e) {
             wrongTagsList.add("JavadocHelper failed for " + element + "\n");
         }
-// Needs to be split it up once it's at a good working version
-
-        Boolean foundOverridingMethod = false;
-        Element overridenMethod = null;
-        String overridenMethodID = null;
-        Element methodSuperClass = null;
-        if (element instanceof ExecutableElement) {
-//            found this to not work as @Override is annotated with SOURCE
-//            and it is discarded by the compiler
-//            Boolean overrides = element instanceof ExecutableElement && ((ExecutableElement) element).getAnnotation(Override.class) != null;
-
-//            if (uniqueId.equals("method:java.security.interfaces.RSAPublicKey:getParams:()")) {
-            var superclasses = types.directSupertypes(clazz.asType());
-            if (superclasses != null) {
-                for (int i = superclasses.size() - 1; i >= 0; i--) {
-                    var superclass = superclasses.get(i);
-                    if (!superclass.toString().equals("java.lang.Object") && !foundOverridingMethod) {
-                        List<? extends Element> superclassmethods = elementUtils.getAllMembers((TypeElement) types.asElement(superclass));
-                        for (Element method : superclassmethods) {
-                            if (method.getSimpleName().contentEquals(element.getSimpleName()) && method.asType().toString().equals(element.asType().toString())) {
-                                overridenMethod = method;
-                                foundOverridingMethod = true;
-                                methodSuperClass = types.asElement(superclass);
-                                overridenMethodID = getElementName((TypeElement) types.asElement(superclass), overridenMethod, types);
-                            }
-                        }
-                    }
-                }
-            }
+        Version sinceVersion = comment != null ? extractSinceVersionFromText(comment) : null;
+        if (sinceVersion == null ||
+                (enclosingVersion != null && enclosingVersion.compareTo(sinceVersion) > 0)) {
+            sinceVersion = enclosingVersion;
         }
-//        }
-
-
         IntroducedIn mappedVersion = classDictionary.get(uniqueId);
         String realMappedVersion = null;
         try {
@@ -348,65 +318,8 @@ public class SinceValidator {
         } catch (Exception e) {
             wrongTagsList.add("For element " + element + "mappedVersion" + mappedVersion + " is null" + e + "\n");
         }
-        Version sinceVersion = comment != null ? extractSinceVersionFromText(comment) : null;
-        if (sinceVersion == null ||
-                (enclosingVersion != null && enclosingVersion.compareTo(sinceVersion) > 0)) {
-            sinceVersion = enclosingVersion;
-        }
-        if (!foundOverridingMethod) {
-            checkEquals(sinceVersion, realMappedVersion, uniqueId);
-
-
-//        } else {
-//            String versionOverridenMethod = null;
-//            String versionOverridenClass = null;
-//            try {
-//                versionOverridenMethod = String.valueOf(extractSinceVersionFromText(javadocHelper.getResolvedDocComment(overridenMethod)));
-//                versionOverridenClass = String.valueOf(extractSinceVersionFromText(javadocHelper.getResolvedDocComment(methodSuperClass)));
-//                if (versionOverridenMethod == null && versionOverridenClass != null) {
-//                    versionOverridenMethod = versionOverridenClass;
-//                }
-//            } catch (IOException e) {
-////                wrongTagsList.add("JavadocHelper failed for " + overridenMethod + "\n");
-//            }
-////            checkEqualsOverrides(enclosingVersion.toString(), sinceVersion.toString(),
-////                    realMappedVersion, uniqueId, overridenMethodID, overridenMethod,
-////                    versionOverridenMethod);
-//
-//
-//            if (!sinceVersion.equals(enclosingVersion)) {
-//
-//            }
-//
-//            checkEquals(Version.parse(versionOverridenMethod), realMappedVersion,
-//                    uniqueId);
-
-
-        }
+        checkEquals(sinceVersion, realMappedVersion, uniqueId);
         return sinceVersion;
-    }
-
-    private void checkEqualsOverrides(String enclosingVersion, String sinceVersion, String realMappedVersion, String uniqueId, String overriddenMethodId, Element overriddenMethod, String overriddenMethodSinceVersion) {
-
-        if (overriddenMethod != null && overriddenMethodId != null) {
-            if (overriddenMethodSinceVersion != null && sinceVersion != null) {
-                if (realMappedVersion.equals(overriddenMethodSinceVersion) && Integer.parseInt(enclosingVersion) <= Integer.parseInt(realMappedVersion)) { // mapping matches that of the supertype
-                    // comparison with the supertype is good
-                    if (enclosingVersion.equals(sinceVersion)) {
-                        wrongTagsList.add("@since should be removed for this method" + uniqueId + "\n");
-                    }
-                } else if (Integer.parseInt(sinceVersion) > Integer.parseInt(realMappedVersion)) {
-
-                }
-
-
-                if (sinceVersion.compareTo(overriddenMethodSinceVersion) > 0) {
-                    sinceVersion = overriddenMethodSinceVersion;
-                }
-            }
-        } else {
-            wrongTagsList.add("Checking @since failed for " + uniqueId);
-        }
     }
 
 
