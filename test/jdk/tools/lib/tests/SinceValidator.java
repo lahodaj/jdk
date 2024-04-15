@@ -165,9 +165,12 @@ public class SinceValidator {
 
     private void testThisModule(String moduleName) throws Exception {
         List<Path> sources = new ArrayList<>();
-//        Path home = Paths.get(System.getProperty("java.home"));
-//        Path srcZip = home.resolve("lib").resolve("src.zip");
-        Path srcZip = Path.of(pathToAPIKEY.pathToSRC); // local path to my src.zip file
+        Path home = Paths.get(System.getProperty("java.home"));
+        Path srcZip = home.resolve("lib").resolve("src.zip");
+        if (Files.notExists(srcZip)) {
+            Path testJdk = Paths.get(System.getProperty("test.jdk"));
+            srcZip = testJdk.getParent().resolve("images").resolve("jdk").resolve("lib").resolve("src.zip");
+        }
         File f = new File(srcZip.toUri());
         if (!f.exists() && !f.isDirectory()) {
 //          throw new SkippedException("Skipping Test because src.zip wasn't found");
@@ -269,6 +272,7 @@ public class SinceValidator {
             try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
                 analyzeClassCheck(te, null, javadocHelper, ct.getTypes(), packageTopVersion, ct.getElements());
             } catch (Exception e) {
+                e.printStackTrace();
                 wrongTagsList.add("Initiating javadocHelperFailed" + e.getMessage());
             }
         }
@@ -354,11 +358,11 @@ public class SinceValidator {
         if (!foundOverridingMethod) {
             checkEquals(sinceVersion, realMappedVersion, uniqueId);
         } else {
-            String versionOverridenMethod = null;
-            String versionOverridenClass = null;
+            Version versionOverridenMethod = null;
+            Version versionOverridenClass = null;
             try {
-                versionOverridenMethod = String.valueOf(extractSinceVersionFromText(javadocHelper.getResolvedDocComment(overridenMethod)));
-                versionOverridenClass = String.valueOf(extractSinceVersionFromText(javadocHelper.getResolvedDocComment(methodSuperClass)));
+                versionOverridenMethod = extractSinceVersionFromText(javadocHelper.getResolvedDocComment(overridenMethod));
+                versionOverridenClass = extractSinceVersionFromText(javadocHelper.getResolvedDocComment(methodSuperClass));
                 if (versionOverridenMethod == null && versionOverridenClass != null) {
                     versionOverridenMethod = versionOverridenClass;
                 }
@@ -369,7 +373,7 @@ public class SinceValidator {
 //                    realMappedVersion, uniqueId, overridenMethodID, overridenMethod,
 //                    versionOverridenMethod);
 
-            checkEquals(Version.parse(versionOverridenMethod), realMappedVersion,
+            checkEquals(versionOverridenMethod, realMappedVersion,
                     uniqueId);
         }
         return sinceVersion;
