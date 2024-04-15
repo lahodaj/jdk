@@ -91,7 +91,7 @@ public class SinceValidator {
                 "jdk.naming.rmi", "jdk.charsets", "jdk.crypto.cryptoki", "jdk.crypto.ec",
                 "jdk.editpad", "jdk.hotspot.agent", "jdk.zipfs"
         );
-        if (modules.contains(modules)) {
+        if (modules.contains(moduleName)) {
             return List.of("--add-modules", moduleName, "--release", String.valueOf(i));
         }
         return List.of("--release", String.valueOf(i));
@@ -138,6 +138,9 @@ public class SinceValidator {
 
     public void persistElement(TypeElement clazz, Element element, Types types, String version) {
         String uniqueId = getElementName(clazz, element, types);
+        if(uniqueId.equals("method:java.lang.classfile.ClassSignature:superclassSignature:()")){
+            System.out.println("hi");
+        }
         IntroducedIn introduced = classDictionary.computeIfAbsent(uniqueId, i -> new IntroducedIn());
         if (isPreview(element, uniqueId, version)) {
             if (introduced.introducedPreview == null) {
@@ -298,6 +301,9 @@ public class SinceValidator {
     private Version checkElement(TypeElement clazz, Element element, Types types,
                                  JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
         String uniqueId = getElementName(clazz, element, types);
+        if(uniqueId.equals("method:java.lang.classfile.ClassSignature:superclassSignature:()")){
+            System.out.println("hi");
+        }
         String comment = null;
         try {
             comment = javadocHelper.getResolvedDocComment(element);
@@ -388,7 +394,7 @@ public class SinceValidator {
             ExecutableElement executableElement = (ExecutableElement) element;
             String methodName = executableElement.getSimpleName().toString();
             String descriptor = executableElement.getParameters().stream()
-                    .map(p -> types.erasure(p.asType()).toString())
+                    .map(p -> p.asType().toString())
                     .collect(Collectors.joining(",", "(", ")"));
             suffix = ":" + te.getQualifiedName() + ":" + methodName + ":" + descriptor;
         } else if (kind.isDeclaredType()) {
