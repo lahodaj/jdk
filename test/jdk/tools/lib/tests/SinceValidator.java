@@ -67,9 +67,9 @@ public class SinceValidator {
             //--add-module is necessary
             //JDK-8205169
             List<String> javacOptions = getJavacOptions(moduleName, i);
-//                    getJavacOptions(moduleName, i);
             JavacTask ct = (JavacTask) tool.getTask(null, null, null,
-                    javacOptions, null,
+                    javacOptions,
+                    null,
                     Collections.singletonList(SimpleJavaFileObject.forSource(URI.create("myfo:/Test.java"), "")));
             ct.analyze();
             String version = String.valueOf(i);
@@ -138,9 +138,6 @@ public class SinceValidator {
 
     public void persistElement(TypeElement clazz, Element element, Types types, String version) {
         String uniqueId = getElementName(clazz, element, types);
-        if(uniqueId.equals("method:java.lang.classfile.ClassSignature:superclassSignature:()")){
-            System.out.println("hi");
-        }
         IntroducedIn introduced = classDictionary.computeIfAbsent(uniqueId, i -> new IntroducedIn());
         if (isPreview(element, uniqueId, version)) {
             if (introduced.introducedPreview == null) {
@@ -301,9 +298,6 @@ public class SinceValidator {
     private Version checkElement(TypeElement clazz, Element element, Types types,
                                  JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
         String uniqueId = getElementName(clazz, element, types);
-        if(uniqueId.equals("method:java.lang.classfile.ClassSignature:superclassSignature:()")){
-            System.out.println("hi");
-        }
         String comment = null;
         try {
             comment = javadocHelper.getResolvedDocComment(element);
@@ -372,12 +366,9 @@ public class SinceValidator {
         if (mappedVersion.toString().equals("9")) {
             message = "For Element: " + elementSimpleName +
                     " Wrong @since version " + sinceVersion + " But the element exists before JDK 10\n";
-        } else if (sinceVersion.toString().equals("9")) {
+        } else{
             message = "For Element: " + elementSimpleName +
-                    " Wrong @since version is 9 or older instead of " + mappedVersion + "\n";
-        } else {
-            message = "For Element: " + elementSimpleName +
-                    " Wrong @since version " + sinceVersion + " instead of " + mappedVersion + "\n";
+                    " Wrong @since version is " + sinceVersion + " instead of " + mappedVersion + "\n";
         }
         return message;
     }
@@ -394,7 +385,7 @@ public class SinceValidator {
             ExecutableElement executableElement = (ExecutableElement) element;
             String methodName = executableElement.getSimpleName().toString();
             String descriptor = executableElement.getParameters().stream()
-                    .map(p -> p.asType().toString())
+                    .map(p -> types.erasure(p.asType()).toString())
                     .collect(Collectors.joining(",", "(", ")"));
             suffix = ":" + te.getQualifiedName() + ":" + methodName + ":" + descriptor;
         } else if (kind.isDeclaredType()) {
