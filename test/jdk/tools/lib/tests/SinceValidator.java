@@ -43,19 +43,17 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class SinceValidator {
-
-    //these are methods that were preview in before the introduction of the @PreviewFeature
     private final Map<String, Set<String>> LEGACY_PREVIEW_METHODS = new HashMap<>();
     private final Map<String, IntroducedIn> classDictionary = new HashMap<>();
     private final JavaCompiler tool;
     private final List<String> wrongTagsList = new ArrayList<>();
 
     public static void main(String[] args) throws Exception {
-        SinceValidator sinceCheckerTestHelper = new SinceValidator(args[0]);
         if (args.length == 0) {
             System.err.println("No module specified. Exiting...");
             System.exit(1);
         }
+        SinceValidator sinceCheckerTestHelper = new SinceValidator(args[0]);
         sinceCheckerTestHelper.testThisModule(args[0]);
     }
 
@@ -72,6 +70,7 @@ public class SinceValidator {
                     null,
                     Collections.singletonList(SimpleJavaFileObject.forSource(URI.create("myfo:/Test.java"), "")));
             ct.analyze();
+
             String version = String.valueOf(i);
             Elements elements = ct.getElements();
             elements.getModuleElement("java.base"); // forces module graph to be instantiated
@@ -403,7 +402,7 @@ public class SinceValidator {
         public String introducedPreview;
         public String introducedStable;
     }
-
+//these were preview in before the introduction of the @PreviewFeature
     {
         LEGACY_PREVIEW_METHODS.put("12", Set.of(
                 "method:com.sun.source.tree.BreakTree:getValue:()",
