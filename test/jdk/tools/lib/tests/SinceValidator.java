@@ -21,10 +21,20 @@
  * questions.
  */
 
+import com.sun.source.tree.BlockTree;
+import com.sun.source.tree.ClassTree;
+import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.ModuleTree;
+import com.sun.source.tree.PackageTree;
+import com.sun.source.tree.VariableTree;
 import com.sun.source.util.JavacTask;
+import com.sun.source.util.TreePathScanner;
+import com.sun.source.util.Trees;
+import com.sun.tools.javac.api.JavacTaskImpl;
 import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.Symbol;
-import jdk.internal.shellsupport.doc.JavadocHelper;
+import com.sun.tools.javac.util.Pair;
 //import jtreg.SkippedException;
 import javax.lang.model.element.*;
 import javax.lang.model.util.ElementFilter;
@@ -33,6 +43,7 @@ import javax.lang.model.util.Types;
 import javax.tools.*;
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.Runtime.Version;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -41,6 +52,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import javax.tools.JavaFileManager.Location;
 
 public class SinceValidator {
     private final Map<String, Set<String>> LEGACY_PREVIEW_METHODS = new HashMap<>();
@@ -122,7 +134,7 @@ public class SinceValidator {
         if (!(classModifiers.contains(Modifier.PUBLIC) || classModifiers.contains(Modifier.PROTECTED))) {
             return;
         }
-        persistElement(te, te, types, version);
+        persistElement(te.getEnclosingElement(), te, types, version);
         elements.getAllMembers(te).stream()
                 .filter(element -> element.getModifiers().contains(Modifier.PUBLIC) || element.getModifiers().contains(Modifier.PROTECTED))
                 .filter(element -> element.getKind().isField()
@@ -135,8 +147,8 @@ public class SinceValidator {
                 .forEach(nestedClass -> analyzeClassRecord(nestedClass, version, types, elements));
     }
 
-    public void persistElement(TypeElement clazz, Element element, Types types, String version) {
-        String uniqueId = getElementName(clazz, element, types);
+    public void persistElement(Element explicitOwner, Element element, Types types, String version) {
+        String uniqueId = getElementName(explicitOwner, element, types);
         IntroducedIn introduced = classDictionary.computeIfAbsent(uniqueId, i -> new IntroducedIn());
         if (isPreview(element, uniqueId, version)) {
             if (introduced.introducedPreview == null) {
@@ -165,9 +177,14 @@ public class SinceValidator {
 
     private void testThisModule(String moduleName) throws Exception {
         List<Path> sources = new ArrayList<>();
-//        Path home = Paths.get(System.getProperty("java.home"));
-//        Path srcZip = home.resolve("lib").resolve("src.zip");
-        Path srcZip = Path.of(pathToAPIKEY.pathToSRC);
+        Path home = Paths.get(System.getProperty("java.home"));
+        Path srcZip = home.resolve("lib").resolve("src.zip");
+        if (Files.notExists(srcZip)) {
+            //possibly running over an exploded JDK build, attempt to find a
+            //co-located full JDK image with src.zip:
+            Path testJdk = Paths.get(System.getProperty("test.jdk"));
+            srcZip = testJdk.getParent().resolve("images").resolve("jdk").resolve("lib").resolve("src.zip");
+        }
         File f = new File(srcZip.toUri());
         if (!f.exists() && !f.isDirectory()) {
 //          throw new SkippedException("Skipping Test because src.zip wasn't found");
@@ -195,7 +212,12 @@ public class SinceValidator {
                         ct.analyze();
                         Elements elements = ct.getElements();
                         elements.getModuleElement("java.base");
-                        processModuleCheck(elements.getModuleElement(moduleName), ct, sources, packagePath);
+                        try (EffectiveSourceSinceHelper javadocHelper = EffectiveSourceSinceHelper.create(ct, List.of(root), this)) {
+                            processModuleCheck(elements.getModuleElement(moduleName), ct, packagePath, javadocHelper);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            wrongTagsList.add("Initiating javadocHelperFailed" + e.getMessage());
+                        }
                         if (!wrongTagsList.isEmpty()) {
                             throw new Exception(wrongTagsList.toString());
                         }
@@ -206,14 +228,13 @@ public class SinceValidator {
         }
     }
 
-    private void processModuleCheck(ModuleElement moduleElement, JavacTask ct, List<Path> sources, Path packagePath) {
+    private void processModuleCheck(ModuleElement moduleElement, JavacTask ct, Path packagePath, EffectiveSourceSinceHelper javadocHelper) {
         if (moduleElement == null) {
             throw new RuntimeException("Module element was null here");
         }
         for (ModuleElement.ExportsDirective ed : ElementFilter.exportsIn(moduleElement.getDirectives())) {
             if (ed.getTargetModules() == null) {
-                Version packageTopVersion = getPackageTopVersion(packagePath, ed);
-                analyzePackageCheck(ed.getPackage(), ct, sources, packageTopVersion);
+                analyzePackageCheck(ed.getPackage(), ct, javadocHelper);
             } else {
                 checkModuleVersion(moduleElement, packagePath);
             }
@@ -263,51 +284,45 @@ public class SinceValidator {
     }
 
 
-    private void analyzePackageCheck(PackageElement pe, JavacTask ct, List<Path> sources, Version packageTopVersion) {
+    private void analyzePackageCheck(PackageElement pe, JavacTask ct, EffectiveSourceSinceHelper javadocHelper) {
         List<TypeElement> typeElements = ElementFilter.typesIn(pe.getEnclosedElements());
         for (TypeElement te : typeElements) {
-            try (JavadocHelper javadocHelper = JavadocHelper.create(ct, sources)) {
-                analyzeClassCheck(te, null, javadocHelper, ct.getTypes(), packageTopVersion);
-            } catch (Exception e) {
-                wrongTagsList.add("Initiating javadocHelperFailed" + e.getMessage());
-            }
+            analyzeClassCheck(te, null, javadocHelper, ct.getTypes(), ct.getElements());
         }
     }
 
-    private void analyzeClassCheck(TypeElement te, String version, JavadocHelper javadocHelper,
-                                   Types types, Version enclosingVersion) {
+    private void analyzeClassCheck(TypeElement te, String version, EffectiveSourceSinceHelper javadocHelper,
+                                   Types types, Elements elementUtils) {
         Set<Modifier> classModifiers = te.getModifiers();
         if (!(classModifiers.contains(Modifier.PUBLIC) || classModifiers.contains(Modifier.PROTECTED))) {
             return;
         }
-        Version currentVersion = checkElement(te, te, types, javadocHelper, version, enclosingVersion);
+        checkElement(te.getEnclosingElement(), te, types, javadocHelper, version, elementUtils);
         te.getEnclosedElements().stream().filter(element -> element.getModifiers().contains(Modifier.PUBLIC)
                         || element.getModifiers().contains(Modifier.PROTECTED))
                 .filter(element -> element.getKind().isField()
                         || element.getKind() == ElementKind.METHOD
                         || element.getKind() == ElementKind.CONSTRUCTOR)
-                .forEach(element -> checkElement(te, element, types, javadocHelper, version, currentVersion));
+                .forEach(element -> checkElement(te, element, types, javadocHelper, version, elementUtils));
         te.getEnclosedElements().stream()
                 .filter(element -> element.getKind().isDeclaredType())
                 .map(TypeElement.class::cast)
-                .forEach(nestedClass -> analyzeClassCheck(nestedClass, version, javadocHelper, types, currentVersion));
+                .forEach(nestedClass -> analyzeClassCheck(nestedClass, version, javadocHelper, types, elementUtils));
     }
 
 
-    private Version checkElement(TypeElement clazz, Element element, Types types,
-                                 JavadocHelper javadocHelper, String currentVersion, Version enclosingVersion) {
-        String uniqueId = getElementName(clazz, element, types);
-        String comment = null;
-        try {
-            comment = javadocHelper.getResolvedDocComment(element);
-        } catch (IOException e) {
-            wrongTagsList.add("JavadocHelper failed for " + element + "\n");
+    private void checkElement(Element explicitOwner, Element element, Types types,
+                              EffectiveSourceSinceHelper javadocHelper, String currentVersion, Elements elementUtils) {
+        String uniqueId = getElementName(explicitOwner, element, types);
+
+        if (element.getKind() == ElementKind.METHOD &&
+                element.getEnclosingElement().getKind() == ElementKind.ENUM &&
+                (uniqueId.endsWith(":values:()") || uniqueId.endsWith(":valueOf:(java.lang.String)"))) {
+            //mandated enum type methods
+            return ;
         }
-        Version sinceVersion = comment != null ? extractSinceVersionFromText(comment) : null;
-        if (sinceVersion == null ||
-                (enclosingVersion != null && enclosingVersion.compareTo(sinceVersion) > 0)) {
-            sinceVersion = enclosingVersion;
-        }
+
+        Version sinceVersion = javadocHelper.effectiveSinceVersion(explicitOwner, element, types, elementUtils);
         IntroducedIn mappedVersion = classDictionary.get(uniqueId);
         String realMappedVersion = null;
         try {
@@ -318,9 +333,7 @@ public class SinceValidator {
             wrongTagsList.add("For element " + element + "mappedVersion" + mappedVersion + " is null" + e + "\n");
         }
         checkEquals(sinceVersion, realMappedVersion, uniqueId);
-        return sinceVersion;
     }
-
 
     private Version extractSinceVersionFromText(String documentation) {
         Pattern pattern = Pattern.compile("@since\\s+(\\d+(?:\\.\\d+)?)");
@@ -372,15 +385,18 @@ public class SinceValidator {
         return message;
     }
 
-    private String getElementName(TypeElement te, Element element, Types types) {
+    private static String getElementName(Element owner, Element element, Types types) {
         String prefix = "";
         String suffix = "";
         ElementKind kind = element.getKind();
         if (kind.isField()) {
+            TypeElement te = (TypeElement) owner;
+
             prefix = "field";
             suffix = ":" + te.getQualifiedName() + ":" + element.getSimpleName();
         } else if (kind == ElementKind.METHOD || kind == ElementKind.CONSTRUCTOR) {
             prefix = "method";
+            TypeElement te = (TypeElement) owner;
             ExecutableElement executableElement = (ExecutableElement) element;
             String methodName = executableElement.getSimpleName().toString();
             String descriptor = executableElement.getParameters().stream()
@@ -393,7 +409,13 @@ public class SinceValidator {
             } else if (kind.isInterface()) {
                 prefix = "interface";
             }
-            suffix = ":" + te.getQualifiedName();
+            suffix = ":" + ((TypeElement) element).getQualifiedName();
+        } else if (kind == ElementKind.PACKAGE) {
+            prefix = "package";
+            suffix = ":" + ((PackageElement) element).getQualifiedName();
+        } else if (kind == ElementKind.MODULE) {
+            prefix = "module";
+            suffix = ":" + ((ModuleElement) element).getQualifiedName();
         }
         return prefix + suffix;
     }
@@ -402,7 +424,7 @@ public class SinceValidator {
         public String introducedPreview;
         public String introducedStable;
     }
-//these were preview in before the introduction of the @PreviewFeature
+    //these were preview in before the introduction of the @PreviewFeature
     {
         LEGACY_PREVIEW_METHODS.put("12", Set.of(
                 "method:com.sun.source.tree.BreakTree:getValue:()",
@@ -509,5 +531,256 @@ public class SinceValidator {
                 "method:java.lang.Class:isSealed:()",
                 "method:java.lang.Class:getPermittedSubclasses:()"
         ));
+    }
+
+    private final class EffectiveSourceSinceHelper implements AutoCloseable {
+        private static final JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        private final JavaFileManager baseFileManager;
+        private final StandardJavaFileManager fm;
+        private final Set<String> seenLookupElements = new HashSet<>();
+        private final Map<String, Version> signature2Source = new HashMap<>();
+
+        public static EffectiveSourceSinceHelper create(JavacTask mainTask, Collection<? extends Path> sourceLocations, SinceValidator validator) {
+            StandardJavaFileManager fm = compiler.getStandardFileManager(null, null, null);
+            try {
+                fm.setLocationFromPaths(StandardLocation.MODULE_SOURCE_PATH, sourceLocations);
+                return validator.new EffectiveSourceSinceHelper(mainTask, fm);
+            } catch (IOException ex) {
+                try {
+                    fm.close();
+                } catch (IOException closeEx) {
+                }
+                throw new UncheckedIOException(ex);
+            }
+        }
+
+        private EffectiveSourceSinceHelper(JavacTask mainTask, StandardJavaFileManager fm) {
+            this.baseFileManager = ((JavacTaskImpl) mainTask).getContext().get(JavaFileManager.class);
+            this.fm = fm;
+        }
+
+        public Version effectiveSinceVersion(Element owner, Element element, Types typeUtils, Elements elementUtils) {
+            String handle = getElementName(owner, element, typeUtils);
+            Version since = signature2Source.get(handle);
+
+            if (since == null) {
+                try {
+                    Element lookupElement = switch (element.getKind()) {
+                        case MODULE -> element;
+                        case PACKAGE -> element;
+                        default -> elementUtils.getOutermostTypeElement(element);
+                    };
+
+                    if (lookupElement == null)
+                        return null;
+
+                    String lookupHandle = getElementName(owner, element, typeUtils);
+
+                    if (!seenLookupElements.add(lookupHandle)) {
+                        //we've already processed this top-level, don't try to compute
+                        //the values again:
+                        return null;
+                    }
+
+                    Pair<JavacTask, CompilationUnitTree> source = findSource(lookupElement, elementUtils);
+
+                    if (source == null)
+                        return null;
+
+                    fillElementCache(source.fst, source.snd, source.fst.getTypes(), source.fst.getElements());
+
+                    since = signature2Source.get(handle);
+                } catch (IOException ex) {
+                    wrongTagsList.add("JavadocHelper failed for " + element + "\n");
+                }
+            }
+
+            return since;
+        }
+        //where:
+        private void fillElementCache(JavacTask task, CompilationUnitTree cut, Types typeUtils, Elements elementUtils) {
+            Trees trees = Trees.instance(task);
+
+            new TreePathScanner<Void, Void>() {
+                @Override
+                public Void visitMethod(MethodTree node, Void p) {
+                    handleDeclaration();
+                    return null;
+                }
+
+                @Override
+                public Void visitClass(ClassTree node, Void p) {
+                    handleDeclaration();
+                    return super.visitClass(node, p);
+                }
+
+                @Override
+                public Void visitVariable(VariableTree node, Void p) {
+                    handleDeclaration();
+                    return null;
+                }
+
+                @Override
+                public Void visitModule(ModuleTree node, Void p) {
+                    handleDeclaration();
+                    return null;
+                }
+
+                @Override
+                public Void visitBlock(BlockTree node, Void p) {
+                    return null;
+                }
+
+                @Override
+                public Void visitPackage(PackageTree node, Void p) {
+                    if (cut.getSourceFile().isNameCompatible("package-info", JavaFileObject.Kind.SOURCE)) {
+                        handleDeclaration();
+                    }
+                    return super.visitPackage(node, p);
+                }
+
+                private void handleDeclaration() {
+                    Element currentElement = trees.getElement(getCurrentPath());
+
+                    if (currentElement != null) {
+                        signature2Source.put(getElementName(currentElement.getEnclosingElement(), currentElement, typeUtils), computeSinceVersion(currentElement, typeUtils, elementUtils));
+                    }
+                }
+            }.scan(cut, null);
+        }
+
+        private Version computeSinceVersion(Element element, Types types,
+                                            Elements elementUtils) {
+            String docComment = elementUtils.getDocComment(element);
+            Version version = null;
+            if (docComment != null) {
+                version = extractSinceVersionFromText(docComment);
+            }
+
+            if (version != null) {
+                return version; //explicit @since has an absolute priority
+            }
+
+            Version overriddenVersion = null;
+            if (element instanceof ExecutableElement && docComment == null) {
+                TypeElement clazz = (TypeElement) element.getEnclosingElement();
+                var superclasses = types.directSupertypes(clazz.asType());
+                if (superclasses != null) {
+                    for (int i = superclasses.size() - 1; i >= 0; i--) {
+                        var superclass = superclasses.get(i);
+                        TypeElement superType = (TypeElement) types.asElement(superclass);
+                        List<? extends Element> superclassmethods = elementUtils.getAllMembers(superType);
+                        for (ExecutableElement method : ElementFilter.methodsIn(superclassmethods)) {
+                            if (elementUtils.overrides((ExecutableElement) element, method, clazz)) {
+                                Version currentMethodVersion = effectiveSinceVersion(method.getEnclosingElement(), method, types, elementUtils);
+                                //currentMethodVersion may be null for private/non-public elements
+                                if (overriddenVersion == null || (currentMethodVersion != null && currentMethodVersion.compareTo(overriddenVersion) < 0)) {
+                                    overriddenVersion = currentMethodVersion;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (element.getKind() != ElementKind.MODULE) {
+                version = effectiveSinceVersion(element.getEnclosingElement().getEnclosingElement(), element.getEnclosingElement(), types, elementUtils);
+            }
+            if (version == null) {
+                //may be null for private elements
+                //TODO: can we be more careful here?
+            }
+            if (overriddenVersion == null || (version != null && version.compareTo(overriddenVersion) > 0)) {
+                return version;
+            } else {
+                return overriddenVersion;
+            }
+        }
+
+        private Pair<JavacTask, CompilationUnitTree> findSource(Element forElement, Elements elementUtils) throws IOException {
+            String moduleName = elementUtils.getModuleOf(forElement).getQualifiedName().toString();
+            String binaryName = switch (forElement.getKind()) {
+                case MODULE -> "module-info";
+                case PACKAGE -> ((QualifiedNameable) forElement).getQualifiedName() + ".package-info";
+                default -> elementUtils.getBinaryName((TypeElement) forElement).toString();
+            };
+            Location packageLocationForModule = fm.getLocationForModule(StandardLocation.MODULE_SOURCE_PATH, moduleName);
+            JavaFileObject jfo = fm.getJavaFileForInput(packageLocationForModule,
+                    binaryName,
+                    JavaFileObject.Kind.SOURCE);
+
+            if (jfo == null)
+                return null;
+
+            List<JavaFileObject> jfos = Arrays.asList(jfo);
+            JavaFileManager patchFM = moduleName != null
+                    ? new PatchModuleFileManager(baseFileManager, jfo, moduleName)
+                    : baseFileManager;
+            JavacTaskImpl task = (JavacTaskImpl) compiler.getTask(null, patchFM, d -> {}, null, null, jfos);
+            Iterable<? extends CompilationUnitTree> cuts = task.parse();
+
+            task.enter();
+
+            return Pair.of(task, cuts.iterator().next());
+        }
+
+        @Override
+        public void close() throws IOException {
+            fm.close();
+        }
+
+        private static final class PatchModuleFileManager
+                extends ForwardingJavaFileManager<JavaFileManager> {
+
+            private final JavaFileObject file;
+            private final String moduleName;
+
+            public PatchModuleFileManager(JavaFileManager fileManager,
+                                          JavaFileObject file,
+                                          String moduleName) {
+                super(fileManager);
+                this.file = file;
+                this.moduleName = moduleName;
+            }
+
+            @Override
+            public Location getLocationForModule(Location location,
+                                                 JavaFileObject fo) throws IOException {
+                return fo == file
+                        ? PATCH_LOCATION
+                        : super.getLocationForModule(location, fo);
+            }
+
+            @Override
+            public String inferModuleName(Location location) throws IOException {
+                return location == PATCH_LOCATION
+                        ? moduleName
+                        : super.inferModuleName(location);
+            }
+
+            @Override
+            public boolean hasLocation(Location location) {
+                return location == StandardLocation.PATCH_MODULE_PATH ||
+                        super.hasLocation(location);
+            }
+
+            private static final Location PATCH_LOCATION = new Location() {
+                @Override
+                public String getName() {
+                    return "PATCH_LOCATION";
+                }
+
+                @Override
+                public boolean isOutputLocation() {
+                    return false;
+                }
+
+                @Override
+                public boolean isModuleOrientedLocation() {
+                    return false;
+                }
+
+            };
+        }
     }
 }
