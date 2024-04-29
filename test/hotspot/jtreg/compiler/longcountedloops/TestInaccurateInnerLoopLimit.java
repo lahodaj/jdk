@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,12 +20,23 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package nsk.share;
 
-public class NativeUtils {
-    static {
-        System.loadLibrary("native_utils");
+/**
+ * @test
+ * @bug 8323972
+ * @summary C2 compilation fails with assert(!x->as_Loop()->is_loop_nest_inner_loop()) failed: loop was transformed
+ *
+ * @run main/othervm -Xcomp -XX:CompileCommand=compileonly,TestInaccurateInnerLoopLimit::test* -XX:-TieredCompilation TestInaccurateInnerLoopLimit
+ *
+ */
+
+public class TestInaccurateInnerLoopLimit {
+
+    public static void main(String args[]) {
+        test();
     }
 
-    public static native long getCurrentPID();
+    public static void test() {
+        for (long i = 9223372034707292164L; i > 9223372034707292158L; i += -2L) { }
+    }
 }
