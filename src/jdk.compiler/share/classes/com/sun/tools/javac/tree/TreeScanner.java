@@ -111,6 +111,11 @@ public class TreeScanner extends Visitor {
         scan(tree.qualid);
     }
 
+    @Override
+    public void visitModuleImport(JCModuleImport tree) {
+        scan(tree.module);
+    }
+
     public void visitClassDef(JCClassDecl tree) {
         scan(tree.mods);
         scan(tree.typarams);

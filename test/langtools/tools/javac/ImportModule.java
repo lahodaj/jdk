@@ -23,7 +23,7 @@
 
 /**
  * @test
- * @bug 8328481 8332236
+ * @bug 8328481 8332236 8332497
  * @summary Check behavior of module imports.
  * @library /tools/lib
  * @modules java.logging
@@ -45,6 +45,12 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.RoundEnvironment;
+import javax.annotation.processing.SupportedAnnotationTypes;
+import javax.lang.model.SourceVersion;
+import javax.lang.model.element.TypeElement;
 
 import toolbox.TestRunner;
 import toolbox.JavacTask;
@@ -741,4 +747,40 @@ public class ImportModule extends TestRunner {
             .writeAll();
     }
 
+    @Test //JDK-8332497
+    public void testAnnotationProcessing(Path base) throws Exception {
+        Path current = base.resolve(".");
+        Path src = current.resolve("src");
+        Path classes = current.resolve("classes");
+        tb.writeJavaFiles(src,
+                          """
+                          import module java.base;
+                          public class Test {}
+                          """);
+
+        Files.createDirectories(classes);
+
+        new JavacTask(tb)
+            .options("--enable-preview", "--release", SOURCE_VERSION,
+                      "-processor", AP.class.getName())
+            .outdir(classes)
+            .files(tb.findJavaFiles(src))
+            .run(Task.Expect.SUCCESS)
+            .writeAll();
+    }
+
+    @SupportedAnnotationTypes("*")
+    public static final class AP extends AbstractProcessor {
+
+        @Override
+        public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+            return false;
+        }
+
+        @Override
+        public SourceVersion getSupportedSourceVersion() {
+            return SourceVersion.latest();
+        }
+
+    }
 }
