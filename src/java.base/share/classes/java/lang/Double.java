@@ -386,7 +386,7 @@ public final class Double extends Number
     /// `Double.longBitsToDouble(0x1L)`.
     public static final double MIN_VALUE = 0x0.0000000000001P-1022; // 4.9e-324
 
-    /// The number of bits used to represent a `double` value.
+    /// The number of bits used to represent a `double` value, {@value}.
     ///
     /// @since 1.5
     public static final int SIZE = 64;
@@ -412,7 +412,7 @@ public final class Double extends Number
     /// @since 1.6
     public static final int MIN_EXPONENT = 1 - MAX_EXPONENT; // -1022
 
-    /// The number of bytes used to represent a `double` value.
+    /// The number of bytes used to represent a `double` value, {@value}.
     ///
     /// @since 1.8
     public static final int BYTES = SIZE / Byte.SIZE;
