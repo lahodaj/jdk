@@ -934,6 +934,11 @@ public class TransPatterns extends TreeTranslator {
         result = make.at(tree.pos).Block(0, stats.toList());
     }
 
+    @Override
+    public void visitMatchFail(JCTree.JCMatchFail tree) {
+        result = make.at(tree.pos).Return(makeNull());
+    }
+
     private class PrimitiveGenerator extends Types.SignatureGenerator {
 
         /**

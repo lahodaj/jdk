@@ -1,0 +1,4 @@
+MatcherFinishingNormally.java:9:5: compiler.err.missing.match.stmt
+- compiler.note.preview.filename: MatcherFinishingNormally.java, DEFAULT
+- compiler.note.preview.recompile
+1 error

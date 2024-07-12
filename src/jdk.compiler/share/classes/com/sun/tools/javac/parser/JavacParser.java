@@ -2931,6 +2931,26 @@ public class JavacParser implements Parser {
                     List<JCExpression> args = arguments();
                     accept(SEMI);
                     return List.of(toP(F.at(pos).Match(name, args)));
+                } else if (next.kind == SUB) {
+                    Token nextNext = S.token(2);
+                    if (nextNext.kind == IDENTIFIER) {
+                        if (nextNext.name().contentEquals("success")) {
+                            checkSourceLevel(Feature.PATTERN_DECLARATIONS);
+                            nextToken();
+                            nextToken();
+                            nextToken();
+                            List<JCExpression> args = arguments();
+                            accept(SEMI);
+                            return List.of(toP(F.at(pos).Match(null, args)));
+                        } else if (nextNext.name().contentEquals("fail")) {
+                            checkSourceLevel(Feature.PATTERN_DECLARATIONS);
+                            nextToken();
+                            nextToken();
+                            nextToken();
+                            accept(SEMI);
+                            return List.of(toP(F.at(pos).MatchFail()));
+                        }
+                    }
                 }
             } else
             if (token.name() == names.yield && allowYieldStatement) {

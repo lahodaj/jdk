@@ -617,8 +617,11 @@ public class Flow {
                 scanStat(tree.body);
                 tree.completesNormally = alive != Liveness.DEAD;
 
-                if (alive == Liveness.ALIVE && !tree.sym.type.getReturnType().hasTag(VOID))
+                if (alive == Liveness.ALIVE && (tree.sym.flags() & PATTERN) != 0) {
+                    log.error(TreeInfo.diagEndPos(tree.body), Errors.MissingMatchStmt);
+                } else if (alive == Liveness.ALIVE && !tree.sym.type.getReturnType().hasTag(VOID)) {
                     log.error(TreeInfo.diagEndPos(tree.body), Errors.MissingRetStmt);
+                }
 
                 clearPendingExits(true);
             } finally {
@@ -632,7 +635,7 @@ public class Flow {
             while (exits.nonEmpty()) {
                 PendingExit exit = exits.head;
                 exits = exits.tail;
-                Assert.check((inMethod && (exit.tree.hasTag(RETURN) || exit.tree.hasTag(MATCH))) ||
+                Assert.check((inMethod && (exit.tree.hasTag(RETURN) || exit.tree.hasTag(MATCH) || exit.tree.hasTag(MATCH_FAIL))) ||
                                 log.hasErrorOn(exit.tree.pos()));
             }
         }
@@ -693,6 +696,10 @@ public class Flow {
 
         public void visitMatch(JCMatch tree) {
             scan(tree.args);
+            recordExit(new PendingExit(tree));
+        }
+
+        public void visitMatchFail(JCMatchFail tree) {
             recordExit(new PendingExit(tree));
         }
 
@@ -1574,6 +1581,7 @@ public class Flow {
                     if (!(exit instanceof ThrownPendingExit)) {
                         Assert.check(exit.tree.hasTag(RETURN) ||
                                          exit.tree.hasTag(MATCH) ||
+                                         exit.tree.hasTag(MATCH_FAIL) ||
                                          log.hasErrorOn(exit.tree.pos()));
                     } else {
                         // uncaught throws will be reported later
@@ -1832,6 +1840,10 @@ public class Flow {
 
         public void visitMatch(JCMatch tree) {
             scan(tree.args);
+            recordExit(new PendingExit(tree));
+        }
+
+        public void visitMatchFail(JCMatchFail tree) {
             recordExit(new PendingExit(tree));
         }
 

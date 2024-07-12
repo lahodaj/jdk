@@ -2427,10 +2427,15 @@ public class Attr extends JCTree.Visitor {
             args = args.tail;
         }
 
-        if (tree.clazz != tree.meth.name) {
+        if (tree.clazz != null && tree.clazz != tree.meth.name) {
             log.error(tree.pos(), Errors.MatchPatternNameWrong);
         }
 
+        result = null;
+    }
+
+    @Override
+    public void visitMatchFail(JCMatchFail that) {
         result = null;
     }
 
