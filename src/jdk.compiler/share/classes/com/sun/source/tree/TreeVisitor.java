@@ -629,4 +629,11 @@ public interface TreeVisitor<R,P> {
      * @return a result value
      */
     R visitMatchFailStatement(MatchFailTree node, P p);
+    /**
+     * Visits an {@code MatchSuperTree} node.
+     * @param node the node being visited
+     * @param p a parameter value
+     * @return a result value
+     */
+    R visitMatchSuperStatement(MatchSuperTree node, P p);
 }

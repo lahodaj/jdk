@@ -215,7 +215,11 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
 
         /** Match fail statements, of type MatchFail.
          */
-        MATCH_FAIL,
+        MATCHFAIL,
+
+        /** Match super statements, of type MatchSuper.
+         */
+        MATCHSUPER,
 
         /** Method invocation expressions, of type Apply.
          */
@@ -1791,7 +1795,39 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
         }
         @Override
         public Tag getTag() {
-            return MATCH_FAIL;
+            return MATCHFAIL;
+        }
+    }
+
+    /**
+     * The match statement
+     */
+    public static class JCMatchSuper extends JCStatement implements MatchSuperTree {
+        public  List<JCPattern> patterns;
+        public MethodSymbol patternDeclaration;
+        public List<Type> fullComponentTypes;
+
+        protected JCMatchSuper(List<JCPattern> patterns) {
+            this.patterns = patterns;
+        }
+        @Override
+        public void accept(Visitor v) { v.visitMatchSuper(this); }
+
+        @DefinedBy(Api.COMPILER_TREE)
+        public Kind getKind() { return Kind.MATCH; }
+
+        @Override @DefinedBy(Api.COMPILER_TREE)
+        public List<? extends PatternTree> getPatterns() {
+            return patterns;
+        }
+
+        @Override @DefinedBy(Api.COMPILER_TREE)
+        public <R,D> R accept(TreeVisitor<R,D> v, D d) {
+            return v.visitMatchSuperStatement(this, d);
+        }
+        @Override
+        public Tag getTag() {
+            return MATCHSUPER;
         }
     }
 
@@ -3616,6 +3652,7 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
         public void visitYield(JCYield that)                 { visitTree(that); }
         public void visitMatch(JCMatch that)                 { visitTree(that); }
         public void visitMatchFail(JCMatchFail that)         { visitTree(that); }
+        public void visitMatchSuper(JCMatchSuper that)        { visitTree(that); }
         public void visitContinue(JCContinue that)           { visitTree(that); }
         public void visitReturn(JCReturn that)               { visitTree(that); }
         public void visitThrow(JCThrow that)                 { visitTree(that); }

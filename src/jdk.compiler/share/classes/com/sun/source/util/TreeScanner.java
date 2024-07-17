@@ -1238,4 +1238,18 @@ public class TreeScanner<R,P> implements TreeVisitor<R,P> {
     public R visitMatchFailStatement(MatchFailTree node, P p) {
         return null;
     }
+
+    /**
+     * {@inheritDoc}
+     *
+     * @implSpec This implementation scans the children in left to right order.
+     *
+     * @param node  {@inheritDoc}
+     * @param p  {@inheritDoc}
+     * @return the result of scanning
+     */
+    @Override
+    public R visitMatchSuperStatement(MatchSuperTree node, P p) {
+        return null;
+    }
 }

@@ -47,9 +47,9 @@ public class MatchSuccessFail {
 
     public pattern MatchSuccessFail(String content) {
         if (fail) {
-            match-fail;
+            match-fail();
         } else {
-            match-success(this.content);
+            match-success(content);
         }
     }
 }

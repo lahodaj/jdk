@@ -408,6 +408,12 @@ public class TreeMaker implements JCTree.Factory {
         return tree;
     }
 
+    public JCMatchSuper MatchSuper(List<JCPattern> patterns) {
+        JCMatchSuper tree = new JCMatchSuper(patterns);
+        tree.pos = pos;
+        return tree;
+    }
+
     public JCMethodInvocation Apply(List<JCExpression> typeargs,
                        JCExpression fn,
                        List<JCExpression> args)

@@ -35,6 +35,7 @@ import com.sun.tools.javac.code.Kinds.Kind;
 import static com.sun.tools.javac.code.TypeTag.*;
 
 import com.sun.tools.javac.code.Preview;
+import com.sun.tools.javac.code.Scope;
 import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.BindingSymbol;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
@@ -97,6 +98,8 @@ import com.sun.tools.javac.tree.JCTree.JCConstantCaseLabel;
 import com.sun.tools.javac.tree.JCTree.JCExpressionStatement;
 import com.sun.tools.javac.tree.JCTree.JCFieldAccess;
 import com.sun.tools.javac.tree.JCTree.JCLambda;
+import com.sun.tools.javac.tree.JCTree.JCMatchFail;
+import com.sun.tools.javac.tree.JCTree.JCMatchSuper;
 import com.sun.tools.javac.tree.JCTree.JCMethodInvocation;
 import com.sun.tools.javac.tree.JCTree.JCNewClass;
 import com.sun.tools.javac.tree.JCTree.JCPattern;
@@ -129,6 +132,7 @@ public class TransPatterns extends TreeTranslator {
     private final Symtab syms;
     private final Attr attr;
     private final Resolve rs;
+    private final TypeEnvs typeEnvs;
     private final Types types;
     private final Operators operators;
     private final Names names;
@@ -190,6 +194,7 @@ public class TransPatterns extends TreeTranslator {
         syms = Symtab.instance(context);
         attr = Attr.instance(context);
         rs = Resolve.instance(context);
+        typeEnvs = TypeEnvs.instance(context);
         make = TreeMaker.instance(context);
         types = Types.instance(context);
         operators = Operators.instance(context);
@@ -935,8 +940,28 @@ public class TransPatterns extends TreeTranslator {
     }
 
     @Override
-    public void visitMatchFail(JCTree.JCMatchFail tree) {
+    public void visitMatchFail(JCMatchFail tree) {
         result = make.at(tree.pos).Return(makeNull());
+    }
+
+    @Override
+    public void visitMatchSuper(JCMatchSuper tree) {
+        bindingContext = new BasicBindingContext();
+        try {
+            JCRecordPattern record = make.RecordPattern(null, tree.patterns);
+            record.setType(currentClass.getSuperclass());
+            record.patternDeclaration = tree.patternDeclaration;
+            record.fullComponentTypes = tree.fullComponentTypes;
+            Scope.WriteableScope scope = typeEnvs.get(currentClass).info.scope;
+            JCExpression cond = make.Unary(Tag.NOT, make.TypeTest(make.Ident(scope.findFirst(names._this)), record).setType(syms.booleanType)).setType(syms.booleanType);
+            JCStatement replacement = make.If(cond, make.Block(0, List.of(make.Return(makeNull()))), null);
+
+            replacement = translate(replacement);
+
+            result = bindingContext.decorateStatement(replacement);
+        } finally {
+            bindingContext.pop();
+        }
     }
 
     private class PrimitiveGenerator extends Types.SignatureGenerator {

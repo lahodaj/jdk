@@ -165,6 +165,14 @@ public class TreeCopier<P> implements TreeVisitor<JCTree,P> {
     }
 
     @DefinedBy(Api.COMPILER_TREE)
+    public JCTree visitMatchSuperStatement(MatchSuperTree node, P p) {
+        JCMatchSuper t = (JCMatchSuper) node;
+        List<JCPattern> patterns = copy(t.patterns, p);
+
+        return M.at(t.pos).MatchSuper(patterns);
+    }
+
+    @DefinedBy(Api.COMPILER_TREE)
     public JCTree visitCase(CaseTree node, P p) {
         JCCase t = (JCCase) node;
         List<JCCaseLabel> labels = copy(t.labels, p);

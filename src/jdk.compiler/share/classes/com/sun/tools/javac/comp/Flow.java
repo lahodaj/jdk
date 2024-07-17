@@ -635,7 +635,7 @@ public class Flow {
             while (exits.nonEmpty()) {
                 PendingExit exit = exits.head;
                 exits = exits.tail;
-                Assert.check((inMethod && (exit.tree.hasTag(RETURN) || exit.tree.hasTag(MATCH) || exit.tree.hasTag(MATCH_FAIL))) ||
+                Assert.check((inMethod && (exit.tree.hasTag(RETURN) || exit.tree.hasTag(MATCH) || exit.tree.hasTag(MATCHFAIL))) ||
                                 log.hasErrorOn(exit.tree.pos()));
             }
         }
@@ -1581,7 +1581,7 @@ public class Flow {
                     if (!(exit instanceof ThrownPendingExit)) {
                         Assert.check(exit.tree.hasTag(RETURN) ||
                                          exit.tree.hasTag(MATCH) ||
-                                         exit.tree.hasTag(MATCH_FAIL) ||
+                                         exit.tree.hasTag(MATCHFAIL) ||
                                          log.hasErrorOn(exit.tree.pos()));
                     } else {
                         // uncaught throws will be reported later

@@ -981,18 +981,8 @@ public class JavacParser implements Parser {
             if (token.kind == LPAREN) {
                 //deconstruction pattern:
                 checkSourceLevel(Feature.RECORD_PATTERNS);
-                ListBuffer<JCPattern> nested = new ListBuffer<>();
-                if (!peekToken(RPAREN)) {
-                    do {
-                        nextToken();
-                        JCPattern nestedPattern = parsePattern(token.pos, null, null, true, false);
-                        nested.append(nestedPattern);
-                    } while (token.kind == COMMA);
-                } else {
-                    nextToken();
-                }
-                accept(RPAREN);
-                pattern = toP(F.at(pos).RecordPattern(e, nested.toList()));
+                List<JCPattern> nested = patterns();
+                pattern = toP(F.at(pos).RecordPattern(e, nested));
                 if (mods.annotations.nonEmpty()) {
                     log.error(mods.annotations.head.pos(), Errors.RecordPatternsAnnotationsNotAllowed);
                 }
@@ -2442,6 +2432,20 @@ public class JavacParser implements Parser {
         return toP(F.at(pos).TypeApply(t, args));
     }
 
+    List<JCPattern> patterns() {
+        ListBuffer<JCPattern> nested = new ListBuffer<>();
+        if (!peekToken(RPAREN)) {
+            do {
+                nextToken();
+                JCPattern nestedPattern = parsePattern(token.pos, null, null, true, false);
+                nested.append(nestedPattern);
+            } while (token.kind == COMMA);
+        } else {
+            nextToken();
+        }
+        accept(RPAREN);
+        return nested.toList();
+    }
     /**
      * BracketsOpt = { [Annotations] "[" "]" }*
      *
@@ -2947,9 +2951,19 @@ public class JavacParser implements Parser {
                             nextToken();
                             nextToken();
                             nextToken();
+                            accept(LPAREN);
+                            accept(RPAREN);
                             accept(SEMI);
                             return List.of(toP(F.at(pos).MatchFail()));
                         }
+                    } else if (nextNext.kind == SUPER) {
+                        checkSourceLevel(Feature.PATTERN_DECLARATIONS);
+                        nextToken();
+                        nextToken();
+                        nextToken();
+                        List<JCPattern> patterns = patterns();
+                        accept(SEMI);
+                        return List.of(toP(F.at(pos).MatchSuper(patterns)));
                     }
                 }
             } else

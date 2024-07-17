@@ -1041,8 +1041,16 @@ public class Attr extends JCTree.Visitor {
             }
 
             // Attribute all bindings.
-            for (List<JCVariableDecl> l = tree.bindings; l != null && l.nonEmpty(); l = l.tail) {
-                attribStat(l.head, localEnv);
+            // the bindings have no meaning in the body of the deconstructor,
+            // so enter them in a temporary scope:
+            Env<AttrContext> bindingEnv =
+                env.dup(tree, localEnv.info.dup(localEnv.info.scope.dup()));
+            try {
+                for (List<JCVariableDecl> l = tree.bindings; l != null && l.nonEmpty(); l = l.tail) {
+                    attribStat(l.head, bindingEnv);
+                }
+            } finally {
+                bindingEnv.info.scope.leave();
             }
 
             chk.checkVarargsMethodDecl(localEnv, tree);
@@ -2435,7 +2443,25 @@ public class Attr extends JCTree.Visitor {
     }
 
     @Override
-    public void visitMatchFail(JCMatchFail that) {
+    public void visitMatchFail(JCMatchFail tree) {
+        result = null;
+    }
+
+    @Override
+    public void visitMatchSuper(JCMatchSuper tree) {
+        Type site = env.enclClass.sym.getSuperclass();
+        MethodSymbol found = findPatternDeclaration(tree.pos(), site, tree.patterns);
+        if (found != null) {
+            List<Type> expectedRecordTypes = types.memberType(site, found)
+                                                  .getBindingTypes();
+            tree.patternDeclaration = found;
+            List<BindingSymbol> bindings = finishNestedPatterns(tree, expectedRecordTypes, tree.patterns);
+            addBindings2Scope(tree, bindings);
+            tree.fullComponentTypes = expectedRecordTypes;
+        }
+
+        //TODO: error recovery
+
         result = null;
     }
 
@@ -4349,27 +4375,13 @@ public class Attr extends JCTree.Visitor {
             tree.record = record;
         }
         else if (site.tsym.kind == Kind.TYP) {
-            int nestedPatternCount = tree.nested.size();
+            MethodSymbol selectedPatternDeclaration =
+                    findPatternDeclaration(tree.pos(), site, tree.nested);
 
-            // precalculate types of pattern components (as in method invocation)
-            ListBuffer<Type> patternTypesBuffer = new ListBuffer<>();
-            for (JCTree arg : tree.nested.map(p -> p.getTree())) {
-                Type argtype = chk.checkNonVoid(arg, attribTree(arg, env, resultInfo));
-                patternTypesBuffer.append(argtype);
-            }
-            List<Type> patternTypes = patternTypesBuffer.toList();
-
-            List<MethodSymbol> patternDeclarations = getPatternDeclarationCandidates(site, nestedPatternCount);
-
-            if (patternDeclarations.size() >= 1) {
-                MethodSymbol patternDeclaration = selectBestPatternDeclarationInScope(tree,
-                        site,
-                        patternDeclarations,
-                        patternTypes);
-                if (patternDeclaration != null) {
-                    expectedRecordTypes = types.memberType(site, patternDeclaration).getBindingTypes();
-                    tree.patternDeclaration = patternDeclaration;
-                }
+            if (selectedPatternDeclaration != null) {
+                expectedRecordTypes = types.memberType(site, selectedPatternDeclaration)
+                                           .getBindingTypes();
+                tree.patternDeclaration = selectedPatternDeclaration;
             }
         }
 
@@ -4383,44 +4395,44 @@ public class Attr extends JCTree.Visitor {
             tree.fullComponentTypes = expectedRecordTypes;
         }
 
-        ListBuffer<BindingSymbol> outBindings = new ListBuffer<>();
-        List<Type> recordTypes = expectedRecordTypes;
-        List<JCPattern> nestedPatterns = tree.nested;
-        Env<AttrContext> localEnv = env.dup(tree, env.info.dup(env.info.scope.dup()));
-        try {
-            while (recordTypes.nonEmpty() && nestedPatterns.nonEmpty()) {
-                attribExpr(nestedPatterns.head, localEnv, recordTypes.head);
-                checkCastablePattern(nestedPatterns.head.pos(), recordTypes.head, nestedPatterns.head.type);
-                outBindings.addAll(matchBindings.bindingsWhenTrue);
-                matchBindings.bindingsWhenTrue.forEach(localEnv.info.scope::enter);
-                nestedPatterns = nestedPatterns.tail;
-                recordTypes = recordTypes.tail;
-            }
-            if (recordTypes.nonEmpty() || nestedPatterns.nonEmpty()) {
-                while (nestedPatterns.nonEmpty()) {
-                    attribExpr(nestedPatterns.head, localEnv, Type.noType);
-                    nestedPatterns = nestedPatterns.tail;
-                }
-                List<Type> nestedTypes =
-                        tree.nested.stream().map(p -> p.type).collect(List.collector());
-                log.error(tree.pos(),
-                          Errors.IncorrectNumberOfNestedPatterns(expectedRecordTypes,
-                                                                 nestedTypes));
-            }
-        } finally {
-            localEnv.info.scope.leave();
-        }
+        List<BindingSymbol> outBindings = finishNestedPatterns(tree, expectedRecordTypes, tree.nested);
         chk.validate(tree.deconstructor, env, true);
         result = tree.type;
-        matchBindings = new MatchBindings(outBindings.toList(), List.nil());
+        matchBindings = new MatchBindings(outBindings, List.nil());
+    }
+
+    private MethodSymbol findPatternDeclaration(DiagnosticPosition pos, Type site, List<JCPattern> nestedPatterns) {
+        int nestedPatternCount = nestedPatterns.size();
+
+        // precalculate types of pattern components (as in method invocation)
+        ListBuffer<Type> patternTypesBuffer = new ListBuffer<>();
+        for (JCTree arg : nestedPatterns.map(p -> p.getTree())) {
+            //TODO: handle "var"!
+            Type argtype = chk.checkNonVoid(arg, attribTree(arg, env, resultInfo));
+            patternTypesBuffer.append(argtype);
+        }
+        List<Type> patternTypes = patternTypesBuffer.toList();
+
+        List<MethodSymbol> patternDeclarations = getPatternDeclarationCandidates(site, nestedPatternCount);
+
+        if (patternDeclarations.size() >= 1) {
+            MethodSymbol patternDeclaration = selectBestPatternDeclarationInScope(pos,
+                    site,
+                    patternDeclarations,
+                    patternTypes);
+            return patternDeclaration;
+        } else {
+            //TODO: error?
+        }
+
+        return null;
     }
 
     // todo: follow the protocol in Resolve::selectBest
-    private MethodSymbol selectBestPatternDeclarationInScope(JCRecordPattern tree,
+    private MethodSymbol selectBestPatternDeclarationInScope(DiagnosticPosition pos,
                                                            Type site,
                                                            List<MethodSymbol> patternDeclarations,
                                                            List<Type> patternTypes) {
-        List<Type> expectedRecordTypes = null;
         ListBuffer<Integer> score = new ListBuffer<Integer>();
 
         for (MethodSymbol matcher : patternDeclarations) {
@@ -4456,11 +4468,12 @@ public class Attr extends JCTree.Visitor {
         List<Integer> scoreList = score.toList();
         var indexOfMaxScore = scoreList.indexOf(maxScore);
 
+        //TODO: maybe cleanup/move/unify the error reporting?
         if (maxScore == -1) {
-            log.error(tree.pos(),
+            log.error(pos,
                     Errors.NoCompatibleMatcherFound);
         } else if (scoreList.stream().filter(s -> s == maxScore).count() > 1) {
-            log.error(tree.pos(),
+            log.error(pos,
                     Errors.MatcherOverloadingAmbiguity);
         } else {
             return patternDeclarations.get(indexOfMaxScore);
@@ -4477,6 +4490,35 @@ public class Attr extends JCTree.Visitor {
                 .map(n -> (MethodSymbol) matchersIt.next())
                 .collect(List.collector());
         return patternDeclarations;
+    }
+
+    private List<BindingSymbol> finishNestedPatterns(JCTree tree, List<Type> expectedNestedTypes, List<JCPattern> nestedPatterns) {
+        ListBuffer<BindingSymbol> outBindings = new ListBuffer<>();
+        Env<AttrContext> localEnv = env.dup(tree, env.info.dup(env.info.scope.dup()));
+        try {
+            while (expectedNestedTypes.nonEmpty() && nestedPatterns.nonEmpty()) {
+                attribExpr(nestedPatterns.head, localEnv, expectedNestedTypes.head);
+                checkCastablePattern(nestedPatterns.head.pos(), expectedNestedTypes.head, nestedPatterns.head.type);
+                outBindings.addAll(matchBindings.bindingsWhenTrue);
+                matchBindings.bindingsWhenTrue.forEach(localEnv.info.scope::enter);
+                nestedPatterns = nestedPatterns.tail;
+                expectedNestedTypes = expectedNestedTypes.tail;
+            }
+            if (expectedNestedTypes.nonEmpty() || nestedPatterns.nonEmpty()) {
+                while (nestedPatterns.nonEmpty()) {
+                    attribExpr(nestedPatterns.head, localEnv, Type.noType);
+                    nestedPatterns = nestedPatterns.tail;
+                }
+                List<Type> nestedTypes =
+                        nestedPatterns.stream().map(p -> p.type).collect(List.collector());
+                log.error(tree.pos(),
+                          Errors.IncorrectNumberOfNestedPatterns(nestedTypes,
+                                                                 nestedTypes));
+            }
+        } finally {
+            localEnv.info.scope.leave();
+        }
+        return outBindings.toList();
     }
 
     public void visitIndexed(JCArrayAccess tree) {

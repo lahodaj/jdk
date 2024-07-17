@@ -722,7 +722,15 @@ public interface Tree {
          * @since 23
          */
         @PreviewFeature(feature=PreviewFeature.Feature.PATTERN_DECLARATIONS, reflective=true)
-        MATCH_FAILED(MatchFailTree.class);
+        MATCH_FAILED(MatchFailTree.class),
+
+        /**
+         * Used for instances of {@link MatchSuperTree}.
+         *
+         * @since 23
+         */
+        @PreviewFeature(feature=PreviewFeature.Feature.PATTERN_DECLARATIONS, reflective=true)
+        MATCH_SUPER(MatchSuperTree.class);
 
         Kind(Class<? extends Tree> intf) {
             associatedInterface = intf;

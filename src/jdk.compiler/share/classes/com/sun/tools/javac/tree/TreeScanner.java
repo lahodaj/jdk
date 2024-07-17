@@ -240,6 +240,10 @@ public class TreeScanner extends Visitor {
     public void visitMatchFail(JCMatchFail tree) {
     }
 
+    public void visitMatchSuper(JCMatchSuper tree) {
+        scan(tree.patterns);
+    }
+
     public void visitContinue(JCContinue tree) {
     }
 
