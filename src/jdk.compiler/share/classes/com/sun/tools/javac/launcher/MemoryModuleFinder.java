@@ -25,6 +25,7 @@
 
 package com.sun.tools.javac.launcher;
 
+import com.sun.tools.javac.launcher.ProgramDescriptor.SourceModuleDescriptor;
 import java.io.ByteArrayInputStream;
 import java.io.IOError;
 import java.io.IOException;
@@ -40,6 +41,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -56,36 +59,50 @@ import jdk.internal.module.Resources;
  * risk.  This code and its internal interfaces are subject to change
  * or deletion without notice.</strong></p>
  */
-record MemoryModuleFinder(Map<String, byte[]> classes,
-                          ModuleDescriptor descriptor,
+record MemoryModuleFinder(Map<SourceModuleDescriptor, Map<String, byte[]>> classes,
+                          List<SourceModuleDescriptor> sourceModules,
+                          List<ModuleDescriptor> descriptors,
                           ProgramDescriptor programDescriptor) implements ModuleFinder {
     @Override
     public Optional<ModuleReference> find(String name) {
-        if (name.equals(descriptor.name())) {
-            return Optional.of(new MemoryModuleReference());
-        }
-        return Optional.empty();
+        Optional<SourceModuleDescriptor> sourceDesc = sourceModules().stream().filter(desc -> desc.moduleName().equals(name)).findAny();
+        Optional<ModuleDescriptor> binaryDesc = descriptors().stream().filter(desc -> desc.name().equals(name)).findAny();
+        return sourceDesc.isPresent() && binaryDesc.isPresent() ? Optional.of(new MemoryModuleReference(sourceDesc.get(), binaryDesc.get())) : Optional.empty();
     }
 
     @Override
     public Set<ModuleReference> findAll() {
-        return Set.of(new MemoryModuleReference());
+        Set<ModuleReference> result = new HashSet<>();
+        for (SourceModuleDescriptor sourceDesc : sourceModules()) {
+            ModuleDescriptor binaryDesc = descriptors().stream().filter(desc -> desc.name().equals(sourceDesc.moduleName())).findAny().orElseThrow();
+            result.add(new MemoryModuleReference(sourceDesc, binaryDesc));
+        }
+        return result;
     }
 
     class MemoryModuleReference extends ModuleReference {
-        protected MemoryModuleReference() {
-            super(descriptor, URI.create("memory:///" + descriptor.toNameAndVersion()));
+        private final SourceModuleDescriptor sourceDesc;
+        private final ModuleDescriptor binaryDesc;
+        protected MemoryModuleReference(SourceModuleDescriptor sourceDesc, ModuleDescriptor binaryDesc) {
+            super(binaryDesc, URI.create("memory:///" + binaryDesc.toNameAndVersion()));
+            this.sourceDesc = sourceDesc;
+            this.binaryDesc = binaryDesc;
         }
 
         @Override
         public ModuleReader open() {
-            return new MemoryModuleReader();
+            return new MemoryModuleReader(sourceDesc);
         }
     }
 
     // Implementation based on jdk.internal.module.ModuleReferences#ExplodedModuleReader
     class MemoryModuleReader implements ModuleReader {
+        private final SourceModuleDescriptor sourceDesc;
         private volatile boolean closed;
+
+        public MemoryModuleReader(SourceModuleDescriptor desc) {
+            this.sourceDesc = desc;
+        }
 
         private void ensureOpen() throws IOException {
             if (closed) {
@@ -96,11 +113,11 @@ record MemoryModuleFinder(Map<String, byte[]> classes,
         public Optional<URI> find(String name) throws IOException {
             ensureOpen();
             // Try to find an in-memory compiled class first
-            if (classes.get(name) != null) {
+            if (classes.getOrDefault(sourceDesc, Collections.emptyMap()).get(name) != null) {
                 return Optional.of(URI.create("memory:///" + name.replace('.', '/') + ".class"));
             }
             // Try to find file resource from root path next
-            Path path = Resources.toFilePath(programDescriptor.sourceRootPath(), name);
+            Path path = Resources.toFilePath(sourceDesc.sourceRootPath(), name);
             if (path != null) {
                 try {
                     return Optional.of(path.toUri());
@@ -115,32 +132,32 @@ record MemoryModuleFinder(Map<String, byte[]> classes,
         public Optional<InputStream> open(String name) throws IOException {
             ensureOpen();
             // Try to find an in-memory compiled class first
-            byte[] bytes = classes.get(name);
+            byte[] bytes = classes.getOrDefault(sourceDesc, Collections.emptyMap()).get(name);
             if (bytes != null) {
                 return Optional.of(new ByteArrayInputStream(bytes));
             }
             // Try to find file resource from root path next
-            Path path = Resources.toFilePath(programDescriptor.sourceRootPath(), name);
+            Path path = Resources.toFilePath(sourceDesc.sourceRootPath(), name);
             return path != null ? Optional.of(Files.newInputStream(path)) : Optional.empty();
         }
 
         public Optional<ByteBuffer> read(String name) throws IOException {
             ensureOpen();
             // Try to find an in-memory compiled class first
-            byte[] bytes = classes.get(name);
+            byte[] bytes = classes.getOrDefault(sourceDesc, Collections.emptyMap()).get(name);
             if (bytes != null) {
                 return Optional.of(ByteBuffer.wrap(bytes));
             }
             // Try to find file resource from root path next
-            Path path = Resources.toFilePath(programDescriptor.sourceRootPath(), name);
+            Path path = Resources.toFilePath(sourceDesc.sourceRootPath(), name);
             return path != null ? Optional.of(ByteBuffer.wrap(Files.readAllBytes(path))) : Optional.empty();
         }
 
         public Stream<String> list() throws IOException {
             ensureOpen();
-            var root = programDescriptor.sourceRootPath();
+            var root = sourceDesc.sourceRootPath();
             var list = new ArrayList<String>();
-            classes.keySet().stream().map(name -> name.replace('.', '/') + ".class").forEach(list::add);
+            classes.getOrDefault(sourceDesc, Collections.emptyMap()).keySet().stream().map(name -> name.replace('.', '/') + ".class").forEach(list::add);
             try (var stream = Files.walk(root, Integer.MAX_VALUE, new FileVisitOption[0])) {
                   stream
                     .map(file -> Resources.toResourceName(root, file))

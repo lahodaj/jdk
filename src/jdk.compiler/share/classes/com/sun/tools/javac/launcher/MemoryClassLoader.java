@@ -25,6 +25,7 @@
 
 package com.sun.tools.javac.launcher;
 
+import com.sun.tools.javac.launcher.ProgramDescriptor.SourceModuleDescriptor;
 import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -43,10 +44,12 @@ import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.function.Function;
+import java.util.Objects;
+import java.util.function.BiFunction;
 
 /**
  * An in-memory classloader, that uses an in-memory cache of classes written by
@@ -67,11 +70,14 @@ final class MemoryClassLoader extends ClassLoader {
      */
     private final ClassLoader parentClassLoader;
 
+    private final List<SourceModuleDescriptor> modules;
+    private final Map<String, String> package2Module;
+
     /**
      * The map of all classes found in the source file, indexed by
      * {@link Class#getName()} binary name.
      */
-    private final Map<String, byte[]> sourceFileClasses;
+    private final Map<SourceModuleDescriptor, Map<String, byte[]>> sourceFileClasses;
 
     /**
      * A minimal protection domain, specifying a code source of the source file itself,
@@ -79,28 +85,36 @@ final class MemoryClassLoader extends ClassLoader {
      */
     private final ProtectionDomain domain;
 
-    private final ModuleDescriptor moduleDescriptor;
+    private final List<ModuleDescriptor> moduleDescriptors;
     private final ProgramDescriptor programDescriptor;
-    private final Function<String, byte[]> compileSourceFile;
+    private final BiFunction<SourceModuleDescriptor, String, byte[]> compileSourceFile;
 
-    MemoryClassLoader(Map<String, byte[]> sourceFileClasses,
+    MemoryClassLoader(List<SourceModuleDescriptor> modules,
+                      Map<SourceModuleDescriptor, Map<String, byte[]>> sourceFileClasses,
                       ClassLoader parentClassLoader,
-                      ModuleDescriptor moduleDescriptor,
+                      List<ModuleDescriptor> moduleDescriptors,
                       ProgramDescriptor programDescriptor,
-                      Function<String, byte[]> compileSourceFile) {
+                      BiFunction<SourceModuleDescriptor, String, byte[]> compileSourceFile) {
         super(parentClassLoader);
         this.parentClassLoader = parentClassLoader;
+        this.modules = modules;
+        this.package2Module = new HashMap<>();
         this.sourceFileClasses = sourceFileClasses;
         CodeSource codeSource;
         try {
-            codeSource = new CodeSource(programDescriptor.fileObject().getFile().toUri().toURL(), (CodeSigner[])null);
+            codeSource = new CodeSource(programDescriptor.fileObject().toUri().toURL(), (CodeSigner[])null);
         } catch (MalformedURLException e) {
             codeSource = null;
         }
         domain = new ProtectionDomain(codeSource, null, this, null);
-        this.moduleDescriptor = moduleDescriptor;
+        this.moduleDescriptors = moduleDescriptors;
         this.programDescriptor = programDescriptor;
         this.compileSourceFile = compileSourceFile;
+        for (ModuleDescriptor desc : this.moduleDescriptors) {
+            for (String pack : desc.packages()) {
+                package2Module.put(pack, desc.name());
+            }
+        }
     }
 
     /**
@@ -120,7 +134,8 @@ final class MemoryClassLoader extends ClassLoader {
         synchronized (getClassLoadingLock(name)) {
             Class<?> c = findLoadedClass(name);
             if (c == null) {
-                c = findOrCompileClass(name);
+                String pack = packageName(name);
+                c = findOrCompileClass(package2Module.get(pack), name);
                 if (c == null) {
                     c = parentClassLoader.loadClass(name);
                 }
@@ -149,12 +164,14 @@ final class MemoryClassLoader extends ClassLoader {
         if (sourceFileClasses.containsKey(toBinaryName(name))) {
             return findResource(name);
         }
-        var programPath = programDescriptor.sourceRootPath().resolve(name);
-        if (Files.exists(programPath)) {
-            try {
-                return programPath.toUri().toURL();
-            } catch (MalformedURLException e) {
-                throw new RuntimeException(e);
+        for (SourceModuleDescriptor desc : programDescriptor.modules()) {
+            var programPath = desc.sourceRootPath().resolve(name);
+            if (Files.exists(programPath)) {
+                try {
+                    return programPath.toUri().toURL();
+                } catch (MalformedURLException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
         return parentClassLoader.getResource(name);
@@ -186,7 +203,12 @@ final class MemoryClassLoader extends ClassLoader {
 
     @Override
     protected Class<?> findClass(String name) throws ClassNotFoundException {
-        var foundOrCompiledClass = findOrCompileClass(name);
+        String pack = packageName(name);
+        return findClassImpl(package2Module.get(pack), name);
+    }
+
+    private Class<?> findClassImpl(String moduleName, String name) throws ClassNotFoundException {
+        var foundOrCompiledClass = findOrCompileClass(moduleName, name);
         if (foundOrCompiledClass == null) {
             throw new ClassNotFoundException(name);
         }
@@ -199,18 +221,26 @@ final class MemoryClassLoader extends ClassLoader {
             if (moduleName == null) {
                 return findClass(name);
             }
-            if (moduleDescriptor != null && moduleDescriptor.name().equals(moduleName)) {
-                return findClass(name);
+            if (moduleDescriptors != null) {
+                for (ModuleDescriptor desc : moduleDescriptors) {
+                    if (desc.name().equals(moduleName)) {
+                        return findClassImpl(desc.name(), name);
+                    }
+                }
             }
             return super.findClass(moduleName, name);
         } catch (ClassNotFoundException ignore) { }
         return null;
     }
 
-    private Class<?> findOrCompileClass(String name) {
-        byte[] bytes = sourceFileClasses.get(name);
+    private Class<?> findOrCompileClass(String moduleName, String name) {
+        SourceModuleDescriptor desc = modules.stream().filter(m -> Objects.equals(moduleName, m.moduleName())).findAny().orElse(null);
+        if (desc == null) {
+            return null;
+        }
+        byte[] bytes = sourceFileClasses.computeIfAbsent(desc, x -> new HashMap<>()).get(name); //TODO: computeIfAbsent synchronization(?)
         if (bytes == null) {
-            bytes = compileSourceFile.apply(name);
+            bytes = compileSourceFile.apply(desc, name);
             if (bytes == null) {
                 return null;
             }
@@ -223,8 +253,12 @@ final class MemoryClassLoader extends ClassLoader {
         if (moduleName == null) {
             return getResource(name);
         }
-        if (moduleDescriptor != null && moduleDescriptor.name().equals(moduleName)) {
-            return getResource(name);
+        if (moduleDescriptors != null) {
+            for (ModuleDescriptor desc : moduleDescriptors) {
+                if (desc.name().equals(moduleName)) {
+                    return getResource(name);
+                }
+            }
         }
         return super.findResource(moduleName, name);
     }
@@ -285,6 +319,11 @@ final class MemoryClassLoader extends ClassLoader {
         return name.substring(0, name.length() - DOT_CLASS_LENGTH).replace('/', '.');
     }
 
+    private String packageName(String cn) {
+        int pos = cn.lastIndexOf('.');
+        return (pos < 0) ? "" : cn.substring(0, pos);
+    }
+
     private static final int DOT_CLASS_LENGTH = ".class".length();
     private final String PROTOCOL = "sourcelauncher-" + getClass().getSimpleName() + hashCode();
     private URLStreamHandler handler;
@@ -298,7 +337,7 @@ final class MemoryClassLoader extends ClassLoader {
             if (!u.getProtocol().equalsIgnoreCase(PROTOCOL)) {
                 throw new IllegalArgumentException(u.toString());
             }
-            return new MemoryURLConnection(u, sourceFileClasses.get(toBinaryName(u.getPath())));
+            return new MemoryURLConnection(u, sourceFileClasses.get(modules.get(0)).get(toBinaryName(u.getPath()))); //XXX: module description selection!!!!
         }
 
     }

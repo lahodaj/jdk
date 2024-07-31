@@ -25,14 +25,14 @@
 
 package com.sun.tools.javac.launcher;
 
-import com.sun.source.util.TaskEvent;
-import com.sun.source.util.TaskListener;
 import com.sun.tools.javac.api.JavacTool;
 import com.sun.tools.javac.code.Preview;
 import com.sun.tools.javac.file.JavacFileManager;
+import com.sun.tools.javac.launcher.ProgramDescriptor.SourceModuleDescriptor;
 import com.sun.tools.javac.resources.LauncherProperties.Errors;
 import com.sun.tools.javac.util.Context;
 import com.sun.tools.javac.util.Context.Factory;
+import com.sun.tools.javac.util.Pair;
 
 import javax.tools.JavaFileManager;
 import javax.tools.JavaFileObject;
@@ -49,10 +49,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * An object to encapsulate the set of in-memory classes, such that
@@ -72,9 +74,9 @@ final class MemoryContext {
 
     private final JavacTool compiler;
     private final JavacFileManager standardFileManager;
-    private final JavaFileManager memoryFileManager;
+    private final MemoryFileManager memoryFileManager;
 
-    private final Map<String, byte[]> inMemoryClasses = new HashMap<>();
+    private final Map<SourceModuleDescriptor, Map<String, byte[]>> inMemoryClasses = new HashMap<>();
 
     MemoryContext(PrintWriter out, ProgramDescriptor descriptor, RelevantJavacOptions options) throws Fault {
         this.out = out;
@@ -84,12 +86,19 @@ final class MemoryContext {
         this.compiler = JavacTool.create();
         this.standardFileManager = compiler.getStandardFileManager(null, null, null);
         try {
-            List<File> searchPath = descriptor.fileObject().isFirstLineIgnored() ? List.of() : List.of(descriptor.sourceRootPath().toFile());
-            standardFileManager.setLocation(StandardLocation.SOURCE_PATH, searchPath);
+            if (descriptor.modules().size() == 1) {
+//                List<File> searchPath = descriptor.fileObject().isFirstLineIgnored() ? List.of() : List.of(descriptor.modules().get(0).sourceRootPath().toFile());
+                List<File> searchPath = List.of(descriptor.modules().get(0).sourceRootPath().toFile());
+                standardFileManager.setLocation(StandardLocation.SOURCE_PATH, searchPath);
+            } else {
+                for (SourceModuleDescriptor desc : descriptor.modules()) {
+                    standardFileManager.setLocationForModule(StandardLocation.MODULE_SOURCE_PATH, desc.moduleName(), List.of(desc.sourceRootPath()));
+                }
+            }
         } catch (IOException e) {
             throw new Error("unexpected exception from file manager", e);
         }
-        this.memoryFileManager = new MemoryFileManager(inMemoryClasses, standardFileManager);
+        this.memoryFileManager = new MemoryFileManager(descriptor.modules(), inMemoryClasses, standardFileManager);
     }
 
     ProgramDescriptor getProgramDescriptor() {
@@ -97,12 +106,12 @@ final class MemoryContext {
     }
 
     String getSourceFileAsString() {
-        return descriptor.fileObject().getFile().toAbsolutePath().toString();
+        return descriptor.fileObject().toAbsolutePath().toString();
     }
 
-    Set<String> getNamesOfCompiledClasses() {
-        return Set.copyOf(inMemoryClasses.keySet());
-    }
+//    Set<String> getNamesOfCompiledClasses() {
+//        return Set.copyOf(inMemoryClasses.keySet());
+//    }
 
     /**
      * Compiles a source file, placing the class files in a map in memory.
@@ -113,9 +122,12 @@ final class MemoryContext {
      */
     void compileProgram() throws Fault {
         var units = new ArrayList<JavaFileObject>();
-        units.add(descriptor.fileObject());
-        if (descriptor.isModular()) {
-            var root = descriptor.sourceRootPath();
+        memoryFileManager.getDelegate().getJavaFileObjects(descriptor.fileObject()).forEach(units::add);
+        for (SourceModuleDescriptor desc : descriptor.modules()) {
+            if (desc.moduleName() == null) {
+                continue;
+            }
+            var root = desc.sourceRootPath();
             units.add(standardFileManager.getJavaFileObject(root.resolve("module-info.java")));
         }
         var opts = options.forProgramCompilation();
@@ -140,12 +152,12 @@ final class MemoryContext {
      * @return the byte code of the compiled class or {@code null}
      *         if no source file was found for the given name
      */
-    byte[] compileJavaFileByName(String name) {
+    byte[] compileJavaFileByName(SourceModuleDescriptor desc, String name) {
         // Initially, determine existing directory from class name.
         // [pack$age . ] na$me [ $ enclo$ed [$ dee$per] ]
         var lastDot = name.lastIndexOf(".");
         var packageName = lastDot == -1 ? "" : name.substring(0, lastDot);
-        var packagePath = descriptor.sourceRootPath().resolve(packageName.replace('.', '/'));
+        var packagePath = desc.sourceRootPath().resolve(packageName.replace('.', '/'));
         // Trivial case: no matching directory exists
         if (!Files.isDirectory(packagePath)) return null;
 
@@ -175,7 +187,7 @@ final class MemoryContext {
         }
 
         // The memory file manager stored bytes in the context map, indexed by the class names.
-        return inMemoryClasses.get(name);
+        return inMemoryClasses.computeIfAbsent(desc, x -> new HashMap<>()).get(name);
     }
 
     /**
@@ -187,10 +199,9 @@ final class MemoryContext {
      * @throws Fault if a modular application class is in the unnamed package
      */
     ClassLoader newClassLoaderFor(ClassLoader parent, String mainClassName) throws Fault {
-        var moduleInfoBytes = inMemoryClasses.get("module-info");
-        if (moduleInfoBytes == null) {
+        if (descriptor.modules().get(0).moduleName() == null) {
             // Trivial case: no compiled module descriptor available, no extra module layer required
-            return new MemoryClassLoader(inMemoryClasses, parent, null, descriptor, this::compileJavaFileByName);
+            return new MemoryClassLoader(descriptor.modules(), inMemoryClasses, parent, null, descriptor, this::compileJavaFileByName);
         }
 
         // Ensure main class resides in a named package.
@@ -214,19 +225,23 @@ final class MemoryContext {
         }
 
         // Create in-memory module layer for the modular application.
-        var applicationModule = ModuleDescriptor.read(ByteBuffer.wrap(moduleInfoBytes), descriptor::computePackageNames);
-        var memoryFinder = new MemoryModuleFinder(inMemoryClasses, applicationModule, descriptor);
-        var memoryConfig = parentLayer.configuration().resolveAndBind(memoryFinder, ModuleFinder.of(), Set.of(applicationModule.name()));
-        var memoryClassLoader = new MemoryClassLoader(inMemoryClasses, parentLoader, applicationModule, descriptor, this::compileJavaFileByName);
+        var applicationModules = descriptor.modules()
+                                           .stream()
+                                           .map(module -> Pair.of(module, inMemoryClasses.getOrDefault(module, Collections.emptyMap()).get("module-info")))
+                                           .map(moduleAndBytes -> ModuleDescriptor.read(ByteBuffer.wrap(moduleAndBytes.snd), moduleAndBytes.fst::computePackageNames))
+                                           .toList();
+        var memoryFinder = new MemoryModuleFinder(inMemoryClasses, descriptor.modules(), applicationModules, descriptor);
+        var memoryConfig = parentLayer.configuration().resolveAndBind(memoryFinder, ModuleFinder.of(), applicationModules.stream().map(m -> m.name()).collect(Collectors.toSet()));
+        var memoryClassLoader = new MemoryClassLoader(descriptor.modules(), inMemoryClasses, parentLoader, applicationModules, descriptor, this::compileJavaFileByName);
         var memoryController = ModuleLayer.defineModules(memoryConfig, List.of(parentLayer), __ -> memoryClassLoader);
         var memoryLayer = memoryController.layer();
 
         // Make application class accessible from the calling (unnamed) module, that loaded this class.
-        var module = memoryLayer.findModule(applicationModule.name()).orElseThrow();
+        var module = memoryLayer.findModule(applicationModules.get(0).name()).orElseThrow();
         var mainClassNamePackageName = mainClassName.substring(0, lastDotInMainClassName);
         memoryController.addOpens(module, mainClassNamePackageName, getClass().getModule());
 
-        return memoryLayer.findLoader(applicationModule.name());
+        return memoryLayer.findLoader(applicationModules.get(0).name());
     }
 
     private static ModuleFinder createModuleFinderFromModulePath() {

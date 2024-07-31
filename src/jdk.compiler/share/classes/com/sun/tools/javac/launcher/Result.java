@@ -38,4 +38,4 @@ import java.util.Set;
  * @param programClass the class instance of the launched program.
  * @param classNames the names of classes compiled into memory.
  */
-public record Result(Class<?> programClass, Set<String> classNames) {}
+public record Result(Class<?> programClass) {}

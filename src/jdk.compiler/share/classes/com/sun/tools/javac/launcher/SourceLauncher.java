@@ -144,7 +144,7 @@ public final class SourceLauncher {
     public Result run(String[] runtimeArgs, String[] args) throws Fault, InvocationTargetException {
         Path file = getFile(args);
 
-        ProgramDescriptor program = ProgramDescriptor.of(ProgramFileObject.of(file));
+        ProgramDescriptor program = ProgramDescriptor.of(file);
         RelevantJavacOptions options = RelevantJavacOptions.of(program, runtimeArgs);
         MemoryContext context = new MemoryContext(out, program, options);
         context.compileProgram();
@@ -152,7 +152,7 @@ public final class SourceLauncher {
         String[] mainArgs = Arrays.copyOfRange(args, 1, args.length);
         var appClass = execute(context, mainArgs);
 
-        return new Result(appClass, context.getNamesOfCompiledClasses());
+        return new Result(appClass);
     }
 
     /**
@@ -209,7 +209,7 @@ public final class SourceLauncher {
         Method mainMethod = MethodFinder.findMainMethod(firstClass);
         if (mainMethod == null) {
             // 2. If the first class doesn't have a main method, look for a class with a matching name
-            var compilationUnitName = program.fileObject().getFile().getFileName().toString();
+            var compilationUnitName = program.fileObject().getFileName().toString();
             assert compilationUnitName.endsWith(".java");
             var expectedSimpleName = compilationUnitName.substring(0, compilationUnitName.length() - 5);
             var expectedPackageName = program.packageName().orElse("");

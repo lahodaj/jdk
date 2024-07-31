@@ -26,6 +26,8 @@
 package com.sun.tools.javac.launcher;
 
 import com.sun.source.tree.ClassTree;
+import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.util.JavacTask;
 import com.sun.tools.javac.api.JavacTool;
 import com.sun.tools.javac.resources.LauncherProperties.Errors;
 
@@ -33,6 +35,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.module.InvalidModuleDescriptorException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -44,6 +47,10 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import javax.lang.model.SourceVersion;
+import javax.tools.JavaFileObject;
+import javax.tools.SimpleJavaFileObject;
+import javax.tools.StandardJavaFileManager;
+import javax.tools.ToolProvider;
 
 /**
  * Describes a launch-able Java compilation unit.
@@ -54,19 +61,19 @@ import javax.lang.model.SourceVersion;
  * or deletion without notice.</strong></p>
  */
 public record ProgramDescriptor(
-        ProgramFileObject fileObject,
+        Path fileObject,
         Optional<String> packageName,
         List<String> qualifiedTypeNames,
-        Path sourceRootPath) {
-    static ProgramDescriptor of(ProgramFileObject fileObject) throws Fault {
-        var file = fileObject.getFile();
+        List<SourceModuleDescriptor> modules) {
+    static ProgramDescriptor of(Path fileObject) throws Fault {
+        var file = fileObject;
         var packageName = ""; // empty string will be converted into an empty optional
         var packageNameAndDot = ""; // empty string or packageName + '.'
         var qualifiedTypeNames = new ArrayList<String>();
         try {
             var compiler = JavacTool.create();
             var standardFileManager = compiler.getStandardFileManager(null, null, null);
-            var units = List.of(fileObject);
+            var units = standardFileManager.getJavaFileObjects(fileObject);
             var task = compiler.getTask(null, standardFileManager, diagnostic -> {}, null, null, units);
             var tree = task.parse().iterator().next(); // single compilation unit
             var packageTree = tree.getPackage();
@@ -85,11 +92,40 @@ public record ProgramDescriptor(
         if (qualifiedTypeNames.isEmpty()) {
             throw new Fault(Errors.NoClass);
         }
+        Path sourceRootPath = computeSourceRootPath(file, packageName);
+        Path moduleInfo = sourceRootPath.resolve("module-info.java");
+        List<SourceModuleDescriptor> modules = new ArrayList<>();
+
+        if (Files.isRegularFile(moduleInfo)) {
+            try {
+                String moduleName = readModuleName(moduleInfo);
+
+                modules.add(new SourceModuleDescriptor(moduleName, sourceRootPath));
+                if (moduleName.equals(sourceRootPath.getFileName().toString())) {
+                    try (DirectoryStream<Path> ds = Files.newDirectoryStream(sourceRootPath.getParent())) {
+                        for (Path nested : ds) {
+                            if (nested.equals(sourceRootPath)) {
+                                continue;
+                            }
+                            Path nestedModuleInfo = nested.resolve("module-info.java");
+                            String nestedModuleName = readModuleName(nestedModuleInfo);
+                            if (nestedModuleName.equals(nested.getFileName().toString())) {
+                                modules.add(new SourceModuleDescriptor(nestedModuleName, nested));
+                            }
+                        }
+                    }
+                }
+            } catch (IOException ex) {
+                throw new Fault(Errors.CompilationFailed); //XXX1!!
+            }
+        } else {
+            modules.add(new SourceModuleDescriptor(null, sourceRootPath));
+        }
         return new ProgramDescriptor(
                 fileObject,
                 packageName.isEmpty() ? Optional.empty() : Optional.of(packageName),
                 List.copyOf(qualifiedTypeNames),
-                computeSourceRootPath(file, packageName));
+                modules);
     }
 
     public static Path computeSourceRootPath(Path program, String packageName) throws Fault {
@@ -113,67 +149,80 @@ public record ProgramDescriptor(
         throw new Fault(Errors.MismatchEndOfPathAndPackageName(packageName, program));
     }
 
-    public boolean isModular() {
-        return Files.exists(sourceRootPath.resolve("module-info.java"));
-    }
-
-    public Set<String> computePackageNames() {
-        return explodedPackages(sourceRootPath);
-    }
-
-    // -- exploded directories --> based on jdk.internal.module.ModulePath
-
-    private static Set<String> explodedPackages(Path dir) {
-        String separator = dir.getFileSystem().getSeparator();
-        try (Stream<Path> stream = Files.find(dir, Integer.MAX_VALUE,
-                (path, attrs) -> attrs.isRegularFile() && !isHidden(path))) {
-            return stream.map(dir::relativize)
-                    .map(path -> toPackageName(path, separator))
-                    .flatMap(Optional::stream)
-                    .collect(Collectors.toSet());
-        } catch (IOException x) {
-            throw new UncheckedIOException(x);
-        }
-    }
-
-    /**
-     * Maps the relative path of an entry in an exploded module to a package
-     * name.
-     *
-     * @throws InvalidModuleDescriptorException if the name is a class file in
-     *         the top-level directory (and it's not module-info.class)
-     */
-    private static Optional<String> toPackageName(Path file, String separator) {
-        assert file.getRoot() == null;
-
-        Path parent = file.getParent();
-        if (parent == null) {
-            String name = file.toString();
-            if (name.endsWith(".class") && !name.equals("module-info.class")) {
-                String msg = name + " found in top-level directory"
-                        + " (unnamed package not allowed in module)";
-                throw new InvalidModuleDescriptorException(msg);
+    private static String readModuleName(Path file) throws IOException {
+        try (StandardJavaFileManager sjfm = ToolProvider.getSystemJavaCompiler().getStandardFileManager(null, null, null)) {
+            JavacTask task = (JavacTask) ToolProvider.getSystemJavaCompiler().getTask(null, sjfm, null, null, null, sjfm.getJavaFileObjects(file));
+            CompilationUnitTree cut = task.parse().iterator().next();
+            if (cut.getModule() == null) {
+                throw new IllegalArgumentException("Not a module declaration: " + file);
             }
-            return Optional.empty();
-        }
-
-        String pn = parent.toString().replace(separator, ".");
-        if (SourceVersion.isName(pn)) {
-            return Optional.of(pn);
-        } else {
-            // not a valid package name
-            return Optional.empty();
+            return cut.getModule().getName().toString();
         }
     }
+    public record SourceModuleDescriptor(String moduleName, Path sourceRootPath) {
 
-    /**
-     * Returns true if the given file exists and is a hidden file
-     */
-    private static boolean isHidden(Path file) {
-        try {
-            return Files.isHidden(file);
-        } catch (IOException ioe) {
-            return false;
+        public boolean isModular() {
+            return moduleName != null;
+        }
+
+        public Set<String> computePackageNames() {
+            return explodedPackages(sourceRootPath);
+        }
+
+        // -- exploded directories --> based on jdk.internal.module.ModulePath
+
+        private static Set<String> explodedPackages(Path dir) {
+            String separator = dir.getFileSystem().getSeparator();
+            try (Stream<Path> stream = Files.find(dir, Integer.MAX_VALUE,
+                    (path, attrs) -> attrs.isRegularFile() && !isHidden(path))) {
+                return stream.map(dir::relativize)
+                        .map(path -> toPackageName(path, separator))
+                        .flatMap(Optional::stream)
+                        .collect(Collectors.toSet());
+            } catch (IOException x) {
+                throw new UncheckedIOException(x);
+            }
+        }
+
+        /**
+         * Maps the relative path of an entry in an exploded module to a package
+         * name.
+         *
+         * @throws InvalidModuleDescriptorException if the name is a class file in
+         *         the top-level directory (and it's not module-info.class)
+         */
+        private static Optional<String> toPackageName(Path file, String separator) {
+            assert file.getRoot() == null;
+
+            Path parent = file.getParent();
+            if (parent == null) {
+                String name = file.toString();
+                if (name.endsWith(".class") && !name.equals("module-info.class")) {
+                    String msg = name + " found in top-level directory"
+                            + " (unnamed package not allowed in module)";
+                    throw new InvalidModuleDescriptorException(msg);
+                }
+                return Optional.empty();
+            }
+
+            String pn = parent.toString().replace(separator, ".");
+            if (SourceVersion.isName(pn)) {
+                return Optional.of(pn);
+            } else {
+                // not a valid package name
+                return Optional.empty();
+            }
+        }
+
+        /**
+         * Returns true if the given file exists and is a hidden file
+         */
+        private static boolean isHidden(Path file) {
+            try {
+                return Files.isHidden(file);
+            } catch (IOException ioe) {
+                return false;
+            }
         }
     }
 }

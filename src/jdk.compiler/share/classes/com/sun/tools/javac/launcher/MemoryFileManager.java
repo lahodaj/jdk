@@ -25,6 +25,7 @@
 
 package com.sun.tools.javac.launcher;
 
+import com.sun.tools.javac.launcher.ProgramDescriptor.SourceModuleDescriptor;
 import javax.tools.FileObject;
 import javax.tools.ForwardingJavaFileManager;
 import javax.tools.JavaFileManager;
@@ -35,7 +36,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import javax.tools.StandardJavaFileManager;
 
 /**
  * An in-memory file manager.
@@ -50,24 +54,50 @@ import java.util.Map;
  * or deletion without notice.</strong></p>
  */
 final class MemoryFileManager extends ForwardingJavaFileManager<JavaFileManager> {
-    private final Map<String, byte[]> map;
+    private final List<SourceModuleDescriptor> modules;
+    private final Map<SourceModuleDescriptor, Map<String, byte[]>> map;
+    private final StandardJavaFileManager delegate;
 
-    MemoryFileManager(Map<String, byte[]> map, JavaFileManager delegate) {
+    MemoryFileManager(List<SourceModuleDescriptor> modules, Map<SourceModuleDescriptor, Map<String, byte[]>> map, StandardJavaFileManager delegate) {
         super(delegate);
+        this.modules = modules;
         this.map = map;
+        this.delegate = delegate;
     }
 
+    public StandardJavaFileManager getDelegate() {
+        return delegate;
+    }
+
+    @Override
+    public Location getLocationForModule(Location location, String moduleName) throws IOException {
+        if (location == StandardLocation.CLASS_OUTPUT) {
+            for (SourceModuleDescriptor desc : modules) {
+                if (desc.moduleName().equals(moduleName)) {
+                    return new ModuleOutputLocation(desc);
+                }
+            }
+            return new DevNullOutputLocation(moduleName);
+        }
+        return super.getLocationForModule(location, moduleName);
+    }
+
+    
     @Override
     public JavaFileObject getJavaFileForOutput(Location location, String className,
                                                JavaFileObject.Kind kind, FileObject sibling) throws IOException {
         if (location == StandardLocation.CLASS_OUTPUT && kind == JavaFileObject.Kind.CLASS) {
-            return createInMemoryClassFile(className);
+            return createInMemoryClassFile(modules.get(0), className); //TODO: some checks this is a meaningful module!
+        } else if (location instanceof ModuleOutputLocation output && kind == JavaFileObject.Kind.CLASS) {
+            return createInMemoryClassFile(output.module, className); 
+        } else if (location instanceof DevNullOutputLocation output && kind == JavaFileObject.Kind.CLASS) {
+            throw new IOException("cannot write to this module: " + output.moduleName);
         } else {
             return super.getJavaFileForOutput(location, className, kind, sibling);
         }
     }
 
-    private JavaFileObject createInMemoryClassFile(String className) {
+    private JavaFileObject createInMemoryClassFile(SourceModuleDescriptor module, String className) {
         URI uri = URI.create("memory:///" + className.replace('.', '/') + ".class");
         return new SimpleJavaFileObject(uri, JavaFileObject.Kind.CLASS) {
             @Override
@@ -76,7 +106,8 @@ final class MemoryFileManager extends ForwardingJavaFileManager<JavaFileManager>
                     @Override
                     public void close() throws IOException {
                         super.close();
-                        map.put(className, toByteArray());
+                        map.computeIfAbsent(module, x -> new HashMap<>())
+                           .put(className, toByteArray());
                     }
                 };
             }
@@ -86,5 +117,61 @@ final class MemoryFileManager extends ForwardingJavaFileManager<JavaFileManager>
     @Override
     public boolean contains(Location location, FileObject fo) throws IOException {
         return fo instanceof ProgramFileObject || super.contains(location, fo);
+    }
+
+    @Override
+    public boolean hasLocation(Location location) {
+        return location == StandardLocation.CLASS_OUTPUT ||
+               super.hasLocation(location);
+    }
+
+    private static final class ModuleOutputLocation implements Location {
+
+        private final SourceModuleDescriptor module;
+
+        public ModuleOutputLocation(SourceModuleDescriptor module) {
+            this.module = module;
+        }
+
+        @Override
+        public String getName() {
+            return module.moduleName();
+        }
+
+        @Override
+        public boolean isOutputLocation() {
+            return true;
+        }
+
+        @Override
+        public boolean isModuleOrientedLocation() {
+            return false;
+        }
+
+    }
+
+    private static final class DevNullOutputLocation implements Location {
+
+        private final String moduleName;
+
+        public DevNullOutputLocation(String moduleName) {
+            this.moduleName = moduleName;
+        }
+
+        @Override
+        public String getName() {
+            return "/dev/null for " + moduleName;
+        }
+
+        @Override
+        public boolean isOutputLocation() {
+            return true;
+        }
+
+        @Override
+        public boolean isModuleOrientedLocation() {
+            return false;
+        }
+        
     }
 }

@@ -158,7 +158,7 @@ record RelevantJavacOptions(List<String> forProgramCompilation,
         // ALL-MODULE-PATH can only be used when compiling the
         // unnamed module or when compiling in the context of
         // an automatic module
-        if (program.isModular()) {
+        if (program.modules().get(0).moduleName() != null) {
             modules.remove("ALL-MODULE-PATH");
         }
         return modules;
