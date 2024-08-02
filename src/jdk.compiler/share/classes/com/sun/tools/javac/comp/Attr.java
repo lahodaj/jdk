@@ -4487,9 +4487,8 @@ public class Attr extends JCTree.Visitor {
                         .map(rc -> rc.type)
                         .collect(List.collector());
 
-                MethodType mt = new MethodType(List.nil(), syms.voidType, List.nil(), syms.methodClass);
-                mt.bindingtypes = recordComponents;
-                patternDeclarations = patternDeclarations.prepend(new MethodSymbol(PUBLIC | SYNTHETIC, ((ClassSymbol) site.tsym).name, mt, site.tsym));
+                PatternType pt = new PatternType(recordComponents, syms.voidType, syms.methodClass);
+                patternDeclarations = patternDeclarations.prepend(new MethodSymbol(PUBLIC | SYNTHETIC, ((ClassSymbol) site.tsym).name, pt, site.tsym));
             }
         }
 

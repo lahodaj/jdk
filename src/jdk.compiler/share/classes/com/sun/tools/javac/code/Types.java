@@ -1444,6 +1444,11 @@ public class Types {
             }
 
             @Override
+            public Boolean visitPatternType(PatternType t, Type s) {
+                return hasSameArgs(t, s);
+            }
+
+            @Override
             public Boolean visitPackageType(PackageType t, Type s) {
                 return t == s;
             }
@@ -2391,6 +2396,9 @@ public class Types {
     }
     //where
     private boolean eraseNotNeeded(Type t) {
+        if (t == null) {
+            System.err.println("HELLO");
+        }
         // We don't want to erase primitive types and String type as that
         // operation is idempotent. Also, erasing these could result in loss
         // of information such as constant values attached to such types.
@@ -3287,10 +3295,14 @@ public class Types {
             @Override
             public Boolean visitMethodType(MethodType t, Type s) {
                 if (s.hasTag(METHOD)) {
-                    if (t.bindingtypes != null && t.bindingtypes.size() > 0) return containsTypeEquivalent(t.bindingtypes, s.getBindingTypes());
-                    else return containsTypeEquivalent(t.argtypes, s.getParameterTypes());
+                    return containsTypeEquivalent(t.argtypes, s.getParameterTypes());
                 }
                 return false;
+            }
+
+            @Override
+            public Boolean visitPatternType(PatternType t, Type s) {
+                return containsTypeEquivalent(t.bindingtypes, s.getBindingTypes());
             }
 
             @Override
@@ -4925,6 +4937,7 @@ public class Types {
         public R visitWildcardType(WildcardType t, S s) { return visitType(t, s); }
         public R visitArrayType(ArrayType t, S s)       { return visitType(t, s); }
         public R visitMethodType(MethodType t, S s)     { return visitType(t, s); }
+        public R visitPatternType(PatternType t, S s)   { return visitType(t, s); }
         public R visitPackageType(PackageType t, S s)   { return visitType(t, s); }
         public R visitModuleType(ModuleType t, S s)     { return visitType(t, s); }
         public R visitTypeVar(TypeVar t, S s)           { return visitType(t, s); }
@@ -5195,11 +5208,7 @@ public class Types {
                 case METHOD:
                     MethodType mt = (MethodType) type;
                     append('(');
-                    if (mt.bindingtypes != null && mt.bindingtypes.size() > 0) {
-                        assembleSig(mt.bindingtypes);
-                    } else {
-                        assembleSig(mt.argtypes);
-                    }
+                    assembleSig(mt.argtypes);
                     append(')');
                     assembleSig(mt.restype);
                     if (hasTypeVar(mt.thrown)) {
@@ -5208,6 +5217,13 @@ public class Types {
                             assembleSig(l.head);
                         }
                     }
+                    break;
+                case PATTERN:
+                    PatternType pt = (PatternType) type;
+                    append('(');
+                    assembleSig(pt.bindingtypes);
+                    append(')');
+                    assembleSig(pt.restype);
                     break;
                 case WILDCARD: {
                     Type.WildcardType ta = (Type.WildcardType) type;

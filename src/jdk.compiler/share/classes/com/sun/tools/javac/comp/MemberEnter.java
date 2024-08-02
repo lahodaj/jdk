@@ -202,8 +202,7 @@ public class MemberEnter extends JCTree.Visitor {
                                tree.thrown,
                                localEnv);
             if (t instanceof MethodType mt && m.isPattern()) {
-                mt.bindingtypes = mt.argtypes;
-                mt.argtypes = List.nil();
+                t = new PatternType(mt.argtypes, mt.restype, syms.methodClass);
             }
             m.type = t;
         } finally {
