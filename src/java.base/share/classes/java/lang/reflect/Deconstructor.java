@@ -472,4 +472,8 @@ public final class Deconstructor<T> extends Executable {
     public AnnotatedType getAnnotatedReturnType() {
         return null;
     }
+
+    String getMangledName() {
+        return mangle(this.getDeclaringClass(), Arrays.stream(getPatternBindings()).map(pb -> pb.getType()).toArray(Class[]::new));
+    }
 }

@@ -68,6 +68,8 @@ import static java.lang.invoke.MethodHandleStatics.UNSAFE;
 import static java.lang.invoke.MethodHandleStatics.newIllegalArgumentException;
 import static java.lang.invoke.MethodHandleStatics.newInternalError;
 import static java.lang.invoke.MethodType.methodType;
+import java.lang.reflect.Deconstructor;
+import java.lang.runtime.Carriers;
 
 /**
  * This class consists exclusively of static methods that operate on or return
@@ -3505,6 +3507,56 @@ return mh1;
             @SuppressWarnings("deprecation")
             Lookup lookup = c.isAccessible() ? IMPL_LOOKUP : this;
             return lookup.getDirectConstructorNoSecurityManager(ctor.getDeclaringClass(), ctor);
+        }
+
+        /**
+         * Produces a method handle for a reflected deconstructor.
+         * TBD
+         * @param d the reflected deconstructor
+         * @return a method handle which can invoke the reflected deconstructor
+         * @throws IllegalAccessException if access checking fails
+         * @throws NullPointerException if the argument is null
+         */
+        public MethodHandle unreflectDeconstructor(Deconstructor<?> d) throws IllegalAccessException {
+            try {
+                String mangled = SharedSecrets.getJavaLangReflectAccess().getMangledName(d);
+                @SuppressWarnings("deprecation")
+                        Lookup lookup = d.isAccessible() ? IMPL_LOOKUP : this;
+                Method deconstructorMethod = d.getDeclaringClass().getDeclaredMethod(mangled, d.getDeclaringClass());
+                MethodHandle deconstructorPhysicalHandle = unreflect(deconstructorMethod);
+                List<Class<?>> methodTypeTypes = new ArrayList<>();
+                methodTypeTypes.add(Object.class);
+                MethodType bindingMethodType = MethodType.methodType(Object.class, Arrays.stream(d.getPatternBindings())
+                                                                                         .map(b -> b.getType())
+                                                                                         .toArray(Class[]::new));
+                return MethodHandles.filterReturnValue(deconstructorPhysicalHandle, MethodHandles.insertArguments(CARRIER_TO_ARRAY, 1, Carriers.components(bindingMethodType)));
+            } catch (NoSuchMethodException | SecurityException ex) {
+                throw new InternalError(ex);
+            }
+        }
+
+        private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
+        private static MethodHandle CARRIER_TO_ARRAY;
+
+        static {
+            try {
+                CARRIER_TO_ARRAY = LOOKUP.findStatic(Lookup.class, "carrier2Array",
+                                               MethodType.methodType(Object[].class, Object.class, List.class));
+            } catch (ReflectiveOperationException e) {
+                throw new ExceptionInInitializerError(e);
+            }
+        }
+
+        private static Object[] carrier2Array(Object carrier, List<MethodHandle> componentHandles) {
+            return componentHandles.stream()
+                                   .map(componentAccess -> {
+                                       try {
+                                           return componentAccess.invoke(carrier);
+                                       } catch (Throwable t) {
+                                           throw new IllegalStateException(t);
+                                       }
+                                    })
+                                   .toArray(Object[]::new);
         }
 
         /*
