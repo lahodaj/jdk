@@ -27,8 +27,6 @@
  * @compile UnreflectPattern.java
  * @run main UnreflectPattern
  */
-// * @run main test.java.lang.invoke.lookup.UnreflectPattern
-//package test.java.lang.invoke.lookup;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -38,13 +36,18 @@ import java.util.Arrays;
 public class UnreflectPattern {
 
     public static void main(String... args) throws Throwable {
+        Object[] expected = new Object[] {"correct", -1};
         Object instance = new UnreflectPattern();
         Deconstructor<?> deconstructor = UnreflectPattern.class.getDeclaredDeconstructor(String.class, int.class);
         Object[] result1 = deconstructor.invoke(instance);
-        System.err.println(Arrays.asList(result1));
+        if (!Arrays.equals(expected, result1)) {
+            throw new AssertionError("Unexpected result: " + Arrays.toString(result1));
+        }
         MethodHandle deconstructorHandle = MethodHandles.lookup().unreflectDeconstructor(deconstructor);
         Object[] result2 = (Object[]) deconstructorHandle.invoke(instance);
-        System.err.println(Arrays.asList(result2));
+        if (!Arrays.equals(expected, result2)) {
+            throw new AssertionError("Unexpected result: " + Arrays.toString(result2));
+        }
     }
 
     public pattern UnreflectPattern(String s, int i) {

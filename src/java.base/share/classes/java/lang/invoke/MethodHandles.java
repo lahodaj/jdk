@@ -3520,8 +3520,6 @@ return mh1;
         public MethodHandle unreflectDeconstructor(Deconstructor<?> d) throws IllegalAccessException {
             try {
                 String mangled = SharedSecrets.getJavaLangReflectAccess().getMangledName(d);
-                @SuppressWarnings("deprecation")
-                        Lookup lookup = d.isAccessible() ? IMPL_LOOKUP : this;
                 Method deconstructorMethod = d.getDeclaringClass().getDeclaredMethod(mangled, d.getDeclaringClass());
                 MethodHandle deconstructorPhysicalHandle = unreflect(deconstructorMethod);
                 List<Class<?>> methodTypeTypes = new ArrayList<>();
@@ -3547,16 +3545,15 @@ return mh1;
             }
         }
 
-        private static Object[] carrier2Array(Object carrier, List<MethodHandle> componentHandles) {
-            return componentHandles.stream()
-                                   .map(componentAccess -> {
-                                       try {
-                                           return componentAccess.invoke(carrier);
-                                       } catch (Throwable t) {
-                                           throw new IllegalStateException(t);
-                                       }
-                                    })
-                                   .toArray(Object[]::new);
+        private static Object[] carrier2Array(Object carrier, List<MethodHandle> componentHandles) throws Throwable {
+            Object[] result = new Object[componentHandles.size()];
+            int i = 0;
+
+            for (MethodHandle componentAccessor : componentHandles) {
+                result[i++] = componentAccessor.invoke(carrier);
+            }
+
+            return result;
         }
 
         /*
