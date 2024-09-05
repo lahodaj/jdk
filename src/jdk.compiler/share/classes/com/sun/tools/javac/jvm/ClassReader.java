@@ -1336,6 +1336,17 @@ public class ClassReader {
                     }
                 }
             },
+            new AttributeReader(names.fromString("javac.APIDigest"), V59, CLASS_ATTRIBUTE) {
+                protected void read(Symbol sym, int attrLen) {
+                    if (sym.kind == TYP && sym.owner.kind == MDL) {
+                        ModuleSymbol msym = (ModuleSymbol) sym.owner;
+                        msym.apiDigest = new byte[32];
+                        for (int i = 0; i < 32; i++) {
+                            msym.apiDigest[i] = (byte) nextByte();
+                        }
+                    }
+                }
+            },
         };
 
         for (AttributeReader r: readers)

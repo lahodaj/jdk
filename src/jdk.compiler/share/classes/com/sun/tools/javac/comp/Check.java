@@ -157,7 +157,7 @@ public class Check {
         target = Target.instance(context);
         warnOnAnyAccessToMembers = options.isSet("warnOnAccessToMembers");
 
-        disablePreviewCheck = false;
+        disablePreviewCheck = true;
 
         Target target = Target.instance(context);
         syntheticNameChar = target.syntheticNameChar();

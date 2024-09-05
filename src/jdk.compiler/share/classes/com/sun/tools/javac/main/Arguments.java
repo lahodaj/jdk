@@ -58,6 +58,7 @@ import com.sun.tools.javac.file.BaseFileManager;
 import com.sun.tools.javac.file.JavacFileManager;
 import com.sun.tools.javac.jvm.Profile;
 import com.sun.tools.javac.jvm.Target;
+import com.sun.tools.javac.main.JavaCompiler.InitialFileParser;
 import com.sun.tools.javac.main.OptionHelper.GrumpyHelper;
 import com.sun.tools.javac.platform.PlatformDescription;
 import com.sun.tools.javac.platform.PlatformUtils;
@@ -418,6 +419,7 @@ public class Arguments {
                 log.error(Errors.ModulesourcepathMustBeSpecifiedWithDashMOption);
             } else {
                 java.util.List<String> modules = Arrays.asList(options.get(Option.MODULE).split(","));
+                InitialFileParser.instance(context).setModules(modules);
                 try {
                     for (String module : modules) {
                         Location sourceLoc = fm.getLocationForModule(StandardLocation.MODULE_SOURCE_PATH, module);
@@ -427,14 +429,14 @@ public class Arguments {
                             Location classLoc = fm.getLocationForModule(StandardLocation.CLASS_OUTPUT, module);
 
                             for (JavaFileObject file : fm.list(sourceLoc, "", EnumSet.of(JavaFileObject.Kind.SOURCE), true)) {
-                                String className = fm.inferBinaryName(sourceLoc, file);
-                                JavaFileObject classFile = fm.getJavaFileForInput(classLoc, className, Kind.CLASS);
-
-                                if (classFile == null || classFile.getLastModified() < file.getLastModified()) {
+//                                String className = fm.inferBinaryName(sourceLoc, file);
+//                                JavaFileObject classFile = fm.getJavaFileForInput(classLoc, className, Kind.CLASS);
+//
+//                                if (classFile == null || classFile.getLastModified() < file.getLastModified()) {
                                     if (fileObjects == null)
                                         fileObjects = new HashSet<>();
                                     fileObjects.add(file);
-                                }
+//                                }
                             }
                         }
                     }

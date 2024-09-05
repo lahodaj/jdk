@@ -1007,6 +1007,7 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
         public Completer usesProvidesCompleter = Completer.NULL_COMPLETER;
         public final Set<ModuleFlags> flags = EnumSet.noneOf(ModuleFlags.class);
         public final Set<ModuleResolutionFlags> resolutionFlags = EnumSet.noneOf(ModuleResolutionFlags.class);
+        public byte[] apiDigest;
 
         /**
          * Create a ModuleSymbol with an associated module-info ClassSymbol.

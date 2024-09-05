@@ -57,6 +57,7 @@ import static com.sun.tools.javac.code.Kinds.Kind.*;
 import static com.sun.tools.javac.code.Scope.LookupKind.NON_RECURSIVE;
 import static com.sun.tools.javac.code.TypeTag.*;
 import static com.sun.tools.javac.main.Option.*;
+import java.util.stream.Collectors;
 
 import static javax.tools.StandardLocation.CLASS_OUTPUT;
 
@@ -1524,7 +1525,7 @@ public class ClassWriter extends ClassFile {
     /** Emit a class file for a given class.
      *  @param c      The class from which a class file is generated.
      */
-    public JavaFileObject writeClass(ClassSymbol c)
+    public JavaFileObject writeClass(ClassSymbol c, byte[] internalApiHashCode)
         throws IOException, PoolOverflow, StringOverflow
     {
         String name = (c.owner.kind == MDL ? c.name : c.flatname).toString();
@@ -1542,7 +1543,7 @@ public class ClassWriter extends ClassFile {
                                                c.sourcefile);
         OutputStream out = outFile.openOutputStream();
         try {
-            writeClassFile(out, c);
+            writeClassFile(out, c, internalApiHashCode);
             if (verbose)
                 log.printVerbose("wrote.file", outFile.getName());
             out.close();
@@ -1562,7 +1563,7 @@ public class ClassWriter extends ClassFile {
 
     /** Write class `c' to outstream `out'.
      */
-    public void writeClassFile(OutputStream out, ClassSymbol c)
+    public void writeClassFile(OutputStream out, ClassSymbol c, byte[] internalApiHashCode)
         throws IOException, PoolOverflow, StringOverflow {
         Assert.check((c.flags() & COMPOUND) == 0);
         databuf.reset();
@@ -1668,8 +1669,34 @@ public class ClassWriter extends ClassFile {
         if (c.owner.kind == MDL) {
             acount += writeModuleAttribute(c);
             acount += writeFlagAttrs(c.owner.flags() & ~DEPRECATED);
+            ModuleSymbol modle = (ModuleSymbol) c.owner;
+            if (modle.apiDigest != null) {
+                int alenIdx = writeAttr(names.fromString("javac.APIDigest"));
+                databuf.appendBytes(modle.apiDigest);
+                endAttr(alenIdx);
+                acount++;
+            }
+            Map<String, byte[]> dependencies = modle.requires.stream().filter(rd -> rd.module.apiDigest != null).map(rd -> Pair.of(rd.module.name.toString(), rd.module.apiDigest)).collect(Collectors.toMap(p -> p.fst, p -> p.snd));
+            if (!dependencies.isEmpty()) {
+                int alenIdx = writeAttr(names.fromString("javac.DependenciesDigests"));
+                databuf.appendChar(dependencies.size());
+                for (Map.Entry<String, byte[]> e : dependencies.entrySet()) {
+                    databuf.appendChar(poolWriter.putName(names.fromString(e.getKey())));
+                    databuf.appendBytes(e.getValue());
+                }
+                endAttr(alenIdx);
+                acount++;
+            }
         }
         acount += writeExtraClassAttributes(c);
+
+        if (internalApiHashCode != null) {
+            int alenIdx = writeAttr(names.fromString("javac.InternalDigest"));
+            databuf.appendBytes(internalApiHashCode);
+            endAttr(alenIdx);
+            acount++;
+        }
+
         acount += writeExtraAttributes(c);
 
         poolbuf.appendInt(JAVA_MAGIC);

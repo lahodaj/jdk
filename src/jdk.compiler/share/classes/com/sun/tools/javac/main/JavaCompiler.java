@@ -766,9 +766,14 @@ public class JavaCompiler {
      *  @param cdef   The class definition from which code is generated.
      */
     JavaFileObject genCode(Env<AttrContext> env, JCClassDecl cdef) throws IOException {
+        if (env.toplevel.doNotGenerate) {
+            return null;
+        }
         try {
-            if (gen.genClass(env, cdef) && (errorCount() == 0))
-                return writer.writeClass(cdef.sym);
+            if (gen.genClass(env, cdef) && (errorCount() == 0)) {
+                JCTree firstClass = env.toplevel.getTypeDecls().nonEmpty() ? env.toplevel.getTypeDecls().head : null;
+                return writer.writeClass(cdef.sym, firstClass == cdef || env.toplevel.getModuleDecl() != null ? env.toplevel.internalDigest : null);
+            }
         } catch (ClassWriter.PoolOverflow ex) {
             log.error(cdef.pos(), Errors.LimitPool);
         } catch (ClassWriter.StringOverflow ex) {
@@ -943,12 +948,14 @@ public class JavaCompiler {
                 modules.addExtraAddModules(moduleName);
             }
 
+            InitialFileParserIntf parser = InitialFileParser.instance(context);
+
             // These method calls must be chained to avoid memory leaks
             processAnnotations(
-                enterTrees(
+                parser.recordApiHashes(enterTrees( //XXX: should handle annotation processing!!!
                         stopIfError(CompileState.ENTER,
-                                initModules(stopIfError(CompileState.ENTER, parseFiles(sourceFileObjects))))
-                ),
+                                parser.checkDependencies(initModules(stopIfError(CompileState.ENTER, parseFiles(sourceFileObjects)))))
+                )),
                 classnames
             );
 
@@ -1952,6 +1959,10 @@ public class JavaCompiler {
 
     public interface InitialFileParserIntf {
         public List<JCCompilationUnit> parse(Iterable<JavaFileObject> files);
+
+        public default void setModules(java.util.List<String> modules) {}
+        public default List<JCCompilationUnit> checkDependencies(List<JCCompilationUnit> baseUnits) { return baseUnits; }
+        public default List<JCCompilationUnit> recordApiHashes(List<JCCompilationUnit> units) { return units; }
     }
 
     public static class InitialFileParser implements InitialFileParserIntf {
@@ -1960,14 +1971,23 @@ public class JavaCompiler {
 
         public static InitialFileParserIntf instance(Context context) {
             InitialFileParserIntf instance = context.get(initialParserKey);
-            if (instance == null)
-                instance = new InitialFileParser(context);
+            if (instance == null) {
+                try {
+                    Class<?> handler = Class.forName("com.sun.tools.javac.main.IncrementalRecompileHandler");
+                    instance = (InitialFileParserIntf) handler.getDeclaredConstructor(Context.class).newInstance(context);
+                } catch (ClassNotFoundException ex) {
+                    instance = new InitialFileParser(context);
+                } catch (ReflectiveOperationException | IllegalArgumentException | SecurityException ex) {
+                    throw new Abort(ex);
+                }
+            }
             return instance;
         }
 
         private final JavaCompiler compiler;
 
-        private InitialFileParser(Context context) {
+        @SuppressWarnings("this-escape")
+        protected InitialFileParser(Context context) {
             context.put(initialParserKey, this);
             this.compiler = JavaCompiler.instance(context);
         }

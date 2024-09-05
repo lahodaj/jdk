@@ -546,6 +546,8 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
         /* An object encapsulating ending positions of source ranges indexed by
          * the tree nodes they belong to. Defined only if option -Xjcov is set. */
         public EndPosTable endPositions = null;
+        public byte[] internalDigest;
+        public boolean doNotGenerate; //hack: skip module-infos need to be parsed from source even if not modified. Do not re-generate them unless needed.
         protected JCCompilationUnit(List<JCTree> defs) {
             this.defs = defs;
         }
@@ -3121,6 +3123,8 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
         public JCExpression qualId;
         public List<JCDirective> directives;
         public ModuleSymbol sym;
+        public byte[] apiDigest;
+        public Map<String, byte[]> dependenciesDigests;
 
         protected JCModuleDecl(JCModifiers mods, ModuleKind kind,
                 JCExpression qualId, List<JCDirective> directives) {
