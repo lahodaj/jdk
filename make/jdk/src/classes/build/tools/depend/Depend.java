@@ -139,6 +139,8 @@ public class Depend implements Plugin {
 
     @Override
     public void init(JavacTask jt, String... args) {
+        if (true) return ;
+
         addExports();
 
         Path internalAPIDigestFile;
