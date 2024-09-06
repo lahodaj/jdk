@@ -93,6 +93,7 @@ import javax.tools.JavaFileManager;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardLocation;
 
+//TODO: include compiler options in the digest(s)
 public class IncrementalRecompileHandler extends InitialFileParser {
 
     private final JavaCompiler compiler;

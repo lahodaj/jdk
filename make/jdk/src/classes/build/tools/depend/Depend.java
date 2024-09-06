@@ -139,8 +139,6 @@ public class Depend implements Plugin {
 
     @Override
     public void init(JavacTask jt, String... args) {
-        if (true) return ;
-
         addExports();
 
         Path internalAPIDigestFile;
@@ -920,7 +918,8 @@ public class Depend implements Plugin {
                                                 internalAPI,
                                                 noApiChange,
                                                 debug);
-                default -> throw new UnsupportedOperationException();
+                case "checkDependencies", "recordApiHashes" -> args[0];
+                default -> throw new UnsupportedOperationException(method.getName());
             };
         }
     }
