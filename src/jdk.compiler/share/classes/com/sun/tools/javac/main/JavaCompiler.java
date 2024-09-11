@@ -378,6 +378,9 @@ public class JavaCompiler {
 
     protected CompileStates compileStates;
 
+    private int statisticsParseCount;
+    private int statisticsWriteCount;
+
     /** Construct a new compiler using a shared context.
      */
     @SuppressWarnings("this-escape")
@@ -441,6 +444,7 @@ public class JavaCompiler {
             options.isSet(Option.XLINT_CUSTOM, "none");
 
         verbose       = options.isSet(VERBOSE);
+        statistics       = options.isSet("statistics");
         sourceOutput  = options.isSet(PRINTSOURCE); // used to be -s
         lineDebugInfo = options.isUnset(G_CUSTOM) ||
                         options.isSet(G_CUSTOM, "lines");
@@ -499,6 +503,7 @@ public class JavaCompiler {
     /** Verbose output.
      */
     public boolean verbose;
+    public boolean statistics;
 
     /** Emit plain Java source files rather than class files.
      */
@@ -639,6 +644,7 @@ public class JavaCompiler {
         long msec = now();
         JCCompilationUnit tree = make.TopLevel(List.nil());
         if (content != null) {
+            statisticsParseCount++;
             if (verbose) {
                 log.printVerbose("parsing.started", filename);
             }
@@ -771,6 +777,7 @@ public class JavaCompiler {
         }
         try {
             if (gen.genClass(env, cdef) && (errorCount() == 0)) {
+                statisticsWriteCount++;
                 JCTree firstClass = env.toplevel.getTypeDecls().nonEmpty() ? env.toplevel.getTypeDecls().head : null;
                 return writer.writeClass(cdef.sym, firstClass == cdef || env.toplevel.getModuleDecl() != null ? env.toplevel.internalDigest : null);
             }
@@ -999,6 +1006,11 @@ public class JavaCompiler {
             if (verbose) {
                 elapsed_msec = elapsed(start_msec);
                 log.printVerbose("total", Long.toString(elapsed_msec));
+            }
+
+            if (statistics) {
+                elapsed_msec = elapsed(start_msec);
+                log.printRawLines("Parsed: " + statisticsParseCount + " files, wrote: " + statisticsWriteCount + " classfiles, in total: " + elapsed_msec + "ms");
             }
 
             reportDeferredDiagnostics();

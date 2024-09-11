@@ -38,13 +38,13 @@ public class GenerateSample {
     public static void main(String[] args) throws IOException {
         Path root = Paths.get(".");
         Path src = root.resolve("src");
-        Path m1 = src.resolve("m1");
-        Path m2 = src.resolve("m2");
+        Path m1 = src.resolve("m");
+        Path m2 = src.resolve("n");
 
         Files.createDirectories(m1);
 
         try (Writer out = Files.newBufferedWriter(m1.resolve("module-info.java"))) {
-            out.write("module m1 { exports api; }");
+            out.write("module m { exports api; }");
         }
 
         Path apiPackage = m1.resolve("api");
@@ -63,7 +63,7 @@ public class GenerateSample {
         Files.createDirectories(m2);
 
         try (Writer out = Files.newBufferedWriter(m2.resolve("module-info.java"))) {
-            out.write("module m2 { requires m1; }");
+            out.write("module n { requires m; }");
         }
 
         for (Path module : new Path[] {m1, m2}) {
