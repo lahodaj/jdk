@@ -691,6 +691,7 @@ public final class LauncherHelper {
     private static final int LM_JAR     = 2;
     private static final int LM_MODULE  = 3;
     private static final int LM_SOURCE  = 4;
+    private static final int LM_JSHELL  = 5;
 
     static void abort(Throwable t, String msgKey, Object... args) {
         if (msgKey != null) {
@@ -729,7 +730,7 @@ public final class LauncherHelper {
 
         Class<?> mainClass = null;
         switch (mode) {
-            case LM_MODULE: case LM_SOURCE:
+            case LM_MODULE, LM_SOURCE, LM_JSHELL:
                 mainClass = loadModuleMainClass(what);
                 break;
             default:

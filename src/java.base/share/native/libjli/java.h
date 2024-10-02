@@ -216,7 +216,8 @@ enum LaunchMode {               // cf. sun.launcher.LauncherHelper
     LM_CLASS,
     LM_JAR,
     LM_MODULE,
-    LM_SOURCE
+    LM_SOURCE,
+    LM_JSHELL
 };
 
 static const char *launchModeNames[]

@@ -171,6 +171,7 @@ static jboolean IsWildCardEnabled();
 
 
 #define SOURCE_LAUNCHER_MAIN_ENTRY "jdk.compiler/com.sun.tools.javac.launcher.SourceLauncher"
+#define JSHELL_MAIN_ENTRY "jdk.jshell/jdk.internal.jshell.tool.JShellToolProvider"
 
 /*
  * This reports error.  VM will not be created and no usage is printed.
@@ -1157,6 +1158,10 @@ ParseArguments(int *pargc, char ***pargv,
     char *splash_file_path = NULL; // value of "-splash:" option
 
     *pret = 0;
+    if (argc == 0) {
+        mode = LM_JSHELL;
+        *pwhat = JSHELL_MAIN_ENTRY;
+    }
 
     while (argc > 0 && *(arg = *argv) == '-') {
         char *option = NULL;
