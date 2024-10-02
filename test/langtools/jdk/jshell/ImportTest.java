@@ -23,7 +23,7 @@
 
 /*
  * @test
- * @bug 8141415 8129418
+ * @bug 8141415 8129418 8341051
  * @summary Test imports
  * @modules jdk.compiler/com.sun.tools.javac.api
  *          jdk.compiler/com.sun.tools.javac.main
@@ -177,11 +177,24 @@ public class ImportTest extends KullaTesting {
         assertEval("MethodHandle m;");
     }
 
+    public void testImportModuleWarnings() {
+        assertEval("import module java.base;", DiagCheck.DIAG_WARNING, DiagCheck.DIAG_OK);
+        assertEval("1", DiagCheck.DIAG_OK, DiagCheck.DIAG_OK);
+    }
+
     @org.testng.annotations.BeforeMethod
     public void setUp(Method m) {
         switch (m.getName()) {
             case "testImportModule" ->
-                super.setUp(bc -> bc.compilerOptions("--source", System.getProperty("java.specification.version"), "--enable-preview").remoteVMOptions("--enable-preview"));
+                super.setUp(bc -> bc.compilerOptions("--source", System.getProperty("java.specification.version"),
+                                                     "--enable-preview")
+                                    .remoteVMOptions("--enable-preview"));
+            case "testImportModuleWarnings" ->
+                super.setUp(bc -> bc.compilerOptions("--source", System.getProperty("java.specification.version"),
+                                                     "--enable-preview",
+                                                     "-Xlint:all",
+                                                     "-XDforcePreview")
+                                    .remoteVMOptions("--enable-preview"));
             default ->
                 super.setUp(bc -> {});
         }

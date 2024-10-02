@@ -562,6 +562,11 @@ class TaskFactory {
                 LinkedHashMap<String, Diag> diagMap = new LinkedHashMap<>();
                 for (Diagnostic<? extends JavaFileObject> in : diagnostics.getDiagnostics()) {
                     Diag d = diag(in);
+                    if ("compiler.warn.preview.feature.use.plural".equals(d.getCode()) &&
+                        d.getEndPosition() == 0) {
+                        //ignore preview warnings that happen before the snippet:
+                        continue;
+                    }
                     String uniqueKey = d.getCode() + ":" + d.getPosition() + ":" + d.getMessage(PARSED_LOCALE);
                     diagMap.put(uniqueKey, d);
                 }
