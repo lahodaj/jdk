@@ -284,8 +284,6 @@ public final class JdkConsoleImpl implements JdkConsole {
                                             result.delete(caret, caret + 1);
                                         }
                                         continue READ;
-                                    default:
-                                        System.err.println("r: " + (char) r);
                                 }
                         }
                         continue READ;
