@@ -227,27 +227,97 @@ public final class JdkConsoleImpl implements JdkConsole {
     private boolean shutdownHookInstalled;
 
     private char[] readline(boolean zeroOut) throws IOException {
-        int len = reader.read(rcb, 0, rcb.length);
-        if (len < 0)
-            return null;  //EOL
-        if (rcb[len-1] == '\r')
-            len--;        //remove CR at end;
-        else if (rcb[len-1] == '\n') {
-            len--;        //remove LF at end;
-            if (len > 0 && rcb[len-1] == '\r')
-                len--;    //remove the CR, if there is one
-        }
-        char[] b = new char[len];
-        if (len > 0) {
-            System.arraycopy(rcb, 0, b, 0, len);
-            if (zeroOut) {
-                Arrays.fill(rcb, 0, len, ' ');
-                if (reader instanceof LineReader lr) {
-                    lr.zeroOut();
-                }
+        String originalTerminalSettings = runStty("-g");
+        Thread restoreConsole = new Thread(() -> {
+            try {
+                runStty(originalTerminalSettings);
+            } catch (IOException ex) {
+                ex.printStackTrace();
             }
+        });
+        try {
+            Runtime.getRuntime().addShutdownHook(restoreConsole);
+            runStty("5000:5:b0:a31:3:1c:7f:15:4:1:0:0:11:13:1a:0:12:f:17:16:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0");
+            StringBuilder result = new StringBuilder();
+            int caret = 0;
+            int r;
+            READ: while (true) {
+                //paint:
+                System.out.print("\r");
+                System.out.print(result);
+                System.out.print("\033[J");
+                for (int i = result.length(); i > caret; i--) {
+                    System.out.print("\033[D");
+                }
+
+                //read
+                r = reader.read();
+                switch (r) {
+                    case -1: continue READ;
+                    case '\r': break READ;
+                    case 4: break READ; //EOF/Ctrl-D
+                    case 127:
+                        if (caret > 0) {
+                            result.delete(caret - 1, caret);
+                            caret--;
+                        }
+                        continue READ;
+                    case '\033':
+                        r = reader.read();
+                        switch (r) {
+                            case '[':
+                                r = reader.read();
+                                switch (r) {
+                                    case 'C': if (caret < result.length()) caret++; break;
+                                    case 'D': if (caret > 0) caret--; break;
+                                    case 'H': caret = 0; break;
+                                    case 'F': caret = result.length(); break;
+                                    case '3':
+                                        r = reader.read();
+                                        if (r != '~') {
+                                            //TODO
+                                        } else {
+                                            //delete
+                                            result.delete(caret, caret + 1);
+                                        }
+                                        continue READ;
+                                    default:
+                                        System.err.println("r: " + (char) r);
+                                }
+                        }
+                        continue READ;
+                }
+
+                result.insert(caret, (char) r);
+                caret++;
+            }
+
+            //show the final state:
+            System.out.print("\r");
+            System.out.println(result);
+
+            return result.toString().toCharArray();
+        } finally {
+            restoreConsole.run();
+            Runtime.getRuntime().removeShutdownHook(restoreConsole);
         }
-        return b;
+    }
+
+    private String runStty(String input) throws IOException {
+        StringBuilder output = new StringBuilder();
+        Process p = new ProcessBuilder("stty", input).inheritIO().redirectOutput(ProcessBuilder.Redirect.PIPE).start();
+        Reader inp = p.inputReader();
+        int r;
+        while ((r = inp.read()) != (-1)) {
+            if (r == '\n') break;
+            output.append((char) r);
+        }
+        try {
+            p.waitFor();
+        } catch (InterruptedException ex) {
+            ex.printStackTrace();
+        }
+        return output.toString();
     }
 
     private char[] grow() {
@@ -398,10 +468,10 @@ public final class JdkConsoleImpl implements JdkConsole {
             }
         };
         formatter = new Formatter(out);
-        reader = new LineReader(StreamDecoder.forInputStreamReader(
+        reader = /*new LineReader(*/StreamDecoder.forInputStreamReader(
                 new FileInputStream(FileDescriptor.in),
                 readLock,
-                charset));
+                charset);//);
         rcb = new char[1024];
     }
 }
