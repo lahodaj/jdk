@@ -34,8 +34,10 @@ import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.Charset;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Formatter;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -227,6 +229,7 @@ public final class JdkConsoleImpl implements JdkConsole {
     private boolean shutdownHookInstalled;
 
     private char[] readline(boolean zeroOut) throws IOException {
+        System.err.println("USING CUSTOM READLINE");
         String originalTerminalSettings = runStty("-g");
         Thread restoreConsole = new Thread(() -> {
             try {
@@ -237,7 +240,7 @@ public final class JdkConsoleImpl implements JdkConsole {
         });
         try {
             Runtime.getRuntime().addShutdownHook(restoreConsole);
-            runStty("5000:5:b0:a31:3:1c:7f:15:4:1:0:0:11:13:1a:0:12:f:17:16:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0");
+            runStty("-brkint", "-ignpar", "-icrnl", "-ixon", "ixoff", "-imaxbel", "-icanon", "-echo");
             StringBuilder result = new StringBuilder();
             int caret = 0;
             int r;
@@ -303,9 +306,12 @@ public final class JdkConsoleImpl implements JdkConsole {
         }
     }
 
-    private String runStty(String input) throws IOException {
+    private String runStty(String... input) throws IOException {
         StringBuilder output = new StringBuilder();
-        Process p = new ProcessBuilder("stty", input).inheritIO().redirectOutput(ProcessBuilder.Redirect.PIPE).start();
+        List<String> command = new ArrayList<>();
+        command.add("stty");
+        command.addAll(Arrays.asList(input));
+        Process p = new ProcessBuilder(command).inheritIO().redirectOutput(ProcessBuilder.Redirect.PIPE).start();
         Reader inp = p.inputReader();
         int r;
         while ((r = inp.read()) != (-1)) {
