@@ -21,16 +21,16 @@
  * questions.
  */
 
-import java.io.IOException;
+import static java.lang.IO.*;
 
-import static java.io.IO.readln;
+public class Methods {
 
-public class Input {
-
-    public static void main(String[] args) throws IOException {
-        if (args[0].equals("0"))
-            System.out.print(readln(null));
-        else
-            System.out.print(readln(args[1]));
+    public static void main(String[] args) {
+        switch (args[0]) {
+            case "println" -> println("hello");
+            case "print" -> print("hello");
+            case "input" -> readln("hello");
+            default -> throw new IllegalArgumentException(args[0]);
+        }
     }
 }

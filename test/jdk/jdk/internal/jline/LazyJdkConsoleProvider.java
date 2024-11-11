@@ -32,7 +32,7 @@
  * @run main LazyJdkConsoleProvider
  */
 
-import java.io.IO;
+import java.lang.IO;
 import jdk.internal.org.jline.reader.LineReader;
 import jdk.internal.org.jline.terminal.Terminal;
 

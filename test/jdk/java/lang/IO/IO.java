@@ -49,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /*
  * @test
  * @bug 8305457
- * @summary java.io.IO tests
+ * @summary java.lang.IO tests
  * @library /test/lib
  * @run junit IO
  */

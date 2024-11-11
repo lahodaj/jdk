@@ -148,29 +148,26 @@ public class ImplicitImports extends TestRunner {
 
         Files.createDirectories(classes);
 
-        new JavacTask(tb)
-            .options("--enable-preview", "--release", SOURCE_VERSION,
-                     "--patch-module", "java.base=" + patchClasses)
-            .outdir(classes)
-            .files(tb.findJavaFiles(src))
-            .run(Task.Expect.SUCCESS)
-            .writeAll();
-
-        var out = new JavaTask(tb)
-                .classpath(classes.toString())
-                .className("Test")
-                .vmOptions("--enable-preview",
-                           "--patch-module", "java.base=" + patchClasses)
-                .run()
+        var log = new JavacTask(tb)
+                .options("--enable-preview", "--release", SOURCE_VERSION,
+                         "--patch-module", "java.base=" + patchClasses,
+                        "-XDrawDiagnostics")
+                .outdir(classes)
+                .files(tb.findJavaFiles(src))
+                .run(Task.Expect.FAIL)
                 .writeAll()
-                .getOutputLines(Task.OutputKind.STDOUT);
+                .getOutputLines(OutputKind.DIRECT);
 
-        var expectedOut = List.of("Hello, World!");
+        var expectedLog = List.of(
+            "Test.java:2:5: compiler.err.cant.resolve.location.args: kindname.method, println, , java.lang.String, (compiler.misc.location: kindname.class, Test, null)",
+            "- compiler.note.preview.filename: Test.java, DEFAULT",
+            "- compiler.note.preview.recompile",
+            "1 error"
+        );
 
-        if (!Objects.equals(expectedOut, out)) {
-            throw new AssertionError("Incorrect Output, expected: " + expectedOut +
-                                      ", actual: " + out);
-
+        if (!Objects.equals(expectedLog, log)) {
+            throw new AssertionError("Incorrect Output, expected: " + expectedLog +
+                                      ", actual: " + log);
         }
     }
 
