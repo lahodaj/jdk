@@ -23,8 +23,10 @@
  * questions.
  */
 
-package java.io;
+package java.lang;
 
+import java.io.Console;
+import java.io.IOError;
 import jdk.internal.javac.PreviewFeature;
 
 /**
@@ -38,7 +40,7 @@ import jdk.internal.javac.PreviewFeature;
  * <p> Input and output from methods in this class use the character set of
  * the system console as specified by {@link Console#charset}.
  *
- * @since 23
+ * @since 24
  */
 @PreviewFeature(feature = PreviewFeature.Feature.IMPLICIT_CLASSES)
 public final class IO {
