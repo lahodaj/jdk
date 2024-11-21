@@ -919,4 +919,109 @@ public class ImportModule extends TestRunner {
                 .run(Task.Expect.SUCCESS)
                 .writeAll();
     }
+
+    public void testStaticOnDemandImportDisambiguates(Path base) throws Exception {
+        Path current = base.resolve(".");
+        Path src = current.resolve("src");
+        Path classes = current.resolve("classes");
+        Path ma = src.resolve("ma");
+        tb.writeJavaFiles(ma,
+                          """
+                          module ma {
+                             exports ma.p1;
+                          }
+                          """,
+                          """
+                          package ma.p1;
+                          public class Nested {}
+                          """);
+        Path mb = src.resolve("mb");
+        tb.writeJavaFiles(mb,
+                          """
+                          module mb {
+                             exports mb.p1;
+                          }
+                          """,
+                          """
+                          package mb.p1;
+                          public class A {
+                              public static class Nested {
+                                  public static void run() {}
+                              }
+                          }
+                          """);
+        Path test = src.resolve("test");
+        tb.writeJavaFiles(test,
+                          """
+                          module test {
+                              requires ma;
+                              requires mb;
+                          }
+                          """,
+                          """
+                          package test;
+                          import module ma;
+                          import static mb.p1.*;
+                          public class Test {
+                              private void run() {
+                                  Nested.run();
+                              }
+                          }
+                          """);
+
+        Files.createDirectories(classes);
+
+        new JavacTask(tb)
+                .options("-XDrawDiagnostics",
+                         "--enable-preview", "--release", SOURCE_VERSION,
+                         "--module-source-path", src.toString())
+                .outdir(classes)
+                .files(tb.findJavaFiles(src))
+                .run(Task.Expect.SUCCESS)
+                .writeAll();
+    }
+
+    public void testJavaLangDisambiguates(Path base) throws Exception {
+        Path current = base.resolve(".");
+        Path src = current.resolve("src");
+        Path classes = current.resolve("classes");
+        Path ma = src.resolve("ma");
+        tb.writeJavaFiles(ma,
+                          """
+                          module ma {
+                             exports ma.p1;
+                          }
+                          """,
+                          """
+                          package ma.p1;
+                          public class String {}
+                          """);
+        Path test = src.resolve("test");
+        tb.writeJavaFiles(test,
+                          """
+                          module test {
+                              requires ma;
+                          }
+                          """,
+                          """
+                          package test;
+                          import module ma;
+                          public class Test {
+                              private void run() {
+                                  Object o = String.CASE_INSENSITIVE_ORDER;
+                              }
+                          }
+                          """);
+
+        Files.createDirectories(classes);
+
+        new JavacTask(tb)
+                .options("-XDrawDiagnostics",
+                         "--enable-preview", "--release", SOURCE_VERSION,
+                         "--module-source-path", src.toString())
+                .outdir(classes)
+                .files(tb.findJavaFiles(src))
+                .run(Task.Expect.SUCCESS)
+                .writeAll();
+    }
 }
