@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.Writer;
@@ -40,8 +41,10 @@ import java.util.Formatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.ServiceLoader;
 
 import jdk.internal.access.SharedSecrets;
+import jdk.internal.loader.ClassLoaders;
 import sun.nio.cs.StreamDecoder;
 import sun.nio.cs.StreamEncoder;
 
@@ -244,28 +247,46 @@ public final class JdkConsoleImpl implements JdkConsole {
     private boolean shutdownHookInstalled;
 
     private char[] readline(boolean zeroOut) throws IOException {
-        System.err.println("USING CUSTOM READLINE");
-        String originalTerminalSettings = runStty("-g");
+        JdkConsoleImpl.class.getModule().addUses(ConsoleReader.class);
+        for (ConsoleReader consoleReader : ServiceLoader.load(ConsoleReader.class, ClassLoaders.appClassLoader())) {
+            return consoleReader.readline(zeroOut);
+        }
+
+        Attributes originalAttributes = CLibrary.getAttributes(0);
+        Attributes rawAttributes = new Attributes(originalAttributes);
+        rawAttributes.setInputFlag(Attributes.InputFlag.BRKINT, false);
+        rawAttributes.setInputFlag(Attributes.InputFlag.IGNPAR, false);
+        rawAttributes.setInputFlag(Attributes.InputFlag.ICRNL, false);
+        rawAttributes.setInputFlag(Attributes.InputFlag.IXON, false);
+        rawAttributes.setInputFlag(Attributes.InputFlag.IXOFF, true);
+        rawAttributes.setInputFlag(Attributes.InputFlag.IMAXBEL, false);
+        rawAttributes.setLocalFlag(Attributes.LocalFlag.ICANON, false);
+        rawAttributes.setLocalFlag(Attributes.LocalFlag.ECHO, false);
         Thread restoreConsole = new Thread(() -> {
-            try {
-                runStty(originalTerminalSettings);
-            } catch (IOException ex) {
-                ex.printStackTrace();
-            }
+            CLibrary.setAttributes(0, originalAttributes);
         });
         try {
             Runtime.getRuntime().addShutdownHook(restoreConsole);
-            runStty("-brkint", "-ignpar", "-icrnl", "-ixon", "ixoff", "-imaxbel", "-icanon", "-echo");
+            CLibrary.setAttributes(0, rawAttributes);
+            return doRead(reader, System.out);
+        } finally {
+            restoreConsole.run();
+            Runtime.getRuntime().removeShutdownHook(restoreConsole);
+        }
+    }
+
+    //public, to simplify access from tests:
+    public static char[] doRead(Reader reader, PrintStream out) throws IOException {
             StringBuilder result = new StringBuilder();
             int caret = 0;
             int r;
             READ: while (true) {
                 //paint:
-                System.out.print("\r");
-                System.out.print(result);
-                System.out.print("\033[J");
+                out.print("\r");
+                out.print(result);
+                out.print("\033[J");
                 for (int i = result.length(); i > caret; i--) {
-                    System.out.print("\033[D");
+                    out.print("\033[D");
                 }
 
                 //read
@@ -285,20 +306,49 @@ public final class JdkConsoleImpl implements JdkConsole {
                         switch (r) {
                             case '[':
                                 r = reader.read();
+
+                                StringBuilder firstNumber = new StringBuilder();
+
+                                r = readNumber(reader, r, firstNumber);
+
+                                String modifier;
+                                String key;
+
                                 switch (r) {
-                                    case 'C': if (caret < result.length()) caret++; break;
-                                    case 'D': if (caret > 0) caret--; break;
-                                    case 'H': caret = 0; break;
-                                    case 'F': caret = result.length(); break;
-                                    case '3':
-                                        r = reader.read();
+                                    case '~' -> {
+                                        key = firstNumber.toString();
+                                        modifier = "1";
+                                    }
+                                    case ';' -> {
+                                        key = firstNumber.toString();
+
+                                        StringBuilder modifierBuilder = new StringBuilder();
+
+                                        r = readNumber(reader, r, modifierBuilder);
+                                        modifier = modifierBuilder.toString();
+
                                         if (r != '~') {
-                                            //TODO
-                                        } else {
+                                            //TODO: unexpected, anything that can be done?
+                                        }
+                                    }
+                                    default -> {
+                                        key = Character.toString(r);
+                                        modifier = firstNumber.isEmpty() ? "1"
+                                                                         : firstNumber.toString();
+                                    }
+                                }
+
+                                if ("1".equals(modifier)) {
+                                    switch (key) {
+                                        case "C": if (caret < result.length()) caret++; break;
+                                        case "D": if (caret > 0) caret--; break;
+                                        case "1", "H": caret = 0; break;
+                                        case "4", "F": caret = result.length(); break;
+                                        case "3":
                                             //delete
                                             result.delete(caret, caret + 1);
-                                        }
-                                        continue READ;
+                                            continue READ;
+                                    }
                                 }
                         }
                         continue READ;
@@ -309,34 +359,18 @@ public final class JdkConsoleImpl implements JdkConsole {
             }
 
             //show the final state:
-            System.out.print("\r");
-            System.out.println(result);
+            out.print("\r");
+            out.println(result);
 
             return result.toString().toCharArray();
-        } finally {
-            restoreConsole.run();
-            Runtime.getRuntime().removeShutdownHook(restoreConsole);
-        }
     }
 
-    private String runStty(String... input) throws IOException {
-        StringBuilder output = new StringBuilder();
-        List<String> command = new ArrayList<>();
-        command.add("stty");
-        command.addAll(Arrays.asList(input));
-        Process p = new ProcessBuilder(command).inheritIO().redirectOutput(ProcessBuilder.Redirect.PIPE).start();
-        Reader inp = p.inputReader();
-        int r;
-        while ((r = inp.read()) != (-1)) {
-            if (r == '\n') break;
-            output.append((char) r);
+    private static int readNumber(Reader reader, int r, StringBuilder number) throws IOException {
+        while (Character.isDigit(r)) {
+            number.append((char) r);
+            r = reader.read();
         }
-        try {
-            p.waitFor();
-        } catch (InterruptedException ex) {
-            ex.printStackTrace();
-        }
-        return output.toString();
+        return r;
     }
 
     private char[] grow() {
@@ -492,5 +526,10 @@ public final class JdkConsoleImpl implements JdkConsole {
                 readLock,
                 charset);//);
         rcb = new char[1024];
+    }
+
+    //this is mostly setup to allow a more convenient Window backend development:
+    public interface ConsoleReader {
+        public char[] readline(boolean zeroout) throws IOException;
     }
 }
