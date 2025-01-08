@@ -36,11 +36,11 @@ import static jdk.internal.console.Kernel32.WINDOW_BUFFER_SIZE_EVENT;
 public class NativeConsoleReaderImpl implements NativeConsoleReader {
 
     public static NativeConsoleReader create(Object readLock) {
-        if (CLibrary.isTty(0)) {
+//        if (CLibrary.isTty(0)) {
             return new NativeConsoleReaderImpl();
-        } else {
-            return new BaseNativeConsoleReader(readLock);
-        }
+//        } else {
+//            return new BaseNativeConsoleReader(readLock);
+//        }
     }
 
     private static final int ENABLE_PROCESSED_INPUT = 0x0001; //for input
