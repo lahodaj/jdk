@@ -18,7 +18,7 @@ import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
 import java.util.EnumMap;
 import java.util.EnumSet;
-import jdk.internal.io.SimpleConsoleReader.Size;
+import jdk.internal.console.SimpleConsoleReader.Size;
 
 @SuppressWarnings("restricted")
 class CLibrary {

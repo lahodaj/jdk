@@ -27,7 +27,7 @@ package jdk.internal.console;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
-import jdk.internal.io.SimpleConsoleReader.Size;
+import jdk.internal.console.SimpleConsoleReader.Size;
 
 public class NativeConsoleReaderImpl implements NativeConsoleReader {
 
