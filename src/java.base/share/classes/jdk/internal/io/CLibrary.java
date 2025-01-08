@@ -18,6 +18,7 @@ import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import jdk.internal.io.SimpleConsoleReader.Size;
 
 @SuppressWarnings("restricted")
 class CLibrary {
@@ -465,6 +466,15 @@ class CLibrary {
         return b.toString();
     }
 
+    static Size getTerminalSize(int fd) {
+        try {
+            winsize ws = new winsize();
+            int res = (int) ioctl.invoke(fd, (long) TIOCGWINSZ, ws.segment());
+            return new Size(ws.ws_col(), ws.ws_row());
+        } catch (Throwable e) {
+            throw new RuntimeException("Unable to call ioctl(TIOCGWINSZ)", e);
+        }
+    }
     static Attributes getAttributes(int fd) {
         try {
             termios t = new termios();
@@ -493,6 +503,9 @@ class CLibrary {
     }
 
     // CONSTANTS
+
+    private static final int TIOCGWINSZ;
+//    private static final int TIOCSWINSZ;
 
     private static final int TCSANOW;
     private static int TCSADRAIN;
@@ -634,6 +647,9 @@ class CLibrary {
         if (osName.startsWith("Linux")) {
             IS_LINUX = true;
             IS_OSX = false;
+
+            TIOCGWINSZ = 0x00005413;
+
             TCSANOW = 0x0;
             TCSADRAIN = 0x1;
             TCSAFLUSH = 0x2;
@@ -757,6 +773,8 @@ class CLibrary {
         } else if (osName.startsWith("Mac") || osName.startsWith("Darwin")) {
             IS_LINUX = false;
             IS_OSX = true;
+
+            TIOCGWINSZ = 0x40087468;
 
             TCSANOW = 0x00000000;
 

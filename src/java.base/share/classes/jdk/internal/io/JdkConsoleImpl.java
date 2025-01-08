@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2022, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,21 +30,15 @@ import java.io.IOException;
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Formatter;
-import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.ServiceLoader;
 
 import jdk.internal.access.SharedSecrets;
-import jdk.internal.loader.ClassLoaders;
 import sun.nio.cs.StreamDecoder;
 import sun.nio.cs.StreamEncoder;
 
@@ -174,14 +168,15 @@ public final class JdkConsoleImpl implements JdkConsole {
                             ioe.addSuppressed(x);
                     }
                     if (ioe != null) {
-                        Arrays.fill(passwd, ' ');
-                        try {
-                            if (reader instanceof LineReader lr) {
-                                lr.zeroOut();
-                            }
-                        } catch (IOException _) {
-                            // ignore
-                        }
+                        //TODO:
+//                        Arrays.fill(passwd, ' ');
+//                        try {
+//                            if (reader instanceof LineReader lr) {
+//                                lr.zeroOut();
+//                            }
+//                        } catch (IOException _) {
+//                            // ignore
+//                        }
                         throw ioe;
                     }
                 }
@@ -240,145 +235,14 @@ public final class JdkConsoleImpl implements JdkConsole {
     private final Object restoreEchoLock;
     private final Reader reader;
     private final Writer out;
+    private final NativeConsoleReader nativeConsoleReader;
     private final PrintWriter pw;
     private final Formatter formatter;
-    private char[] rcb;
     private boolean restoreEcho;
     private boolean shutdownHookInstalled;
 
     private char[] readline(boolean zeroOut) throws IOException {
-        JdkConsoleImpl.class.getModule().addUses(ConsoleReader.class);
-        for (ConsoleReader consoleReader : ServiceLoader.load(ConsoleReader.class, ClassLoaders.appClassLoader())) {
-            return consoleReader.readline(zeroOut);
-        }
-
-        Attributes originalAttributes = CLibrary.getAttributes(0);
-        Attributes rawAttributes = new Attributes(originalAttributes);
-        rawAttributes.setInputFlag(Attributes.InputFlag.BRKINT, false);
-        rawAttributes.setInputFlag(Attributes.InputFlag.IGNPAR, false);
-        rawAttributes.setInputFlag(Attributes.InputFlag.ICRNL, false);
-        rawAttributes.setInputFlag(Attributes.InputFlag.IXON, false);
-        rawAttributes.setInputFlag(Attributes.InputFlag.IXOFF, true);
-        rawAttributes.setInputFlag(Attributes.InputFlag.IMAXBEL, false);
-        rawAttributes.setLocalFlag(Attributes.LocalFlag.ICANON, false);
-        rawAttributes.setLocalFlag(Attributes.LocalFlag.ECHO, false);
-        Thread restoreConsole = new Thread(() -> {
-            CLibrary.setAttributes(0, originalAttributes);
-        });
-        try {
-            Runtime.getRuntime().addShutdownHook(restoreConsole);
-            CLibrary.setAttributes(0, rawAttributes);
-            return doRead(reader, System.out);
-        } finally {
-            restoreConsole.run();
-            Runtime.getRuntime().removeShutdownHook(restoreConsole);
-        }
-    }
-
-    //public, to simplify access from tests:
-    public static char[] doRead(Reader reader, PrintStream out) throws IOException {
-            StringBuilder result = new StringBuilder();
-            int caret = 0;
-            int r;
-            READ: while (true) {
-                //paint:
-                out.print("\r");
-                out.print(result);
-                out.print("\033[J");
-                for (int i = result.length(); i > caret; i--) {
-                    out.print("\033[D");
-                }
-
-                //read
-                r = reader.read();
-                switch (r) {
-                    case -1: continue READ;
-                    case '\r': break READ;
-                    case 4: break READ; //EOF/Ctrl-D
-                    case 127:
-                        if (caret > 0) {
-                            result.delete(caret - 1, caret);
-                            caret--;
-                        }
-                        continue READ;
-                    case '\033':
-                        r = reader.read();
-                        switch (r) {
-                            case '[':
-                                r = reader.read();
-
-                                StringBuilder firstNumber = new StringBuilder();
-
-                                r = readNumber(reader, r, firstNumber);
-
-                                String modifier;
-                                String key;
-
-                                switch (r) {
-                                    case '~' -> {
-                                        key = firstNumber.toString();
-                                        modifier = "1";
-                                    }
-                                    case ';' -> {
-                                        key = firstNumber.toString();
-
-                                        StringBuilder modifierBuilder = new StringBuilder();
-
-                                        r = readNumber(reader, r, modifierBuilder);
-                                        modifier = modifierBuilder.toString();
-
-                                        if (r != '~') {
-                                            //TODO: unexpected, anything that can be done?
-                                        }
-                                    }
-                                    default -> {
-                                        key = Character.toString(r);
-                                        modifier = firstNumber.isEmpty() ? "1"
-                                                                         : firstNumber.toString();
-                                    }
-                                }
-
-                                if ("1".equals(modifier)) {
-                                    switch (key) {
-                                        case "C": if (caret < result.length()) caret++; break;
-                                        case "D": if (caret > 0) caret--; break;
-                                        case "1", "H": caret = 0; break;
-                                        case "4", "F": caret = result.length(); break;
-                                        case "3":
-                                            //delete
-                                            result.delete(caret, caret + 1);
-                                            continue READ;
-                                    }
-                                }
-                        }
-                        continue READ;
-                }
-
-                result.insert(caret, (char) r);
-                caret++;
-            }
-
-            //show the final state:
-            out.print("\r");
-            out.println(result);
-
-            return result.toString().toCharArray();
-    }
-
-    private static int readNumber(Reader reader, int r, StringBuilder number) throws IOException {
-        while (Character.isDigit(r)) {
-            number.append((char) r);
-            r = reader.read();
-        }
-        return r;
-    }
-
-    private char[] grow() {
-        assert Thread.holdsLock(readLock);
-        char[] t = new char[rcb.length * 2];
-        System.arraycopy(rcb, 0, t, 0, rcb.length);
-        rcb = t;
-        return rcb;
+        return nativeConsoleReader.readline(reader, out, zeroOut);
     }
 
     /*
@@ -389,122 +253,6 @@ public final class JdkConsoleImpl implements JdkConsole {
      * @return true if the previous console echo status is on
      */
     private static native boolean echo(boolean on) throws IOException;
-
-    class LineReader extends Reader {
-        private final Reader in;
-        private final char[] cb;
-        private int nChars, nextChar;
-        boolean leftoverLF;
-        LineReader(Reader in) {
-            this.in = in;
-            cb = new char[1024];
-            nextChar = nChars = 0;
-            leftoverLF = false;
-        }
-        public void zeroOut() throws IOException {
-            if (in instanceof StreamDecoder sd) {
-                sd.fillZeroToPosition();
-            }
-        }
-        public void close () {}
-        public boolean ready() throws IOException {
-            //in.ready synchronizes on readLock already
-            return in.ready();
-        }
-
-        public int read(char[] cbuf, int offset, int length)
-                throws IOException
-        {
-            int off = offset;
-            int end = offset + length;
-            if (offset < 0 || offset > cbuf.length || length < 0 ||
-                    end < 0 || end > cbuf.length) {
-                throw new IndexOutOfBoundsException();
-            }
-            synchronized(readLock) {
-                boolean eof = false;
-                char c;
-                for (;;) {
-                    if (nextChar >= nChars) {   //fill
-                        int n;
-                        do {
-                            n = in.read(cb, 0, cb.length);
-                        } while (n == 0);
-                        if (n > 0) {
-                            nChars = n;
-                            nextChar = 0;
-                            if (n < cb.length &&
-                                    cb[n-1] != '\n' && cb[n-1] != '\r') {
-                                /*
-                                 * we're in canonical mode so each "fill" should
-                                 * come back with an eol. if there is no lf or nl at
-                                 * the end of returned bytes we reached an eof.
-                                 */
-                                eof = true;
-                            }
-                        } else { /*EOF*/
-                            if (off - offset == 0)
-                                return -1;
-                            return off - offset;
-                        }
-                    }
-                    if (leftoverLF && cbuf == rcb && cb[nextChar] == '\n') {
-                        /*
-                         * if invoked by our readline, skip the leftover, otherwise
-                         * return the LF.
-                         */
-                        nextChar++;
-                    }
-                    leftoverLF = false;
-                    while (nextChar < nChars) {
-                        c = cbuf[off++] = cb[nextChar];
-                        cb[nextChar++] = 0;
-                        if (c == '\n') {
-                            return off - offset;
-                        } else if (c == '\r') {
-                            if (off == end) {
-                                /* no space left even the next is LF, so return
-                                 * whatever we have if the invoker is not our
-                                 * readLine()
-                                 */
-                                if (cbuf == rcb) {
-                                    cbuf = grow();
-                                } else {
-                                    leftoverLF = true;
-                                    return off - offset;
-                                }
-                            }
-                            if (nextChar == nChars && in.ready()) {
-                                /*
-                                 * we have a CR and we reached the end of
-                                 * the read in buffer, fill to make sure we
-                                 * don't miss a LF, if there is one, it's possible
-                                 * that it got cut off during last round reading
-                                 * simply because the read in buffer was full.
-                                 */
-                                nChars = in.read(cb, 0, cb.length);
-                                nextChar = 0;
-                            }
-                            if (nextChar < nChars && cb[nextChar] == '\n') {
-                                cbuf[off++] = '\n';
-                                nextChar++;
-                            }
-                            return off - offset;
-                        } else if (off == end) {
-                            if (cbuf == rcb) {
-                                cbuf = grow();
-                                end = cbuf.length;
-                            } else {
-                                return off - offset;
-                            }
-                        }
-                    }
-                    if (eof)
-                        return off - offset;
-                }
-            }
-        }
-    }
 
     public JdkConsoleImpl(Charset charset) {
         Objects.requireNonNull(charset);
@@ -525,11 +273,7 @@ public final class JdkConsoleImpl implements JdkConsole {
                 new FileInputStream(FileDescriptor.in),
                 readLock,
                 charset);//);
-        rcb = new char[1024];
+        nativeConsoleReader = NativeConsoleReaderImpl.create(readLock);
     }
 
-    //this is mostly setup to allow a more convenient Window backend development:
-    public interface ConsoleReader {
-        public char[] readline(boolean zeroout) throws IOException;
-    }
 }
