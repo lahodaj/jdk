@@ -6,7 +6,7 @@
  *
  * https://opensource.org/licenses/BSD-3-Clause
  */
-package jdk.internal.io;
+package jdk.internal.console;
 
 import java.io.IOException;
 import java.lang.foreign.MemoryLayout;

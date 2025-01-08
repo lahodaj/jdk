@@ -1,4 +1,4 @@
-package jdk.internal.io;
+package jdk.internal.console;
 
 import java.io.Reader;
 import java.io.Writer;
@@ -8,20 +8,20 @@ import java.io.InputStreamReader;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.concurrent.atomic.AtomicInteger;
-import static jdk.internal.io.Kernel32.ALT_FLAG;
-import jdk.internal.io.Kernel32.CONSOLE_SCREEN_BUFFER_INFO;
-import static jdk.internal.io.Kernel32.CTRL_FLAG;
-import jdk.internal.io.Kernel32.INPUT_RECORD;
-import static jdk.internal.io.Kernel32.INVALID_HANDLE_VALUE;
-import static jdk.internal.io.Kernel32.KEY_EVENT;
-import jdk.internal.io.Kernel32.KEY_EVENT_RECORD;
-import static jdk.internal.io.Kernel32.LEFT_ALT_PRESSED;
-import static jdk.internal.io.Kernel32.LEFT_CTRL_PRESSED;
-import static jdk.internal.io.Kernel32.RIGHT_ALT_PRESSED;
-import static jdk.internal.io.Kernel32.RIGHT_CTRL_PRESSED;
-import static jdk.internal.io.Kernel32.SHIFT_FLAG;
-import static jdk.internal.io.Kernel32.SHIFT_PRESSED;
-import static jdk.internal.io.Kernel32.WINDOW_BUFFER_SIZE_EVENT;
+import static jdk.internal.console.Kernel32.ALT_FLAG;
+import jdk.internal.console.Kernel32.CONSOLE_SCREEN_BUFFER_INFO;
+import static jdk.internal.console.Kernel32.CTRL_FLAG;
+import jdk.internal.console.Kernel32.INPUT_RECORD;
+import static jdk.internal.console.Kernel32.INVALID_HANDLE_VALUE;
+import static jdk.internal.console.Kernel32.KEY_EVENT;
+import jdk.internal.console.Kernel32.KEY_EVENT_RECORD;
+import static jdk.internal.console.Kernel32.LEFT_ALT_PRESSED;
+import static jdk.internal.console.Kernel32.LEFT_CTRL_PRESSED;
+import static jdk.internal.console.Kernel32.RIGHT_ALT_PRESSED;
+import static jdk.internal.console.Kernel32.RIGHT_CTRL_PRESSED;
+import static jdk.internal.console.Kernel32.SHIFT_FLAG;
+import static jdk.internal.console.Kernel32.SHIFT_PRESSED;
+import static jdk.internal.console.Kernel32.WINDOW_BUFFER_SIZE_EVENT;
 
 //partly based on JLine:
 /*

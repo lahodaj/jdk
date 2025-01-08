@@ -22,7 +22,7 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package jdk.internal.io;
+package jdk.internal.console;
 
 import java.io.IOException;
 import java.io.Reader;

@@ -23,7 +23,7 @@
  * questions.
  */
 
-package jdk.internal.io;
+package jdk.internal.console;
 
 import java.io.IOException;
 import java.io.Reader;
