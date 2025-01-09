@@ -35,6 +35,7 @@ import com.sun.tools.javac.code.Kinds.Kind;
 import static com.sun.tools.javac.code.TypeTag.*;
 
 import com.sun.tools.javac.code.Preview;
+import com.sun.tools.javac.code.Source;
 import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.BindingSymbol;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
@@ -56,6 +57,8 @@ import com.sun.tools.javac.tree.JCTree.JCForLoop;
 import com.sun.tools.javac.tree.JCTree.JCIdent;
 import com.sun.tools.javac.tree.JCTree.JCIf;
 import com.sun.tools.javac.tree.JCTree.JCInstanceOf;
+import com.sun.tools.javac.tree.JCTree.JCInstanceOfStatement;
+import com.sun.tools.javac.tree.JCTree.JCThrow;
 import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
 import com.sun.tools.javac.tree.JCTree.JCSwitch;
 import com.sun.tools.javac.tree.JCTree.JCMatch;
@@ -83,6 +86,7 @@ import com.sun.tools.javac.code.Symbol.RecordComponent;
 import com.sun.tools.javac.code.Type;
 import static com.sun.tools.javac.code.TypeTag.BOT;
 import static com.sun.tools.javac.code.TypeTag.VOID;
+
 import com.sun.tools.javac.jvm.PoolConstant.LoadableConstant;
 import com.sun.tools.javac.jvm.Target;
 import com.sun.tools.javac.tree.JCTree;
@@ -198,11 +202,37 @@ public class TransPatterns extends TreeTranslator {
         names = Names.instance(context);
         target = Target.instance(context);
         preview = Preview.instance(context);
+
+        Source source = Source.instance(context);
+        allowPatternDeclarations = (preview.isEnabled() || !preview.isPreview(Source.Feature.PATTERN_DECLARATIONS)) &&
+                Source.Feature.PATTERN_DECLARATIONS.allowedInSource(source);
     }
+
+    private final boolean allowPatternDeclarations;
 
     @Override
     public void visitTypeTest(JCInstanceOf tree) {
-        if (tree.pattern instanceof JCPattern pattern) {
+        // Translates regular instanceof type operation to instanceof pattern operator when
+        // the expression was originally T but was subsequently erased to Object.
+        //
+        // $expr instanceof $primitiveType
+        // =>
+        // $expr instanceof T $temp && $temp instanceof $primitiveType
+        if (tree.erasedExprOriginalType!=null && !types.isSameType(tree.expr.type, tree.erasedExprOriginalType)) {
+            BindingSymbol temp = new BindingSymbol(Flags.FINAL | Flags.SYNTHETIC,
+                    names.fromString("temp" + variableIndex++ + target.syntheticNameChar()),
+                    tree.erasedExprOriginalType,
+                    currentMethodSym);
+
+            JCVariableDecl tempDecl = make.at(tree.pos()).VarDef(temp, null);
+
+            JCTree resultExpr =
+                    makeBinary(Tag.AND,
+                            make.TypeTest(tree.expr, make.BindingPattern(tempDecl).setType(tree.erasedExprOriginalType)).setType(syms.booleanType),
+                            make.TypeTest(make.Ident(tempDecl), tree.pattern).setType(syms.booleanType));
+
+            result = translate(resultExpr);
+        } else if (tree.pattern instanceof JCPattern pattern) {
             //first, resolve any record patterns:
             JCExpression extraConditions = null;
             if (pattern instanceof JCRecordPattern recordPattern) {
@@ -265,6 +295,44 @@ public class TransPatterns extends TreeTranslator {
             super.visitTypeTest(tree);
         }
     }
+
+    @Override
+    public void visitTypeTestStatement(JCInstanceOfStatement tree) {
+        /**
+         * A statement of the form
+         *
+         * <pre>
+         *     <expression> instanceof <pattern>;
+         * </pre>
+         *
+         * (where <pattern> is any pattern) is translated to:
+         *
+         * <pre>{@code
+         *     if (!(<expression> instanceof(<pattern>)) {
+         *         throw new MatchException(null, null);
+         *     }
+         * }</pre>
+         *
+         */
+        bindingContext = new BasicBindingContext();
+        try {
+            List<JCExpression> matchExParams = List.of(makeNull(), makeNull());
+            JCThrow thr = make.Throw(makeNewClass(syms.matchExceptionType, matchExParams));
+
+            JCExpression expr = translate(tree.expr);
+
+            JCInstanceOf instanceOfTree = make.TypeTest(expr, tree.pattern);
+            tree.type = syms.booleanType;
+
+            JCIf ifNode = make.If(makeUnary(Tag.NOT,
+                    translate(instanceOfTree)).setType(syms.booleanType), thr, null);
+
+            result = bindingContext.decorateStatement(ifNode);
+        } finally {
+            bindingContext.pop();
+        }
+    }
+
 
     @Override
     public void visitAnyPattern(JCTree.JCAnyPattern that) {
@@ -338,17 +406,15 @@ public class TransPatterns extends TreeTranslator {
         //  - the synthetic, implicitly declared one if it is a record and overload resolves to that
         Assert.check(recordPattern.patternDeclaration != null);
 
-        if ((recordPattern.patternDeclaration.flags() & Flags.PATTERN) != 0 || (recordPattern.patternDeclaration.flags() & Flags.SYNTHETIC) == 0) {
+        if (allowPatternDeclarations) {
             mSymbol = new BindingSymbol(Flags.SYNTHETIC,
                     names.fromString(target.syntheticNameChar() + "m" + target.syntheticNameChar() + variableIndex++), syms.objectType,
                     currentMethodSym);
             JCVariableDecl mVar = make.VarDef(mSymbol, null);
-            JCExpression nullCheck = make.TypeTest(
-                    make.App(make.Select(make.Ident(recordPattern.patternDeclaration.owner), recordPattern.patternDeclaration),
-                                     List.of(make.Ident(tempBind))).setType(syms.objectType),
-                    make.BindingPattern(mVar).setType(mSymbol.type)).setType(syms.booleanType);
 
-            firstLevelChecks = nullCheck;
+            firstLevelChecks = make.TypeTest(
+                    generatePatternCall(recordPattern, tempBind),
+                    make.BindingPattern(mVar).setType(mSymbol.type)).setType(syms.booleanType);
 
             // Resolve Carriers.component(methodType, index) for subsequent constant dynamic call results
             carriersComponentCallSym =
@@ -367,13 +433,12 @@ public class TransPatterns extends TreeTranslator {
             Type componentType = types.erasure(nestedFullComponentTypes.head);
             JCExpression accessedComponentValue;
             index++;
-            if ((recordPattern.patternDeclaration.flags() & Flags.SYNTHETIC) == 0 || (recordPattern.patternDeclaration.flags() & Flags.PATTERN) != 0) {
+            if (allowPatternDeclarations) {
                 /*
                  *  Generate invoke call for component X
                  *       component$X.invoke(carrier);
                  * */
-                List<Type> params = recordPattern.patternDeclaration.bindings
-                        .map(v -> types.erasure(v.type));
+                List<Type> params = recordPattern.patternDeclaration.type.getBindingTypes();
 
                 MethodType methodType = new MethodType(params, syms.objectType, List.nil(), syms.methodClass);
 
@@ -464,6 +529,43 @@ public class TransPatterns extends TreeTranslator {
         }
 
         return new UnrolledRecordPattern((JCBindingPattern) make.BindingPattern(recordBindingVar).setType(recordBinding.type), guard);
+    }
+
+    private JCMethodInvocation generatePatternCall(JCRecordPattern recordPattern, BindingSymbol tempBind) {
+        List<Type> staticArgTypes = List.of(syms.methodHandleLookupType,
+                syms.stringType,
+                syms.methodTypeType,
+                syms.stringType);
+
+        MethodSymbol bsm = rs.resolveInternalMethod(
+                recordPattern.pos(), env, syms.patternBootstrapsType,
+                names.invokePattern, staticArgTypes, List.nil());
+
+        MethodType indyType = new MethodType(
+                List.of(recordPattern.type),
+                syms.objectType,
+                List.nil(),
+                syms.methodClass
+        );
+
+        String mangledName = ((MethodSymbol)(recordPattern.patternDeclaration.baseSymbol())).externalName(types).toString();
+        LoadableConstant[] staticArgValues = new LoadableConstant[] {
+                LoadableConstant.String(mangledName)
+        };
+
+        DynamicMethodSymbol dynSym = new DynamicMethodSymbol(names.invokePattern,
+                syms.noSymbol,
+                bsm.asHandle(),
+                indyType,
+                staticArgValues);
+
+        JCFieldAccess qualifier = make.Select(make.QualIdent(bsm.owner), dynSym.name);
+        qualifier.sym = dynSym;
+        qualifier.type = syms.objectType;
+        return make.Apply(List.nil(),
+                        qualifier,
+                        List.of(make.Ident(tempBind)))
+                .setType(syms.objectType);
     }
 
     record UnrolledRecordPattern(JCBindingPattern primaryPattern, JCExpression newGuard) {}
@@ -949,7 +1051,7 @@ public class TransPatterns extends TreeTranslator {
         StringBuilder sb = new StringBuilder();
 
         PrimitiveGenerator() {
-            super(types);
+            types.super();
         }
 
         @Override
@@ -1155,7 +1257,7 @@ public class TransPatterns extends TreeTranslator {
                        !currentNullable &&
                        !previousCompletesNormally &&
                        !currentCompletesNormally &&
-                       new TreeDiffer(List.of(commonBinding), List.of(currentBinding))
+                       new TreeDiffer(types, List.of(commonBinding), List.of(currentBinding))
                                .scan(commonNestedExpression, currentNestedExpression)) {
                 accummulator.add(c.head);
             } else {

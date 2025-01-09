@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2022, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,23 +24,24 @@
  */
 package java.lang.classfile;
 
+import java.lang.classfile.attribute.RecordComponentInfo;
 import java.lang.classfile.attribute.PatternAttribute;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-import java.lang.classfile.attribute.RecordComponentInfo;
 import jdk.internal.classfile.impl.AbstractUnboundModel;
-import jdk.internal.javac.PreviewFeature;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  * A {@link ClassFileElement} describing an entity that has attributes, such
  * as a class, field, method, code attribute, or record component.
  *
  * @sealedGraph
- * @since 22
+ * @since 24
  */
-@PreviewFeature(feature = PreviewFeature.Feature.CLASSFILE_API)
 public sealed interface AttributedElement extends ClassFileElement
         permits ClassModel, CodeModel, FieldModel, MethodModel, PatternAttribute,
                 RecordComponentInfo, AbstractUnboundModel {
@@ -58,6 +59,7 @@ public sealed interface AttributedElement extends ClassFileElement
      * is not present
      */
     default <T extends Attribute<T>> Optional<T> findAttribute(AttributeMapper<T> attr) {
+        requireNonNull(attr);
         for (Attribute<?> la : attributes()) {
             if (la.attributeMapper() == attr) {
                 @SuppressWarnings("unchecked")
@@ -76,6 +78,7 @@ public sealed interface AttributedElement extends ClassFileElement
      * is not present
      */
     default <T extends Attribute<T>> List<T> findAttributes(AttributeMapper<T> attr) {
+        requireNonNull(attr);
         var list = new ArrayList<T>();
         for (var a : attributes()) {
             if (a.attributeMapper() == attr) {
@@ -84,6 +87,6 @@ public sealed interface AttributedElement extends ClassFileElement
                 list.add(t);
             }
         }
-        return list;
+        return Collections.unmodifiableList(list);
     }
 }

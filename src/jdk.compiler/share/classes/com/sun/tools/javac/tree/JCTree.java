@@ -245,6 +245,10 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
          */
         TYPETEST,
 
+        /** Type test statements, of type TypeTest.
+         */
+        TYPETEST_STATEMENT,
+
         /** Patterns.
          */
         ANYPATTERN,
@@ -542,6 +546,8 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
         public NamedImportScope namedImportScope;
         /** A scope for all import-on-demands. */
         public StarImportScope starImportScope;
+        /** A scope for all single module imports. */
+        public StarImportScope moduleImportScope;
         /** Line starting positions, defined only if option -g is set. */
         public Position.LineMap lineMap = null;
         /** A table that stores all documentation comments indexed by the tree
@@ -811,6 +817,8 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
 
         /** list of target types inferred for this functional expression. */
         public Type target;
+        /** The owner of this functional expression. */
+        public Symbol owner;
 
         public Type getDescriptorType(Types types) {
             return target != null ? types.findDescriptorType(target) : types.createErrorType(null);
@@ -1770,6 +1778,38 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
     }
 
     /**
+     * The match statement
+     */
+    public static class JCInstanceOfStatement extends JCStatement implements InstanceOfStatementTree {
+        public JCPattern pattern;
+        public JCExpression expr;
+
+        protected JCInstanceOfStatement(JCExpression expr, JCPattern pattern) {
+            this.pattern = pattern;
+            this.expr = expr;
+        }
+        @Override
+        public void accept(Visitor v) { v.visitTypeTestStatement(this); }
+
+        @DefinedBy(Api.COMPILER_TREE)
+        public Kind getKind() { return Kind.INSTANCEOF_STATEMENT; }
+        @Override @DefinedBy(Api.COMPILER_TREE)
+        public Tree getPattern() { return pattern; }
+        @DefinedBy(Api.COMPILER_TREE)
+        public JCTree getType() { return pattern instanceof JCPattern ? pattern.hasTag(BINDINGPATTERN) ? ((JCBindingPattern) pattern).var.vartype : null : pattern; }
+        @DefinedBy(Api.COMPILER_TREE)
+        public JCExpression getExpression() { return expr; }
+        @Override @DefinedBy(Api.COMPILER_TREE)
+        public <R,D> R accept(TreeVisitor<R,D> v, D d) {
+            return v.visitInstanceOfStatement(this, d);
+        }
+        @Override
+        public Tag getTag() {
+            return TYPETEST_STATEMENT;
+        }
+    }
+
+    /**
      * A continue of a loop.
      */
     public static class JCContinue extends JCStatement implements ContinueTree {
@@ -2309,6 +2349,8 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
         /**{@code true} if this instanceof test should have
          * value {@code true} when the {@code expr} is {@code null}.*/
         public boolean allowNull;
+        public Type erasedExprOriginalType;
+
         protected JCInstanceOf(JCExpression expr, JCTree pattern) {
             this.expr = expr;
             this.pattern = pattern;
@@ -3605,6 +3647,7 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
         public void visitBinary(JCBinary that)               { visitTree(that); }
         public void visitTypeCast(JCTypeCast that)           { visitTree(that); }
         public void visitTypeTest(JCInstanceOf that)         { visitTree(that); }
+        public void visitTypeTestStatement(JCInstanceOfStatement that)  { visitTree(that); }
         public void visitAnyPattern(JCAnyPattern that)       { visitTree(that); }
         public void visitBindingPattern(JCBindingPattern that) { visitTree(that); }
         public void visitDefaultCaseLabel(JCDefaultCaseLabel that) { visitTree(that); }

@@ -122,10 +122,6 @@ public enum TypeTag {
      */
     ERROR,
 
-    /** The tag of an unknown type
-     */
-    UNKNOWN,
-
     /** The tag of all instantiatable type variables.
      */
     UNDETVAR,

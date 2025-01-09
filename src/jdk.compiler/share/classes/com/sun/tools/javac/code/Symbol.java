@@ -894,7 +894,8 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
             apiComplete();
             for (Symbol sym : members().getSymbols(NON_RECURSIVE)) {
                 sym.apiComplete();
-                if ((sym.flags() & SYNTHETIC) == 0 && sym.owner == this && sym.kind != ERR) {
+                //TODO: patterns should be part of the output, but they are marked synthetic:
+                if (((sym.flags() & SYNTHETIC) == 0 || sym.isPattern()) && sym.owner == this && sym.kind != ERR) {
                     list = list.prepend(sym);
                 }
             }
@@ -2015,6 +2016,8 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
          */
         public Attribute defaultValue = null;
 
+        //TODO: would be good to avoid creating an EnumSet instance for *every* MethodSymbol,
+        //even though only a small fraction of them will be patterns:
         public final Set<PatternFlags> patternFlags = EnumSet.noneOf(PatternFlags.class);
 
 
@@ -2088,9 +2091,9 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
 
         private Name mangledBytecodePatternName(Types types) {
             List<String> parts = bindings().map(param -> {
-                var g = new UnSharedSignatureGenerator(types, name.table.names);
+                var g = new UnSharedSignatureGenerator(types);
                 g.assembleSig(param.erasure(types));
-                String mangled = name.table.names.fromString(BytecodeName.toBytecodeName(g.toName().toString())).toString();
+                String mangled = name.table.names.fromString(BytecodeName.toBytecodeName(g.toName(name.table.names).toString())).toString();
                 mangled = mangled.toString().replaceFirst("\\\\=", "");
                 return mangled;
             });
@@ -2106,11 +2109,9 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
              * An output buffer for type signatures.
              */
             ByteBuffer sigbuf = new ByteBuffer();
-            private final Names names;
 
-            UnSharedSignatureGenerator(Types types, Names names) {
-                super(types);
-                this.names = names;
+            UnSharedSignatureGenerator(Types types) {
+                types.super();
             }
 
             @Override
@@ -2128,11 +2129,7 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
                 sigbuf.appendName(name);
             }
 
-            protected void reset() {
-                sigbuf.reset();
-            }
-
-            protected Name toName() {
+            protected Name toName(Names names) {
                 try {
                     return sigbuf.toName(names);
                 } catch (InvalidUtfException e) {

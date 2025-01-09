@@ -34,18 +34,11 @@ import java.util.function.Function;
 
 import java.lang.classfile.*;
 import java.lang.classfile.attribute.*;
-import java.lang.classfile.constantpool.ClassEntry;
-import java.lang.classfile.constantpool.ConstantPool;
-import java.lang.classfile.constantpool.ConstantValueEntry;
-import java.lang.classfile.constantpool.LoadableConstantEntry;
-import java.lang.classfile.constantpool.ModuleEntry;
-import java.lang.classfile.constantpool.NameAndTypeEntry;
-import java.lang.classfile.constantpool.PackageEntry;
-import java.lang.classfile.constantpool.PoolEntry;
-import java.lang.classfile.constantpool.Utf8Entry;
+import java.lang.classfile.constantpool.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -55,12 +48,13 @@ import static java.lang.classfile.Attributes.*;
 
 public abstract sealed class BoundAttribute<T extends Attribute<T>>
         extends AbstractElement
-        implements Attribute<T> {
+        implements Attribute<T>, Util.Writable {
 
     static final int NAME_AND_LENGTH_PREFIX = 6;
     private final AttributeMapper<T> mapper;
     final ClassReaderImpl classReader;
     final int payloadStart;
+    Utf8Entry name;
 
     BoundAttribute(ClassReader classReader, AttributeMapper<T> mapper, int payloadStart) {
         this.mapper = mapper;
@@ -73,8 +67,11 @@ public abstract sealed class BoundAttribute<T extends Attribute<T>>
     }
 
     @Override
-    public String attributeName() {
-        return mapper.name();
+    public Utf8Entry attributeName() {
+        if (name == null) {
+            name = classReader.readEntry(payloadStart - 6, Utf8Entry.class);
+        }
+        return name;
     }
 
     @Override
@@ -108,7 +105,7 @@ public abstract sealed class BoundAttribute<T extends Attribute<T>>
 
     @Override
     @SuppressWarnings("unchecked")
-    public void writeTo(BufWriter buf) {
+    public void writeTo(BufWriterImpl buf) {
         if (!buf.canWriteDirect(classReader))
             attributeMapper().writeAttribute(buf, (T) this);
         else
@@ -141,7 +138,6 @@ public abstract sealed class BoundAttribute<T extends Attribute<T>>
         var filled = new ArrayList<Attribute<?>>(size);
         int p = pos + 2;
         int cfLen = reader.classfileLength();
-        var apo = ((ClassReaderImpl)reader).context().attributesProcessingOption();
         for (int i = 0; i < size; ++i) {
             Utf8Entry name = reader.readEntry(p, Utf8Entry.class);
             int len = reader.readInt(p + 2);
@@ -155,7 +151,7 @@ public abstract sealed class BoundAttribute<T extends Attribute<T>>
                 mapper = customAttributes.apply(name);
             }
             if (mapper != null) {
-                filled.add((Attribute)mapper.readAttribute(enclosing, reader, p));
+                filled.add(Objects.requireNonNull(mapper.readAttribute(enclosing, reader, p)));
             } else {
                 AttributeMapper<UnknownAttribute> fakeMapper = new AttributeMapper<>() {
                     @Override
@@ -293,7 +289,11 @@ public abstract sealed class BoundAttribute<T extends Attribute<T>>
 
         public BoundLocalVariableTableAttribute(AttributedElement enclosing, ClassReader cf, AttributeMapper<LocalVariableTableAttribute> mapper, int pos) {
             super(cf, mapper, pos);
-            codeAttribute = (CodeImpl) enclosing;
+            if (enclosing instanceof CodeImpl ci) {
+                this.codeAttribute = ci;
+            } else {
+                throw new IllegalArgumentException("Invalid LocalVariableTable attribute location");
+            }
         }
 
         @Override
@@ -320,7 +320,11 @@ public abstract sealed class BoundAttribute<T extends Attribute<T>>
 
         public BoundLocalVariableTypeTableAttribute(AttributedElement enclosing, ClassReader cf, AttributeMapper<LocalVariableTypeTableAttribute> mapper, int pos) {
             super(cf, mapper, pos);
-            this.codeAttribute = (CodeImpl) enclosing;
+            if (enclosing instanceof CodeImpl ci) {
+                this.codeAttribute = ci;
+            } else {
+                throw new IllegalArgumentException("Invalid LocalVariableTypeTable attribute location");
+            }
         }
 
         @Override

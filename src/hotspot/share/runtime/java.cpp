@@ -359,7 +359,11 @@ void print_statistics() {
 
   ThreadsSMRSupport::log_statistics();
 
-  ClassLoader::print_counters(tty);
+  if (log_is_enabled(Info, perf, class, link)) {
+    LogStreamHandle(Info, perf, class, link) log;
+    log.print_cr("At VM exit:");
+    ClassLoader::print_counters(&log);
+  }
 }
 
 // Note: before_exit() can be executed only once, if more than one threads
@@ -484,7 +488,7 @@ void before_exit(JavaThread* thread, bool halt) {
 
 #ifdef LINUX
   if (DumpPerfMapAtExit) {
-    CodeCache::write_perf_map();
+    CodeCache::write_perf_map(nullptr, tty);
   }
   if (PrintMemoryMapAtExit) {
     MemMapPrinter::print_all_mappings(tty);

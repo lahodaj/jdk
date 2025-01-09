@@ -22,8 +22,6 @@
  */
 
 // key: compiler.err.no.compatible.matcher.found
-// key: compiler.err.prob.found.req
-// key: compiler.misc.inconvertible.types
 // key: compiler.misc.feature.pattern.declarations
 // key: compiler.warn.preview.feature.use.plural
 // options: --enable-preview -source ${jdk.version} -Xlint:preview
@@ -38,11 +36,11 @@ public class NoCompatibleMatcherFound {
 
     public static class D {
         public pattern D(Object v1, Float out) {
-            out = 10.0f;
+            match D(new Object(), 10.0f);
         }
 
         public pattern D(Float out, Integer v1) {
-            out = 2;
+            match D(10.0f, 42);
         }
     }
 }

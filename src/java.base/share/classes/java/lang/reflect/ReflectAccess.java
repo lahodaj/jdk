@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,65 +25,34 @@
 
 package java.lang.reflect;
 
-import jdk.internal.reflect.MethodAccessor;
+import jdk.internal.access.JavaLangReflectAccess;
 import jdk.internal.reflect.ConstructorAccessor;
+
+import java.util.ArrayList;
 
 /** Package-private class implementing the
     jdk.internal.access.JavaLangReflectAccess interface, allowing the java.lang
     package to instantiate objects in this package. */
+final class ReflectAccess implements JavaLangReflectAccess {
+    public <T> Constructor<T> newConstructorWithAccessor(Constructor<T> original, ConstructorAccessor accessor) {
+        return original.newWithAccessor(accessor);
+    }
 
-class ReflectAccess implements jdk.internal.access.JavaLangReflectAccess {
-    public <T> Constructor<T> newConstructor(Class<T> declaringClass,
-                                             Class<?>[] parameterTypes,
-                                             Class<?>[] checkedExceptions,
-                                             int modifiers,
-                                             int slot,
-                                             String signature,
-                                             byte[] annotations,
-                                             byte[] parameterAnnotations)
+    public <T> Deconstructor<T> newDeconstructor(Class<T> declaringClass,
+                                                 int modifiers,
+                                                 int patternFlags,
+                                                 int slot,
+                                                 ArrayList<PatternBinding> patternBindings,
+                                                 String signature,
+                                                 byte[] annotations)
     {
-        return new Constructor<>(declaringClass,
-                                  parameterTypes,
-                                  checkedExceptions,
-                                  modifiers,
-                                  slot,
-                                  signature,
-                                  annotations,
-                                  parameterAnnotations);
-    }
-
-    public MethodAccessor getMethodAccessor(Method m) {
-        return m.getMethodAccessor();
-    }
-
-    public void setMethodAccessor(Method m, MethodAccessor accessor) {
-        m.setMethodAccessor(accessor);
-    }
-
-    public ConstructorAccessor getConstructorAccessor(Constructor<?> c) {
-        return c.getConstructorAccessor();
-    }
-
-    public void setConstructorAccessor(Constructor<?> c,
-                                       ConstructorAccessor accessor)
-    {
-        c.setConstructorAccessor(accessor);
-    }
-
-    public int getConstructorSlot(Constructor<?> c) {
-        return c.getSlot();
-    }
-
-    public String getConstructorSignature(Constructor<?> c) {
-        return c.getSignature();
-    }
-
-    public byte[] getConstructorAnnotations(Constructor<?> c) {
-        return c.getRawAnnotations();
-    }
-
-    public byte[] getConstructorParameterAnnotations(Constructor<?> c) {
-        return c.getRawParameterAnnotations();
+        return new Deconstructor<>(declaringClass,
+                modifiers,
+                patternFlags,
+                slot,
+                patternBindings,
+                signature,
+                annotations);
     }
 
     public byte[] getExecutableTypeAnnotationBytes(Executable ex) {
@@ -100,13 +69,10 @@ class ReflectAccess implements jdk.internal.access.JavaLangReflectAccess {
 
     //
     // Copying routines, needed to quickly fabricate new Field,
-    // Method, and Constructor objects from templates
+    // Method, Constructor and Deconstructor objects from templates
     //
     public Method      copyMethod(Method arg) {
         return arg.copy();
-    }
-    public Method      leafCopyMethod(Method arg) {
-        return arg.leafCopy();
     }
 
     public Field       copyField(Field arg) {
@@ -114,6 +80,10 @@ class ReflectAccess implements jdk.internal.access.JavaLangReflectAccess {
     }
 
     public <T> Constructor<T> copyConstructor(Constructor<T> arg) {
+        return arg.copy();
+    }
+
+    public <T> Deconstructor<T> copyDeconstructor(Deconstructor<T> arg) {
         return arg.copy();
     }
 
@@ -130,5 +100,10 @@ class ReflectAccess implements jdk.internal.access.JavaLangReflectAccess {
         throws IllegalAccessException, InstantiationException, InvocationTargetException
     {
         return ctor.newInstanceWithCaller(args, true, caller);
+    }
+
+    @Override
+    public String getMangledName(MemberPattern<?> d) {
+        return d.getMangledName();
     }
 }

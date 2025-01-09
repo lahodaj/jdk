@@ -1845,7 +1845,8 @@ public class Check {
         }
 
         if (shouldCheckPreview(m, other, origin)) {
-            checkPreview(tree.pos(), m, other);
+            checkPreview(TreeInfo.diagnosticPositionFor(m, tree),
+                         m, origin.type, other);
         }
 
         Type mt = types.memberType(origin.type, m);
@@ -1925,7 +1926,8 @@ public class Check {
         private boolean shouldCheckPreview(MethodSymbol m, MethodSymbol other, ClassSymbol origin) {
             if (m.owner != origin ||
                 //performance - only do the expensive checks when the overridden method is a Preview API:
-                (other.flags() & PREVIEW_API) == 0) {
+                ((other.flags() & PREVIEW_API) == 0 &&
+                 (other.owner.flags() & PREVIEW_API) == 0)) {
                 return false;
             }
 
@@ -3631,7 +3633,7 @@ public class Check {
                     applicableTargets.add(names.PATTERN_BINDING);
                 }
             } else if (target == names.METHOD) {
-                if (s.kind == MTH && !s.isConstructor())
+                if (s.kind == MTH && !s.isConstructor() && !s.isDeconstructor())
                     applicableTargets.add(names.METHOD);
             } else if (target == names.PARAMETER) {
                 if (s.kind == VAR &&
@@ -3836,8 +3838,29 @@ public class Check {
     }
 
     void checkPreview(DiagnosticPosition pos, Symbol other, Symbol s) {
-        if ((s.flags() & PREVIEW_API) != 0 && !preview.participatesInPreview(syms, other, s) && !disablePreviewCheck) {
-            if ((s.flags() & PREVIEW_REFLECTIVE) == 0) {
+        checkPreview(pos, other, Type.noType, s);
+    }
+
+    void checkPreview(DiagnosticPosition pos, Symbol other, Type site, Symbol s) {
+        boolean sIsPreview;
+        Symbol previewSymbol;
+        if ((s.flags() & PREVIEW_API) != 0) {
+            sIsPreview = true;
+            previewSymbol=  s;
+        } else if ((s.kind == Kind.MTH || s.kind == Kind.VAR) &&
+                   site.tsym != null &&
+                   (site.tsym.flags() & PREVIEW_API) == 0 &&
+                   (s.owner.flags() & PREVIEW_API) != 0) {
+            //calling a method, or using a field, whose owner is a preview, but
+            //using a site that is not a preview. Also produce an error or warning:
+            sIsPreview = true;
+            previewSymbol = s.owner;
+        } else {
+            sIsPreview = false;
+            previewSymbol = null;
+        }
+        if (sIsPreview && !preview.participatesInPreview(syms, other, s) && !disablePreviewCheck) {
+            if ((previewSymbol.flags() & PREVIEW_REFLECTIVE) == 0) {
                 if (!preview.isEnabled()) {
                     log.error(pos, Errors.IsPreview(s));
                 } else {
@@ -4091,6 +4114,29 @@ public class Check {
         public void visitClassDef(JCClassDecl tree) {
             // don't descend any further
         }
+
+        @Override
+        public void visitLambda(JCLambda tree) {
+            final boolean constructorPrev = constructor;
+            final boolean firstStatementPrev = firstStatement;
+            final JCReturn earlyReturnPrev = earlyReturn;
+            final Name initCallPrev = initCall;
+            final int scanDepthPrev = scanDepth;
+            constructor = false;
+            firstStatement = false;
+            earlyReturn = null;
+            initCall = null;
+            scanDepth = 0;
+            try {
+                super.visitLambda(tree);
+            } finally {
+                constructor = constructorPrev;
+                firstStatement = firstStatementPrev;
+                earlyReturn = earlyReturnPrev;
+                initCall = initCallPrev;
+                scanDepth = scanDepthPrev;
+            }
+        }
     }
 
 /* *************************************************************************
@@ -4165,7 +4211,7 @@ public class Check {
                     duplicateErasureError(pos, sym, byName);
                     sym.flags_field |= CLASH;
                     return true;
-                } else if (sym.isPattern() && byName.isPattern() && types.hasSameArgs(sym.type, byName.type, false)) {
+                } else if (sym.isPattern() && byName.isPattern() && !types.hasSameArgs(sym.type, byName.type, false)) {
                     return true;
                 } else if ((sym.flags() & MATCH_BINDING) != 0 &&
                            (byName.flags() & MATCH_BINDING) != 0 &&
