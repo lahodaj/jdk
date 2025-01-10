@@ -27,43 +27,42 @@ package jdk.internal.console;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
-import jdk.internal.console.SimpleConsoleReader.Size;
 
 public class NativeConsoleReaderImpl implements NativeConsoleReader {
 
     public static NativeConsoleReader create(Object readLock) {
-        if (CLibrary.isTty(0)) {
-            return new NativeConsoleReaderImpl();
-        } else {
-            return new BaseNativeConsoleReader(readLock);
-        }
+        return new NativeConsoleReaderImpl();
     }
 
     //TODO: read lock
     public char[] readline(Reader reader, Writer out, boolean zeroOut) throws IOException {
-        Attributes originalAttributes = CLibrary.getAttributes(0);
-        Attributes rawAttributes = new Attributes(originalAttributes);
-        rawAttributes.setInputFlag(Attributes.InputFlag.BRKINT, false);
-        rawAttributes.setInputFlag(Attributes.InputFlag.IGNPAR, false);
-        rawAttributes.setInputFlag(Attributes.InputFlag.ICRNL, false);
-        rawAttributes.setInputFlag(Attributes.InputFlag.IXON, false);
-        rawAttributes.setInputFlag(Attributes.InputFlag.IXOFF, true);
-        rawAttributes.setInputFlag(Attributes.InputFlag.IMAXBEL, false);
-        rawAttributes.setLocalFlag(Attributes.LocalFlag.ICANON, false);
-        rawAttributes.setLocalFlag(Attributes.LocalFlag.ECHO, false);
+        byte[] originalTermios = switchToRaw();
         Thread restoreConsole = new Thread(() -> {
-            CLibrary.setAttributes(0, originalAttributes);
+            restore(originalTermios);
         });
         try {
             Runtime.getRuntime().addShutdownHook(restoreConsole);
-            CLibrary.setAttributes(0, rawAttributes);
-            Size size = CLibrary.getTerminalSize(0);
+            int width = terminalWidth();
             out.append("\033[6n").flush(); //ask the terminal to provide cursor location
-            return SimpleConsoleReader.doRead(reader, out, -1, () -> size.width());
+            return SimpleConsoleReader.doRead(reader, out, -1, () -> width);
         } finally {
             restoreConsole.run();
             Runtime.getRuntime().removeShutdownHook(restoreConsole);
         }
     }
 
+    static {
+        loadNativeLibrary();
+    }
+
+    @SuppressWarnings("restricted")
+    private static void loadNativeLibrary() {
+        System.loadLibrary("le");
+        initIDs();
+    }
+
+    private static native void initIDs();
+    private static native byte[] switchToRaw();
+    private static native void restore(byte[] termios);
+    private static native int terminalWidth();
 }

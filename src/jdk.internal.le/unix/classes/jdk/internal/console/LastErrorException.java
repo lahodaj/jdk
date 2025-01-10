@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,20 +24,13 @@
  */
 package jdk.internal.console;
 
-import java.nio.charset.Charset;
-import jdk.internal.io.JdkConsole;
-import jdk.internal.io.JdkConsoleProvider;
+@SuppressWarnings("serial")
+public class LastErrorException extends RuntimeException{
 
-public class JdkConsoleProviderImpl implements JdkConsoleProvider {
+    public final long lastError;
 
-    @Override
-    public JdkConsole console(boolean isTTY, Charset charset) {
-        if (isTTY) {
-            //TODO: only supported on Linux, Mac OS/X and Windows:
-            return new JdkConsoleImpl(charset);
-        }
-
-        return null;
+    public LastErrorException(long lastError) {
+        this.lastError = lastError;
     }
-    
+
 }
