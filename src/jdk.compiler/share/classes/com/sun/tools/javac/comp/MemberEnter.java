@@ -158,6 +158,7 @@ public class MemberEnter extends JCTree.Visitor {
         }
         if (msym.isPattern()) {
             Assert.check(params.isEmpty());
+            Assert.check(tvars.isEmpty());
             return new PatternType(bindingsbuf.toList(), restype, syms.methodClass);
         } else {
             Assert.check(bindings == null);
