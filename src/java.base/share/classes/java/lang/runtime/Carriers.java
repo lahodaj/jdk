@@ -78,16 +78,14 @@ import java.lang.invoke.MethodType;
 public final class Carriers {
 
     private static final MethodHandle CONSTRUCTOR;
-    private static final MethodHandle CALL_SINGLE_COMPONENT_INVOKER;
-    private static final MethodHandle ALL_COMPONENTS_INVOKER;
+    private static final MethodHandle CARRIER_INVOKER;
 
     static {
         try {
             MethodHandles.Lookup lookup = MethodHandles.lookup();
 
             CONSTRUCTOR = lookup.findStatic(Carriers.class, "constructor", MethodType.methodType(Object.class, MethodType.class, Object[].class));
-            CALL_SINGLE_COMPONENT_INVOKER = lookup.findStatic(Carriers.class, "callSingleComponentInvoker", MethodType.methodType(Object.class, MethodHandle.class, MethodHandle.class));
-            ALL_COMPONENTS_INVOKER = lookup.findStatic(Carriers.class, "allComponentsInvoker", MethodType.methodType(Object.class, MethodHandle.class, MethodHandle.class));
+            CARRIER_INVOKER = lookup.findStatic(Carriers.class, "carrierInvoker", MethodType.methodType(Object.class, MethodHandle.class, MethodHandle.class));
         }
         catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
@@ -135,11 +133,7 @@ public final class Carriers {
         if (i + 1 < methodType.parameterCount()) {
             reader = MethodHandles.dropArguments(reader, i + 1, methodType.parameterList().subList(i + 1, methodType.parameterCount()));
         }
-        return MethodHandles.insertArguments(CALL_SINGLE_COMPONENT_INVOKER, 1, reader).asType(MethodType.methodType(methodType.parameterType(i), Object.class));
-    }
-
-    private static Object callSingleComponentInvoker(MethodHandle carrierAsInvoker, MethodHandle reader) throws Throwable {
-        return carrierAsInvoker.invoke(reader);
+        return MethodHandles.insertArguments(CARRIER_INVOKER, 1, reader).asType(MethodType.methodType(methodType.parameterType(i), Object.class));
     }
 
     /**{@return a MethodHandle, which accepts the carrier as the first parameter,
@@ -150,10 +144,10 @@ public final class Carriers {
      *                    carrier's components
      */
     public static MethodHandle componentInvoker(MethodType methodType) {
-        return ALL_COMPONENTS_INVOKER;
+        return CARRIER_INVOKER;
     }
 
-    private static Object allComponentsInvoker(MethodHandle carrierAsInvoker, MethodHandle reader) throws Throwable {
+    private static Object carrierInvoker(MethodHandle carrierAsInvoker, MethodHandle reader) throws Throwable {
         return carrierAsInvoker.invoke(reader);
     }
 }
