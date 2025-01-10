@@ -1979,8 +1979,6 @@ public abstract class Type extends AnnoConstruct implements TypeMirror, PoolCons
         public Type              getReturnType()     { return restype; }
         @DefinedBy(Api.LANGUAGE_MODEL)
         public Type              getReceiverType()   {
-            //TODO:
-//            return (recvtype == null) ? Type.noType : recvtype;
             return Type.noType;
         }
         @DefinedBy(Api.LANGUAGE_MODEL)
@@ -2002,8 +2000,6 @@ public abstract class Type extends AnnoConstruct implements TypeMirror, PoolCons
         public boolean contains(Type elem) {
             return elem.equalsIgnoreMetadata(this);
         }
-
-//        public MethodType asMethodType() { return this; }
 
         public void complete() {
             for (List<Type> l = bindingtypes; l.nonEmpty(); l = l.tail)

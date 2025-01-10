@@ -2408,9 +2408,6 @@ public class Types {
     }
     //where
     private boolean eraseNotNeeded(Type t) {
-        if (t == null) {
-            System.err.println("HELLO");
-        }
         // We don't want to erase primitive types and String type as that
         // operation is idempotent. Also, erasing these could result in loss
         // of information such as constant values attached to such types.
