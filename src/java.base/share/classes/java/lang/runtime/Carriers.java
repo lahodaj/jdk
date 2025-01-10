@@ -77,6 +77,23 @@ import java.lang.invoke.MethodType;
  */
 public final class Carriers {
 
+    private static final MethodHandle CONSTRUCTOR;
+    private static final MethodHandle CALL_SINGLE_COMPONENT_INVOKER;
+    private static final MethodHandle ALL_COMPONENTS_INVOKER;
+
+    static {
+        try {
+            MethodHandles.Lookup lookup = MethodHandles.lookup();
+
+            CONSTRUCTOR = lookup.findStatic(Carriers.class, "constructor", MethodType.methodType(Object.class, MethodType.class, Object[].class));
+            CALL_SINGLE_COMPONENT_INVOKER = lookup.findStatic(Carriers.class, "callSingleComponentInvoker", MethodType.methodType(Object.class, MethodHandle.class, MethodHandle.class));
+            ALL_COMPONENTS_INVOKER = lookup.findStatic(Carriers.class, "allComponentsInvoker", MethodType.methodType(Object.class, MethodHandle.class, MethodHandle.class));
+        }
+        catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
     private Carriers() {
     }
 
@@ -89,12 +106,9 @@ public final class Carriers {
      *                    carrier's components
      */
     static public MethodHandle initializingConstructor(MethodType methodType) {
-        try {
-            MethodHandle constructor = MethodHandles.lookup().findStatic(Carriers.class, "constructor", MethodType.methodType(Object.class, MethodType.class, Object[].class));
-            return MethodHandles.insertArguments(constructor, 0, methodType).asCollector(Object[].class, methodType.parameterCount()).asType(methodType);
-        } catch (NoSuchMethodException | IllegalAccessException ex) {
-            throw new IllegalStateException(ex);
-        }
+        return MethodHandles.insertArguments(CONSTRUCTOR, 0, methodType)
+                            .asCollector(Object[].class, methodType.parameterCount())
+                            .asType(methodType);
     }
 
     private static Object constructor(MethodType methodType, Object... args) {
@@ -114,19 +128,14 @@ public final class Carriers {
      * @throws IllegalArgumentException if {@code i} is out of bounds
      */
     public static MethodHandle component(MethodType methodType, int i) {
-        try {
-            MethodHandle reader = MethodHandles.identity(methodType.parameterType(i));
-            if (i > 0) {
-                reader = MethodHandles.dropArguments(reader, 0, methodType.parameterList().subList(0, i));
-            }
-            if (i + 1 < methodType.parameterCount()) {
-                reader = MethodHandles.dropArguments(reader, i + 1, methodType.parameterList().subList(i + 1, methodType.parameterCount()));
-            }
-            MethodHandle singleComponentInvoker = MethodHandles.lookup().findStatic(Carriers.class, "callSingleComponentInvoker", MethodType.methodType(Object.class, MethodHandle.class, MethodHandle.class));
-            return MethodHandles.insertArguments(singleComponentInvoker, 1, reader).asType(MethodType.methodType(methodType.parameterType(i), Object.class));
-        } catch (NoSuchMethodException | IllegalAccessException ex) {
-            throw new IllegalStateException(ex);
+        MethodHandle reader = MethodHandles.identity(methodType.parameterType(i));
+        if (i > 0) {
+            reader = MethodHandles.dropArguments(reader, 0, methodType.parameterList().subList(0, i));
         }
+        if (i + 1 < methodType.parameterCount()) {
+            reader = MethodHandles.dropArguments(reader, i + 1, methodType.parameterList().subList(i + 1, methodType.parameterCount()));
+        }
+        return MethodHandles.insertArguments(CALL_SINGLE_COMPONENT_INVOKER, 1, reader).asType(MethodType.methodType(methodType.parameterType(i), Object.class));
     }
 
     private static Object callSingleComponentInvoker(MethodHandle carrierAsInvoker, MethodHandle reader) throws Throwable {
@@ -141,12 +150,7 @@ public final class Carriers {
      *                    carrier's components
      */
     public static MethodHandle componentInvoker(MethodType methodType) {
-        try {
-            MethodHandle allComponentInvoker = MethodHandles.lookup().findStatic(Carriers.class, "allComponentsInvoker", MethodType.methodType(Object.class, MethodHandle.class, MethodHandle.class));
-            return allComponentInvoker; //TODO: the first parameter should be an Object
-        } catch (NoSuchMethodException | IllegalAccessException ex) {
-            throw new IllegalStateException(ex);
-        }
+        return ALL_COMPONENTS_INVOKER;
     }
 
     private static Object allComponentsInvoker(MethodHandle carrierAsInvoker, MethodHandle reader) throws Throwable {
