@@ -34,6 +34,7 @@ import sun.reflect.generics.repository.GenericDeclRepository;
 import sun.reflect.generics.scope.MemberPatternScope;
 
 import java.lang.annotation.Annotation;
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.runtime.Carriers;
 import java.util.ArrayList;
@@ -403,19 +404,19 @@ public abstract sealed class MemberPattern<T> extends Executable permits Deconst
         try {
             Method method = getDeclaringClass().getDeclaredMethod(underlyingName, matchCandidate.getClass());
             method.setAccessible(override);
-            return (Object[])Carriers.boxedComponentValueArray(
-                MethodType.methodType(
+            return (Object[]) Carriers.componentInvoker(MethodType.methodType(
                     Object.class,
                     Arrays.stream(this.getPatternBindings())
                           .map(PatternBinding::getType)
                           .toArray(Class[]::new)
-                )
-            ).invoke(
-                method.invoke(matchCandidate, matchCandidate)
-            );
+                )).invoke(method.invoke(matchCandidate, matchCandidate), MethodHandles.lookup().findStatic(MemberPattern.class, "wrap", MethodType.methodType(Object[].class, Object[].class)));
         } catch (Throwable e) {
             throw new MatchException(e.getMessage(), e);
         }
+    }
+
+    private static Object[] wrap(Object... args) {
+        return args;
     }
 
     byte[] getRawAnnotations() {

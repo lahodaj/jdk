@@ -147,9 +147,7 @@ public class PatternBootstraps {
 
         Class<?>[] ctypes = Arrays.stream(components).map(c -> c.getType()).toArray(Class<?>[]::new);
 
-        Carriers.CarrierElements carrierElements = Carriers.CarrierFactory.of(ctypes);
-
-        MethodHandle initializingConstructor = carrierElements.initializingConstructor();
+        MethodHandle initializingConstructor = Carriers.initializingConstructor(MethodType.methodType(Object.class, ctypes));
 
         Object[] extracted = Arrays.stream(components).map(c -> {
             Method accessor = c.getAccessor();
