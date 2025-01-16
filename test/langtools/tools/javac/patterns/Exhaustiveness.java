@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,7 @@
 
 /**
  * @test
- * @bug 8262891 8268871 8274363 8281100 8294670 8311038 8311815 8325215 8333169 8327368
+ * @bug 8262891 8268871 8274363 8281100 8294670 8311038 8311815 8325215 8333169 8327368 8347291
  * @summary Check exhaustiveness of switches over sealed types.
  * @library /tools/lib
  * @modules jdk.compiler/com.sun.tools.javac.api
@@ -2180,6 +2180,27 @@ public class Exhaustiveness extends TestRunner {
                    }
                }
                """);
+    }
+
+    @Test //JDK-8347291
+    public void testRecursiveBoundInference(Path base) throws Exception {
+        doTest(base,
+               new String[0],
+               """
+               public class Test {
+
+                   abstract static sealed class Sealed<T extends Sealed<T>> permits One, Two {}
+                   abstract static non-sealed class One extends Sealed<One> {}
+                   abstract static non-sealed class Two<V extends Two<V>> extends Sealed<V> {}
+                   public static void test(Sealed<?> sealed) {
+                       switch (sealed) {
+                           case One one -> {}
+                       }
+                   }
+               }
+               """,
+               "Test.java:7:9: compiler.err.not.exhaustive.statement",
+               "1 error");
     }
 
     private void doTest(Path base, String[] libraryCode, String testCode, String... expectedErrors) throws IOException {

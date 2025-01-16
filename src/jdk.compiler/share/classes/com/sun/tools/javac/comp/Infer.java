@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -756,7 +756,14 @@ public class Infer {
                 Type upper;
                 boolean recursive = Type.containsAny(upperBounds, vars);
                 if (recursive) {
-                    upper = types.makeIntersectionType(upperBounds);
+                    List<Type> sortedUpperBounds = List.nil();
+
+                    for (Type upperBound : upperBounds) {
+                        sortedUpperBounds =
+                                types.insert(sortedUpperBounds, upperBound);
+                    }
+
+                    upper = types.makeIntersectionType(sortedUpperBounds);
                     todo.append(undet);
                 } else if (upperBounds.nonEmpty()) {
                     upper = types.glb(upperBounds);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2022, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -82,6 +82,8 @@ public class InferenceUnitTest {
                         interface RecursiveTest1Use<BB extends RecursiveTest1Use<BB>> extends RecursiveTest1Interface<BB> { }
                         interface RecursiveTest2Interface<X> { }
                         interface RecursiveTest2Use<X extends RecursiveTest2Use<X, Y>, Y> extends RecursiveTest2Interface<Y> { }
+                        class JDK_8347291_Base<T extends JDK_8347291_Base<T>> {}
+                        class JDK_8347291_BaseSub<T extends JDK_8347291_BaseSub<T>> extends JDK_8347291_Base<T> {}
                         """;
 
         JavacTaskImpl task = (JavacTaskImpl) compiler.getTask(null, null, null, null, null, List.of(SimpleJavaFileObject.forSource(URI.create("mem://Test.java"), source)));
@@ -160,8 +162,9 @@ public class InferenceUnitTest {
         checkInferedType("B<String>", "C", null); // no sideways casts
 
         checkInferedType("A<T1>", "B", "B<T1>");
-        checkInferedType("RecursiveTest1Interface<?>", "RecursiveTest1Use", "RecursiveTest1Use<? extends java.lang.Object&RecursiveTest1Use<?>&RecursiveTest1Interface<? extends RecursiveTest1Use<?>>>");
+        checkInferedType("RecursiveTest1Interface<?>", "RecursiveTest1Use", "RecursiveTest1Use<? extends RecursiveTest1Use<?>>");
         checkInferedType("RecursiveTest2Interface<?>", "RecursiveTest2Use", "RecursiveTest2Use<? extends RecursiveTest2Use<?,?>,?>");
+        checkInferedType("JDK_8347291_Base<?>", "JDK_8347291_BaseSub", "JDK_8347291_BaseSub<? extends JDK_8347291_BaseSub<?>>");
     }
 
     private void checkInferedType(String base, String test, String expected) {
