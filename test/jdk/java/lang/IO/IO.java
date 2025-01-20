@@ -183,6 +183,7 @@ public class IO {
         var file = Path.of("PrintlnNoParams.java");
         try (Writer w = Files.newBufferedWriter(file)) {
             w.write("""
+                    import static java.lang.IO.*;
                     void main() {
                         print("1 ");
                         print("2 ");
@@ -203,20 +204,6 @@ public class IO {
         String out = output.getStdout();
         String nl = System.getProperty("line.separator");
         assertEquals("1 2 3 " + nl + "1 2 3 " + nl, out);
-    }
-
-
-    @ParameterizedTest
-    @ValueSource(strings = {"println", "print", "input"})
-    public void nullConsole(String method) throws Exception {
-        var file = Path.of(System.getProperty("test.src", "."), "Methods.java")
-                .toAbsolutePath().toString();
-        var pb = ProcessTools.createTestJavaProcessBuilder("-Djdk.console=gibberish",
-                "--enable-preview", file, method);
-        OutputAnalyzer output = ProcessTools.executeProcess(pb);
-        output.reportDiagnosticSummary();
-        assertEquals(1, output.getExitValue());
-        output.shouldContain("Exception in thread \"main\" java.io.IOError");
     }
 
 

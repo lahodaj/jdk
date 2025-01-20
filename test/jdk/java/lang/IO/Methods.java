@@ -21,18 +21,16 @@
  * questions.
  */
 
-import java.io.IOException;
+import static java.lang.IO.*;
 
-import static java.io.IO.readln;
+public class Methods {
 
-public class Input {
-
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
         switch (args[0]) {
-            case "0" -> System.out.print(readln(null));
-            case "1" -> System.out.print(readln(args[1]));
-            case "2" -> System.out.print(readln());
-            default -> throw new AssertionError("Unknown command: " + args[0]);
+            case "println" -> println("hello");
+            case "print" -> print("hello");
+            case "input" -> readln("hello");
+            default -> throw new IllegalArgumentException(args[0]);
         }
     }
 }
