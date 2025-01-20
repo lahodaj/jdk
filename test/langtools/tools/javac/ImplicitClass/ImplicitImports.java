@@ -132,49 +132,6 @@ public class ImplicitImports extends TestRunner {
     }
 
     @Test
-    public void testImplicitSimpleIOImport(Path base) throws Exception {
-        Path current = base.resolve(".");
-
-        Path patchClasses = prepareIOPatch(current);
-
-        Path src = current.resolve("src");
-        Path classes = current.resolve("classes");
-        tb.writeFile(src.resolve("Test.java"),
-                     """
-                     public static void main(String... args) {
-                         println("Hello, World!");
-                     }
-                     """);
-
-        Files.createDirectories(classes);
-
-        new JavacTask(tb)
-            .options("--enable-preview", "--release", SOURCE_VERSION,
-                     "--patch-module", "java.base=" + patchClasses)
-            .outdir(classes)
-            .files(tb.findJavaFiles(src))
-            .run(Task.Expect.SUCCESS)
-            .writeAll();
-
-        var out = new JavaTask(tb)
-                .classpath(classes.toString())
-                .className("Test")
-                .vmOptions("--enable-preview",
-                           "--patch-module", "java.base=" + patchClasses)
-                .run()
-                .writeAll()
-                .getOutputLines(Task.OutputKind.STDOUT);
-
-        var expectedOut = List.of("Hello, World!");
-
-        if (!Objects.equals(expectedOut, out)) {
-            throw new AssertionError("Incorrect Output, expected: " + expectedOut +
-                                      ", actual: " + out);
-
-        }
-    }
-
-    @Test
     public void testNoImplicitImportsForOrdinaryClasses(Path base) throws Exception {
         Path current = base.resolve(".");
 

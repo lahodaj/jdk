@@ -60,31 +60,31 @@ public class ConsoleToolTest extends ReplToolTesting {
     public void testIO() {
         test(new String[] {"--enable-preview"},
              a -> {assertCommandWithOutputAndTerminal(a,
-                                                      "java.io.IO.readln(\"%%s\");\ninput", //newline automatically appended
+                                                      "java.lang.IO.readln(\"%%s\");\ninput", //newline automatically appended
                                                       "$1 ==> \"input\"",
                                                       """
-                                                      \u0005java.io.IO.readln(\"%%s\");
+                                                      \u0005java.lang.IO.readln(\"%%s\");
                                                       %%sinput
                                                       """);},
              a -> {assertCommandWithOutputAndTerminal(a,
-                                                      "java.io.IO.readln();\ninput!", //newline automatically appended
+                                                      "java.lang.IO.readln();\ninput!", //newline automatically appended
                                                       "$2 ==> \"input!\"",
                                                       """
-                                                      \u0005java.io.IO.readln();
+                                                      \u0005java.lang.IO.readln();
                                                       input!
                                                       """);},
              a -> {assertCommandWithOutputAndTerminal(a,
-                                                      "java.io.IO.println(\"Hello, World!\");",
+                                                      "java.lang.IO.println(\"Hello, World!\");",
                                                       "",
                                                       """
-                                                      \u0005java.io.IO.println(\"Hello, World!\");
+                                                      \u0005java.lang.IO.println(\"Hello, World!\");
                                                       Hello, World!
                                                       """);},
              a -> {assertCommandWithOutputAndTerminal(a,
-                                                      "java.io.IO.println();",
+                                                      "java.lang.IO.println();",
                                                       "",
                                                       """
-                                                      \u0005java.io.IO.println();
+                                                      \u0005java.lang.IO.println();
 
                                                       """);}
             );
