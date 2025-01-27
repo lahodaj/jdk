@@ -33,23 +33,14 @@ import static jdk.internal.console.Kernel32.WINDOW_BUFFER_SIZE_EVENT;
  * https://opensource.org/licenses/BSD-3-Clause
  */
 
-public class NativeConsoleReaderImpl implements NativeConsoleReader {
-
-    public static NativeConsoleReader create(Object readLock) {
-//        if (CLibrary.isTty(0)) {
-            return new NativeConsoleReaderImpl();
-//        } else {
-//            return new BaseNativeConsoleReader(readLock);
-//        }
-    }
+public class NativeConsoleReader implements NativeConsoleReader {
 
     private static final int ENABLE_PROCESSED_INPUT = 0x0001; //for input
     private static final int ENABLE_VIRTUAL_TERMINAL_INPUT = 0x0200; //for input
     private static final int ENABLE_PROCESSED_OUTPUT = 0x0001; //for output
     private static final int ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004; //for output
 
-    @Override
-    public char[] readline(Reader reader, Writer out, boolean zeroOut) throws IOException {
+    public static char[] readline(Reader reader, Writer out, boolean password) throws IOException {
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment inConsole = Kernel32.GetStdHandle(Kernel32.STD_INPUT_HANDLE);
             MemorySegment originalInModeRef = arena.allocate(java.lang.foreign.ValueLayout.JAVA_INT);
@@ -70,7 +61,7 @@ public class NativeConsoleReaderImpl implements NativeConsoleReader {
                     Kernel32.GetConsoleScreenBufferInfo(outConsole, consoleInfo);
                     width.set(consoleInfo.size().x());
                 });
-                return SimpleConsoleReader.doRead(new InputStreamReader(in), out, firstLineOffset, () -> width.get());
+                return SimpleConsoleReader.doRead(new InputStreamReader(in), out, password, firstLineOffset, () -> width.get());
             } finally {
                 Kernel32.SetConsoleMode(inConsole, originalInMode);
                 Kernel32.SetConsoleMode(outConsole, originalOutMode);

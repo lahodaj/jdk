@@ -28,14 +28,9 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 
-public class NativeConsoleReaderImpl implements NativeConsoleReader {
+public class NativeConsoleReader {
 
-    public static NativeConsoleReader create(Object readLock) {
-        return new NativeConsoleReaderImpl();
-    }
-
-    //TODO: read lock
-    public char[] readline(Reader reader, Writer out, boolean zeroOut) throws IOException {
+    public static char[] readline(Reader reader, Writer out, boolean password) throws IOException {
         byte[] originalTermios = switchToRaw();
         Thread restoreConsole = new Thread(() -> {
             restore(originalTermios);
@@ -44,7 +39,7 @@ public class NativeConsoleReaderImpl implements NativeConsoleReader {
             Runtime.getRuntime().addShutdownHook(restoreConsole);
             int width = terminalWidth();
             out.append("\033[6n").flush(); //ask the terminal to provide cursor location
-            return SimpleConsoleReader.doRead(reader, out, -1, () -> width);
+            return SimpleConsoleReader.doRead(reader, out, password, -1, () -> width);
         } finally {
             restoreConsole.run();
             Runtime.getRuntime().removeShutdownHook(restoreConsole);

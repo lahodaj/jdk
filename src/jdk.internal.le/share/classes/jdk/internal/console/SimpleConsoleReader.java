@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.IntSupplier;
@@ -36,16 +37,26 @@ import java.util.function.IntSupplier;
 public class SimpleConsoleReader {
 
     //public, to simplify access from tests:
-    public static char[] doRead(Reader reader, Writer out, int firstLineOffset, IntSupplier terminalWidthSupplier) throws IOException {
-        StringBuilder result = new StringBuilder();
+    public static char[] doRead(Reader reader, Writer out, boolean password, int firstLineOffset, IntSupplier terminalWidthSupplier) throws IOException {
+        CleanableBuffer result = new CleanableBuffer();
+        try {
+            doReadImpl(reader, out, password, firstLineOffset, terminalWidthSupplier, result);
+            return result.data;
+        } catch (Throwable t) {
+            result.zeroOut();
+            throw t;
+        }
+    }
+
+    private static void doReadImpl(Reader reader, Writer out, boolean password, int firstLineOffset, IntSupplier terminalWidthSupplier, CleanableBuffer result) throws IOException {
         int caret = 0;
         int r;
         PaintState prevState = new PaintState();
 
         READ: while (true) {
             //paint:
-            if (firstLineOffset != (-1)) {
-                prevState = repaint(out, firstLineOffset, terminalWidthSupplier, result.toString(), caret, prevState);
+            if (firstLineOffset != (-1) && !password) {
+                prevState = repaint(out, firstLineOffset, terminalWidthSupplier, result.data, result.length, caret, prevState);
             }
 
             //read
@@ -55,6 +66,7 @@ public class SimpleConsoleReader {
                 case '\r': break READ;
                 case 4: break READ; //EOF/Ctrl-D
                 case 127:
+                    //backspace:
                     if (caret > 0) {
                         result.delete(caret - 1, caret);
                         caret--;
@@ -122,29 +134,29 @@ public class SimpleConsoleReader {
             caret++;
         }
 
-        //show the final state:
-        repaint(out, firstLineOffset, terminalWidthSupplier, result.toString(), caret, prevState);
-
-        out.append("\n\r").flush();
-
-        return result.toString().toCharArray();
-    }
-
-    private static PaintState repaint(Writer out, int firstLineOffset, IntSupplier terminalWidthSupplier, String toDisplay, int caret, PaintState prevPaintState) throws IOException {
-        //TODO: compute smaller (ideally minimal) changes, and apply them instead of repainting everything:
-        int terminalWidth = terminalWidthSupplier.getAsInt();
-        List<String> toDisplayLines = new ArrayList<>();
-        int lineOffset = firstLineOffset;
-
-        String remaining = toDisplay;
-
-        while (remaining.length() > terminalWidth - lineOffset) {
-            toDisplayLines.add(remaining.substring(0, terminalWidth - lineOffset));
-            remaining = remaining.substring(terminalWidth - lineOffset);
-            lineOffset = 0;
+        if (!password) {
+            //show the final state:
+            repaint(out, firstLineOffset, terminalWidthSupplier, result.data, result.length, caret, prevState);
         }
 
-        toDisplayLines.add(remaining);
+        out.append("\n\r").flush();
+    }
+
+    private static PaintState repaint(Writer out, int firstLineOffset, IntSupplier terminalWidthSupplier, char[] toDisplay, int toDisplayLength, int caret, PaintState prevPaintState) throws IOException {
+        //TODO: compute smaller (ideally minimal) changes, and apply them instead of repainting everything:
+        record DisplayLine(int lineStartIndex, int lineLength) {}
+        int terminalWidth = terminalWidthSupplier.getAsInt();
+        List<DisplayLine> toDisplayLines = new ArrayList<>();
+        int lineOffset = firstLineOffset;
+        int lineStartIndex = 0;
+
+        while (lineStartIndex < toDisplayLength) {
+            int currentLineColumns = terminalWidth - lineOffset;
+            int maxCurrentLineLen = Math.min(currentLineColumns, toDisplayLength - lineStartIndex);
+            toDisplayLines.add(new DisplayLine(lineStartIndex, maxCurrentLineLen));
+            lineStartIndex += maxCurrentLineLen;
+            lineOffset = 0;
+        }
 
         for (int i = prevPaintState.caretLine() + 1; i < prevPaintState.lines(); i++) {
             out.append("\033[B");
@@ -159,9 +171,9 @@ public class SimpleConsoleReader {
                 out.append("\033[A");
             }
         }
-        for (Iterator<java.lang.String> it = toDisplayLines.iterator(); it.hasNext();) {
-            String line = it.next();
-            out.append(line);
+        for (Iterator<DisplayLine> it = toDisplayLines.iterator(); it.hasNext();) {
+            DisplayLine line = it.next();
+            out.write(toDisplay, line.lineStartIndex(), line.lineLength());
             if (it.hasNext()) {
                 out.append("\n\r");
             }
@@ -169,18 +181,18 @@ public class SimpleConsoleReader {
 
         int prevCaretLine = prevPaintState.lines();
 
-        if (caret < toDisplay.length()) {
-            int currentPos = toDisplay.length();
+        if (caret < toDisplayLength) {
+            int currentPos = toDisplayLength;
 
             prevCaretLine = prevPaintState.lines() - 1;
 
-            while (caret < currentPos - toDisplayLines.get(prevCaretLine).length()) {
+            while (caret < currentPos - toDisplayLines.get(prevCaretLine).lineLength()) {
                 out.append("\033[A");
-                currentPos -= toDisplayLines.get(prevCaretLine).length();
+                currentPos -= toDisplayLines.get(prevCaretLine).lineLength();
                 prevCaretLine--;
             }
 
-            int currentLineStart = currentPos - toDisplayLines.get(prevCaretLine).length();
+            int currentLineStart = currentPos - toDisplayLines.get(prevCaretLine).lineLength();
             int linePosition = caret - currentLineStart;
 
             if (prevCaretLine == 0) {
@@ -210,4 +222,34 @@ public class SimpleConsoleReader {
 
     }
 
+    private static final class CleanableBuffer {
+        private char[] data = new char[16];
+        private int length;
+
+        public void delete(int from, int to) {
+            System.arraycopy(data, from, data, to, length - to);
+            length--;
+        }
+
+        public int length() {
+            return length;
+        }
+
+        public void insert(int caret, char c) {
+            while (length + 1 >= data.length) {
+                char[] newData = Arrays.copyOf(data, data.length * 2);
+
+                zeroOut();
+                data = newData;
+            }
+
+            System.arraycopy(data, caret, data, caret + 1, length - caret);
+            data[caret] = c;
+            length++;
+        }
+
+        public void zeroOut() {
+            Arrays.fill(data, '\0');
+        }
+    }
 }

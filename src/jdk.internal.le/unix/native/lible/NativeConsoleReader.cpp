@@ -25,7 +25,7 @@
 
 #include "jni.h"
 #include "jni_util.h"
-#include "jdk_internal_console_NativeConsoleReaderImpl.h"
+#include "jdk_internal_console_NativeConsoleReader.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -38,7 +38,7 @@ static jmethodID lastErrorExceptionConstructor;
 
 static void throw_errno(JNIEnv *env);
 
-JNIEXPORT void JNICALL Java_jdk_internal_console_NativeConsoleReaderImpl_initIDs
+JNIEXPORT void JNICALL Java_jdk_internal_console_NativeConsoleReader_initIDs
   (JNIEnv *env, jclass) {
     jclass cls;
     cls = env->FindClass("jdk/internal/console/LastErrorException");
@@ -48,7 +48,7 @@ JNIEXPORT void JNICALL Java_jdk_internal_console_NativeConsoleReaderImpl_initIDs
     CHECK_NULL(lastErrorExceptionConstructor);
 }
 
-JNIEXPORT jbyteArray JNICALL Java_jdk_internal_console_NativeConsoleReaderImpl_switchToRaw
+JNIEXPORT jbyteArray JNICALL Java_jdk_internal_console_NativeConsoleReader_switchToRaw
   (JNIEnv *env, jclass) {
     int fd = 0;
     termios data;
@@ -73,7 +73,7 @@ JNIEXPORT jbyteArray JNICALL Java_jdk_internal_console_NativeConsoleReaderImpl_s
     return result;
 }
 
-JNIEXPORT void JNICALL Java_jdk_internal_console_NativeConsoleReaderImpl_restore
+JNIEXPORT void JNICALL Java_jdk_internal_console_NativeConsoleReader_restore
   (JNIEnv *env, jclass, jbyteArray storedData) {
     int fd = 0;
     termios data;
@@ -86,7 +86,7 @@ JNIEXPORT void JNICALL Java_jdk_internal_console_NativeConsoleReaderImpl_restore
     }
 }
 
-JNIEXPORT jint JNICALL Java_jdk_internal_console_NativeConsoleReaderImpl_terminalWidth
+JNIEXPORT jint JNICALL Java_jdk_internal_console_NativeConsoleReader_terminalWidth
   (JNIEnv *env, jclass) {
     int fd = 0;
     winsize ws;
