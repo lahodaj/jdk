@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2011, 2024, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2011, 2025, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -564,8 +564,8 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_HELPER],
   elif test "x$TOOLCHAIN_TYPE" = xmicrosoft; then
     # The -utf-8 option sets source and execution character sets to UTF-8 to enable correct
     # compilation of all source files regardless of the active code page on Windows.
-    TOOLCHAIN_CFLAGS_JVM="-nologo -MD -Zc:preprocessor -Zc:inline -permissive- -utf-8 -MP"
-    TOOLCHAIN_CFLAGS_JDK="-nologo -MD -Zc:preprocessor -Zc:inline -permissive- -utf-8 -Zc:wchar_t-"
+    TOOLCHAIN_CFLAGS_JVM="-nologo -MD -Zc:preprocessor -Zc:inline -Zc:throwingNew -permissive- -utf-8 -MP"
+    TOOLCHAIN_CFLAGS_JDK="-nologo -MD -Zc:preprocessor -Zc:inline -Zc:throwingNew -permissive- -utf-8 -Zc:wchar_t-"
   fi
 
   # CFLAGS C language level for JDK sources (hotspot only uses C++)
@@ -736,6 +736,11 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_CPU_DEP],
         # for all archs except arm and ppc, prevent gcc to omit frame pointer
         $1_CFLAGS_CPU_JDK="${$1_CFLAGS_CPU_JDK} -fno-omit-frame-pointer"
       fi
+      if test "x$FLAGS_CPU" = xppc64le; then
+        # Little endian machine uses ELFv2 ABI.
+        # Use Power8, this is the first CPU to support PPC64 LE with ELFv2 ABI.
+        $1_CFLAGS_CPU_JVM="${$1_CFLAGS_CPU_JVM} -DABI_ELFv2 -mcpu=power8 -mtune=power8"
+      fi
     fi
     if test "x$OPENJDK_TARGET_OS" = xaix; then
       $1_CFLAGS_CPU="-mcpu=pwr8"
@@ -829,6 +834,22 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_CPU_DEP],
   AC_SUBST(FILE_MACRO_CFLAGS)
 
   FLAGS_SETUP_BRANCH_PROTECTION
+
+  if test "x$FLAGS_CPU" = xriscv64; then
+    AC_MSG_CHECKING([if RVV/vector sigcontext supported])
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([#include <linux/ptrace.h>],
+        [
+          return (int)sizeof(struct __riscv_v_ext_state);
+        ])],
+        [
+          AC_MSG_RESULT([yes])
+        ],
+        [
+          $1_DEFINES_CPU_JVM="${$1_DEFINES_CPU_JVM} -DNO_RVV_SIGCONTEXT"
+          AC_MSG_RESULT([no])
+        ]
+    )
+  fi
 
   # EXPORT to API
   CFLAGS_JVM_COMMON="$ALWAYS_CFLAGS_JVM $ALWAYS_DEFINES_JVM \
