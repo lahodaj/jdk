@@ -33,7 +33,7 @@ import static jdk.internal.console.Kernel32.WINDOW_BUFFER_SIZE_EVENT;
  * https://opensource.org/licenses/BSD-3-Clause
  */
 
-public class NativeConsoleReader implements NativeConsoleReader {
+public class NativeConsoleReader {
 
     private static final int ENABLE_PROCESSED_INPUT = 0x0001; //for input
     private static final int ENABLE_VIRTUAL_TERMINAL_INPUT = 0x0200; //for input
