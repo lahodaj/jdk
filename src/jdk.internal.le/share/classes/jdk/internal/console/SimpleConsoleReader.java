@@ -41,10 +41,9 @@ public class SimpleConsoleReader {
         CleanableBuffer result = new CleanableBuffer();
         try {
             doReadImpl(reader, out, password, firstLineOffset, terminalWidthSupplier, result);
-            return result.data;
-        } catch (Throwable t) {
+            return Arrays.copyOf(result.data, result.length);
+        } finally {
             result.zeroOut();
-            throw t;
         }
     }
 
