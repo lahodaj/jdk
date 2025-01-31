@@ -226,7 +226,7 @@ public class SimpleConsoleReader {
         private int length;
 
         public void delete(int from, int to) {
-            System.arraycopy(data, from, data, to, length - to);
+            System.arraycopy(data, to, data, from, length - to);
             length--;
         }
 

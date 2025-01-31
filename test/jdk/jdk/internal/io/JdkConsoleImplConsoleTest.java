@@ -1,14 +1,14 @@
 /**
  * @test
- * @modules java.base/jdk.internal.io
+ * @modules jdk.internal.le/jdk.internal.console
  */
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.io.StringReader;
+import java.io.StringWriter;
 import java.util.Objects;
-import jdk.internal.io.JdkConsoleImpl;
+
+import jdk.internal.console.SimpleConsoleReader;
 
 public class JdkConsoleImplConsoleTest {
     public static void main(String... args) throws IOException {
@@ -24,7 +24,7 @@ public class JdkConsoleImplConsoleTest {
                        12345\033[D\033[D\033[3~6\033[1~7\033[4~8\033[H9\033[FA\r
                        """;
         String expectedResult = "97123658A";
-        char[] read = JdkConsoleImpl.doRead(new StringReader(input), new PrintStream(new ByteArrayOutputStream()));
+        char[] read = SimpleConsoleReader.doRead(new StringReader(input), new StringWriter(), false, 0, () -> Integer.MAX_VALUE);
         assertEquals(expectedResult, new String(read));
     }
 
