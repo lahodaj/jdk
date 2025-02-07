@@ -832,6 +832,7 @@ public class Flow {
                 for (var l : c.labels) {
                     if (l instanceof JCPatternCaseLabel patternLabel) {
                         if (patternLabel.pat instanceof JCRecordPattern rec &&
+                            rec.patternDeclaration != null &&
                             !rec.patternDeclaration.patternFlags.contains(PatternFlags.TOTAL)) {
                             continue;
                         }
