@@ -83,6 +83,7 @@ import static com.sun.tools.javac.jvm.ByteCodes.ishll;
 import static com.sun.tools.javac.jvm.ByteCodes.lushrl;
 import static com.sun.tools.javac.jvm.ByteCodes.lxor;
 import static com.sun.tools.javac.jvm.ByteCodes.string_add;
+import java.util.HashSet;
 
 /** Root class for Java symbols. It contains subclasses
  *  for specific sorts of symbols, such as variables, methods and operators,
@@ -1003,6 +1004,7 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
         public Map<Name, PackageSymbol> visiblePackages;
         public Set<ModuleSymbol> readModules;
         public List<Symbol> enclosedPackages = List.nil();
+        public Set<Name> knownTopLevelPackageNames = new HashSet<>();
 
         public Completer usesProvidesCompleter = Completer.NULL_COMPLETER;
         public final Set<ModuleFlags> flags = EnumSet.noneOf(ModuleFlags.class);
@@ -1107,6 +1109,16 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
             return list;
         }
 
+        public void addKnownPackage(Symtab syms, Symbol knownSymbol) {
+            Symbol topLevel = knownSymbol;
+
+            while (topLevel.owner != syms.rootPackage) {
+                topLevel = topLevel.owner;
+            }
+
+            knownTopLevelPackageNames.add(topLevel.name);
+        }
+
         public void reset() {
             this.directives = null;
             this.requires = null;
@@ -1114,6 +1126,7 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
             this.provides = null;
             this.uses = null;
             this.visiblePackages = null;
+            this.knownTopLevelPackageNames.clear();
         }
 
     }

@@ -212,6 +212,11 @@ public class Lint {
         CAST("cast"),
 
         /**
+         * Warn about clashing names.
+         */
+        CLASH("clash"),
+
+        /**
          * Warn about issues related to classfile contents
          */
         CLASSFILE("classfile"),

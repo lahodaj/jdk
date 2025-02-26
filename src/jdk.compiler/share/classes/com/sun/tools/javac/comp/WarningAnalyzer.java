@@ -25,8 +25,18 @@
 
 package com.sun.tools.javac.comp;
 
+import com.sun.tools.javac.code.Kinds.Kind;
+import com.sun.tools.javac.code.Lint;
+import com.sun.tools.javac.resources.CompilerProperties;
+import com.sun.tools.javac.resources.CompilerProperties.LintWarnings;
+import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
+import com.sun.tools.javac.tree.JCTree.JCIdent;
+import com.sun.tools.javac.tree.TreeScanner;
 import com.sun.tools.javac.util.Context;
 import com.sun.tools.javac.util.Log;
+import com.sun.tools.javac.util.Name;
+import java.util.Set;
 
 /** This pass checks for various things to warn about.
  *  It runs after attribution and flow analysis.
@@ -42,6 +52,7 @@ public class WarningAnalyzer {
 
     private final Log log;
     private final ThisEscapeAnalyzer thisEscapeAnalyzer;
+    private final PackageClassClash packageClassClash;
 
     public static WarningAnalyzer instance(Context context) {
         WarningAnalyzer instance = context.get(contextKey);
@@ -55,9 +66,55 @@ public class WarningAnalyzer {
         context.put(contextKey, this);
         log = Log.instance(context);
         thisEscapeAnalyzer = ThisEscapeAnalyzer.instance(context);
+        packageClassClash = PackageClassClash.instance(context);
     }
 
     public void analyzeTree(Env<AttrContext> env) {
         thisEscapeAnalyzer.analyzeTree(env);
+        packageClassClash.analyzeTree(env);
+    }
+
+    private static class PackageClassClash extends TreeScanner {
+
+        public static PackageClassClash instance(Context context) {
+            PackageClassClash instance = context.get(PackageClassClash.class);
+
+            if (instance == null) {
+                context.put(PackageClassClash.class, instance = new PackageClassClash(context));
+            }
+
+            return instance;
+        }
+
+        private final Log log;
+        private       Lint lint;
+        private Set<Name> knownTopLevelPackageNames;
+
+        @SuppressWarnings("this-escape")
+        private PackageClassClash(Context context) {
+            context.put(PackageClassClash.class, this);
+            this.log = Log.instance(context);
+            this.lint = Lint.instance(context);
+        }
+
+        @Override
+        public void visitTopLevel(JCCompilationUnit tree) {
+            knownTopLevelPackageNames = tree.modle.knownTopLevelPackageNames;
+            super.visitTopLevel(tree);
+        }
+
+        @Override
+        public void visitIdent(JCIdent tree) {
+            if (tree.sym != null && tree.sym.kind == Kind.TYP) {
+                if (knownTopLevelPackageNames.contains(tree.sym.getSimpleName())) {
+                    lint.logIfEnabled(tree.pos(), LintWarnings.PackageClassClash(tree.name));
+                }
+            }
+        }
+
+        private void analyzeTree(Env<AttrContext> env) {
+            env.toplevel.accept(this);
+        }
+
     }
 }

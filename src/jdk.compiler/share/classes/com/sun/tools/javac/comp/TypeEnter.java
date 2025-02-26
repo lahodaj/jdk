@@ -472,6 +472,7 @@ public class TypeEnter implements Completer {
                     importNamed(tree.pos(), c, env, tree);
                 }
             }
+            env.toplevel.modle.addKnownPackage(syms, p);
         }
 
         private void doModuleImport(JCModuleImport tree) {

@@ -1645,6 +1645,7 @@ public class Modules extends JCTree.Visitor {
 
                 seenPackages.put(packageName, exportsFrom);
                 msym.visiblePackages.put(d.packge.fullname, d.packge);
+                msym.addKnownPackage(syms, d.packge);
             }
         }
     }
