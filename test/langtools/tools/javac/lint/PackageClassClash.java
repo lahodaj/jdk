@@ -543,4 +543,52 @@ public class PackageClassClash extends TestRunner {
         }
     }
 
+    @Test
+    public void testDefaultIsOn(Path base) throws Exception {
+        Path current = base.resolve(".");
+        Path src = current.resolve("src");
+        tb.writeJavaFiles(src,
+                          """
+                          package clashing;
+                          public class Cls {
+                          }
+                          """,
+                          """
+                          package mb;
+                          public class clashing {
+                              public static class Cls {}
+                          }
+                          """,
+                          """
+                          package mb;
+                          import mb.*;
+                          public class Test {
+                              clashing.Cls cls;
+                          }
+                          """);
+
+        Path classes = current.resolve("classes");
+        Files.createDirectories(classes);
+
+        List<String> actualWarnings =
+            new JavacTask(tb)
+                .options("-XDrawDiagnostics")
+                .outdir(classes)
+                .files(tb.findJavaFiles(src))
+                .run(Task.Expect.SUCCESS)
+                .writeAll()
+                .getOutputLines(Task.OutputKind.DIRECT);
+
+        List<String> expectedWarnings = List.of(
+            "Test.java:4:5: compiler.warn.package.class.clash: clashing",
+            "1 warning"
+        );
+
+        if (!Objects.equals(expectedWarnings, actualWarnings)) {
+            throw new AssertionError("Incorrect Output, expected: " + expectedWarnings +
+                                      ", actual: " + actualWarnings);
+
+        }
+    }
+
 }

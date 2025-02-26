@@ -175,6 +175,7 @@ public class Lint {
             }
             values.add(LintCategory.SYNCHRONIZATION);
             values.add(LintCategory.INCUBATING);
+            values.add(LintCategory.CLASH);
         }
 
         // Look for specific overrides
