@@ -25,11 +25,14 @@
 
 package com.sun.tools.javac.comp;
 
+import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.Kinds.Kind;
 import com.sun.tools.javac.code.Lint;
+import com.sun.tools.javac.code.Lint.LintCategory;
 import com.sun.tools.javac.resources.CompilerProperties;
 import com.sun.tools.javac.resources.CompilerProperties.LintWarnings;
 import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.tree.JCTree.JCClassDecl;
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
 import com.sun.tools.javac.tree.JCTree.JCIdent;
 import com.sun.tools.javac.tree.TreeScanner;
@@ -104,6 +107,39 @@ public class WarningAnalyzer {
         }
 
         @Override
+        public void visitClassDef(JCClassDecl tree) {
+            Lint lintPrev = lint;
+            lint = lint.augment(tree.sym);
+            try {
+                super.visitClassDef(tree);
+            } finally {
+                lint = lintPrev;
+            }
+        }
+
+        @Override
+        public void visitMethodDef(JCTree.JCMethodDecl tree) {
+            Lint lintPrev = lint;
+            lint = lint.augment(tree.sym);
+            try {
+                super.visitMethodDef(tree);
+            } finally {
+                lint = lintPrev;
+            }
+        }
+
+        @Override
+        public void visitVarDef(JCTree.JCVariableDecl tree) {
+            Lint lintPrev = lint;
+            lint = lint.augment(tree.sym);
+            try {
+                super.visitVarDef(tree);
+            } finally {
+                lint = lintPrev;
+            }
+        }
+
+        @Override
         public void visitIdent(JCIdent tree) {
             if (tree.sym != null && tree.sym.kind == Kind.TYP) {
                 if (knownTopLevelPackageNames.contains(tree.sym.getSimpleName())) {
@@ -113,7 +149,9 @@ public class WarningAnalyzer {
         }
 
         private void analyzeTree(Env<AttrContext> env) {
-            env.toplevel.accept(this);
+            if (lint.isEnabled(LintCategory.CLASH)) {
+                env.toplevel.accept(this);
+            }
         }
 
     }

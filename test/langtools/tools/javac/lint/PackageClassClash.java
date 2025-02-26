@@ -397,4 +397,150 @@ public class PackageClassClash extends TestRunner {
         }
     }
 
+    @Test
+    public void testSuppressWarningsClass(Path base) throws Exception {
+        Path current = base.resolve(".");
+        Path src = current.resolve("src");
+        tb.writeJavaFiles(src,
+                          """
+                          package clashing;
+                          public class Cls {
+                          }
+                          """,
+                          """
+                          package mb;
+                          public class clashing {
+                              public static class Cls {}
+                          }
+                          """,
+                          """
+                          package mb;
+                          import mb.*;
+                          @SuppressWarnings("clash")
+                          public class Test {
+                              clashing.Cls cls;
+                          }
+                          """);
+
+        Path classes = current.resolve("classes");
+        Files.createDirectories(classes);
+
+        List<String> actualWarnings =
+            new JavacTask(tb)
+                .options("-Xlint:clash",
+                         "-XDrawDiagnostics",
+                         "-Werror")
+                .outdir(classes)
+                .files(tb.findJavaFiles(src))
+                .run(Task.Expect.SUCCESS)
+                .writeAll()
+                .getOutputLines(Task.OutputKind.DIRECT);
+
+        List<String> expectedWarnings = List.of("");
+
+        if (!Objects.equals(expectedWarnings, actualWarnings)) {
+            throw new AssertionError("Incorrect Output, expected: " + expectedWarnings +
+                                      ", actual: " + actualWarnings);
+
+        }
+    }
+
+    @Test
+    public void testSuppressWarningsMethod(Path base) throws Exception {
+        Path current = base.resolve(".");
+        Path src = current.resolve("src");
+        tb.writeJavaFiles(src,
+                          """
+                          package clashing;
+                          public class Cls {
+                          }
+                          """,
+                          """
+                          package mb;
+                          public class clashing {
+                              public static class Cls {}
+                          }
+                          """,
+                          """
+                          package mb;
+                          import mb.*;
+                          public class Test {
+                              @SuppressWarnings("clash")
+                              public void test() {
+                                  clashing.Cls cls;
+                              }
+                          }
+                          """);
+
+        Path classes = current.resolve("classes");
+        Files.createDirectories(classes);
+
+        List<String> actualWarnings =
+            new JavacTask(tb)
+                .options("-Xlint:clash",
+                         "-XDrawDiagnostics",
+                         "-Werror")
+                .outdir(classes)
+                .files(tb.findJavaFiles(src))
+                .run(Task.Expect.SUCCESS)
+                .writeAll()
+                .getOutputLines(Task.OutputKind.DIRECT);
+
+        List<String> expectedWarnings = List.of("");
+
+        if (!Objects.equals(expectedWarnings, actualWarnings)) {
+            throw new AssertionError("Incorrect Output, expected: " + expectedWarnings +
+                                      ", actual: " + actualWarnings);
+
+        }
+    }
+
+    @Test
+    public void testSuppressWarningsVariable(Path base) throws Exception {
+        Path current = base.resolve(".");
+        Path src = current.resolve("src");
+        tb.writeJavaFiles(src,
+                          """
+                          package clashing;
+                          public class Cls {
+                          }
+                          """,
+                          """
+                          package mb;
+                          public class clashing {
+                              public static class Cls {}
+                          }
+                          """,
+                          """
+                          package mb;
+                          import mb.*;
+                          public class Test {
+                              @SuppressWarnings("clash")
+                              clashing.Cls cls;
+                          }
+                          """);
+
+        Path classes = current.resolve("classes");
+        Files.createDirectories(classes);
+
+        List<String> actualWarnings =
+            new JavacTask(tb)
+                .options("-Xlint:clash",
+                         "-XDrawDiagnostics",
+                         "-Werror")
+                .outdir(classes)
+                .files(tb.findJavaFiles(src))
+                .run(Task.Expect.SUCCESS)
+                .writeAll()
+                .getOutputLines(Task.OutputKind.DIRECT);
+
+        List<String> expectedWarnings = List.of("");
+
+        if (!Objects.equals(expectedWarnings, actualWarnings)) {
+            throw new AssertionError("Incorrect Output, expected: " + expectedWarnings +
+                                      ", actual: " + actualWarnings);
+
+        }
+    }
+
 }
