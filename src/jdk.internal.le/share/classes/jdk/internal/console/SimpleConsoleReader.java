@@ -41,7 +41,7 @@ public class SimpleConsoleReader {
         CleanableBuffer result = new CleanableBuffer();
         try {
             doReadImpl(reader, out, password, firstLineOffset, terminalWidthSupplier, result);
-            return Arrays.copyOf(result.data, result.length);
+            return result.getData();
         } finally {
             result.zeroOut();
         }
@@ -62,7 +62,7 @@ public class SimpleConsoleReader {
             r = reader.read();
             switch (r) {
                 case -1: continue READ;
-                case '\r': break READ;
+                case '\n', '\r': break READ;
                 case 4: break READ; //EOF/Ctrl-D
                 case 127:
                     //backspace:
@@ -221,7 +221,7 @@ public class SimpleConsoleReader {
 
     }
 
-    private static final class CleanableBuffer {
+    static final class CleanableBuffer {
         private char[] data = new char[16];
         private int length;
 
@@ -245,6 +245,11 @@ public class SimpleConsoleReader {
             System.arraycopy(data, caret, data, caret + 1, length - caret);
             data[caret] = c;
             length++;
+        }
+
+
+        public char[] getData() {
+            return Arrays.copyOf(data, length);
         }
 
         public void zeroOut() {

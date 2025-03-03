@@ -28,6 +28,7 @@ package jdk.internal.console;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.Locale;
+import jdk.internal.console.SimpleConsoleReader.CleanableBuffer;
 
 import jdk.internal.io.BaseJdkConsoleImpl;
 
@@ -35,6 +36,8 @@ import jdk.internal.io.BaseJdkConsoleImpl;
  * JdkConsole implementation based on the platform's TTY, with basic keyboard navigation.
  */
 public final class JdkConsoleImpl extends BaseJdkConsoleImpl {
+
+    private final boolean isTTY;
 
     @Override
     public char[] readPassword() {
@@ -52,11 +55,32 @@ public final class JdkConsoleImpl extends BaseJdkConsoleImpl {
     }
 
     protected char[] readline(boolean password) throws IOException {
-        return NativeConsoleReader.readline(reader, out, password);
+        if (isTTY) {
+            return NativeConsoleReader.readline(reader, out, password);
+        } else {
+            //dumb input:
+            CleanableBuffer buffer = new CleanableBuffer();
+
+            try {
+                int r;
+
+                OUTER: while ((r = reader.read()) != (-1)) {
+                    switch (r) {
+                        case '\r', '\n' -> { break OUTER; }
+                        default -> buffer.insert(buffer.length(), (char) r);
+                    }
+                }
+
+                return buffer.getData();
+            } finally {
+                buffer.zeroOut();
+            }
+        }
     }
 
-    public JdkConsoleImpl(Charset charset) {
+    public JdkConsoleImpl(boolean isTTY, Charset charset) {
         super(charset);
+        this.isTTY = isTTY;
     }
 
 }
