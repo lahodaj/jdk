@@ -280,7 +280,7 @@ public final class JdkConsoleImpl extends BaseJdkConsoleImpl {
 
     @Override
     protected Reader wrapReader(Reader baseReader) {
-        return new LineReader(reader);
+        return new LineReader(baseReader);
     }
 
     public JdkConsoleImpl(Charset charset) {

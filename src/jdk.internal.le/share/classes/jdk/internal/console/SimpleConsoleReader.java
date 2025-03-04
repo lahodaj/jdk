@@ -249,7 +249,7 @@ public class SimpleConsoleReader {
 
 
         public char[] getData() {
-            return Arrays.copyOf(data, length);
+            return length > 0 ? Arrays.copyOf(data, length) : null;
         }
 
         public void zeroOut() {
