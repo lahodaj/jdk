@@ -90,6 +90,8 @@ public class ConsolePromptTest {
         command.add(expectedOut);
         command.add(jdkDir + "/bin/java");
         command.addAll(extraParams);
+        command.add("-cp");
+        command.add(System.getProperty("java.class.path"));
         command.add(ConsoleTest.class.getName());
         command.add(testName);
 
