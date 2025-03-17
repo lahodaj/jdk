@@ -109,8 +109,7 @@ public final class ArrayCarriers {
      *                    carrier's components
      */
     static public MethodHandle initializingConstructor(MethodType methodType) {
-        return CONSTRUCTOR.asCollector(Object[].class, methodType.parameterCount())
-                          .asType(methodType);
+        return CONSTRUCTOR.asType(methodType);
     }
 
     private static Object constructor(Object... args) {
