@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -339,7 +339,6 @@ public class JNIWriter {
             }
         }
     }
-    @SuppressWarnings("fallthrough")
     protected final String jniType(Type t) {
         switch (t.getKind()) {
             case ARRAY: {
@@ -442,7 +441,6 @@ public class JNIWriter {
         JNI,
         SIGNATURE
     }
-    @SuppressWarnings("fallthrough")
     static String encode(CharSequence name, EncoderType mtype) {
         StringBuilder result = new StringBuilder(100);
         int length = name.length();
@@ -672,6 +670,11 @@ public class JNIWriter {
 
         @Override
         public R visitMethodType(Type.MethodType t, P p) {
+            return defaultAction(t, p);
+        }
+
+        @Override
+        public R visitPatternType(Type.PatternType t, P p) {
             return defaultAction(t, p);
         }
 

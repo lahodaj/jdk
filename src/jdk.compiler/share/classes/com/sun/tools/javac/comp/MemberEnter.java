@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -156,17 +156,28 @@ public class MemberEnter extends JCTree.Visitor {
             }
             thrownbuf.append(exc);
         }
-        MethodType mtype = new MethodType(argbuf.toList(),
-                                    restype,
-                                    thrownbuf.toList(),
-                                    syms.methodClass);
-        if (bindings != null) {
-            mtype.bindingtypes = bindingsbuf.toList();
+        if (msym.isPattern()) {
+            //TODO: anything to do with the params?
+            //Assert.check(params.isEmpty());
+            var erasedBindingTypes = bindingsbuf.toList()
+                            .stream()
+                            .map(b -> types.erasure(b))
+                            .collect(List.collector());
+
+            PatternType patternType = new PatternType(bindingsbuf.toList(), erasedBindingTypes, restype, syms.methodClass);
+
+            return patternType;
+        } else {
+            Assert.check(bindings == null);
+            MethodType mtype = new MethodType(argbuf.toList(),
+                                        restype,
+                                        thrownbuf.toList(),
+                                        syms.methodClass);
+
+            mtype.recvtype = recvtype;
+
+            return tvars.isEmpty() ? mtype : new ForAll(tvars, mtype);
         }
-
-        mtype.recvtype = recvtype;
-
-        return tvars.isEmpty() ? mtype : new ForAll(tvars, mtype);
     }
 
 /* ********************************************************************
@@ -337,7 +348,7 @@ public class MemberEnter extends JCTree.Visitor {
                 needsLazyConstValue(tree.init)) {
                 Env<AttrContext> initEnv = getInitEnv(tree, env);
                 initEnv.info.enclVar = v;
-                v.setLazyConstValue(initEnv(tree, initEnv), attr, tree);
+                v.setLazyConstValue(initEnv(tree, initEnv), env, attr, tree);
             }
         }
 

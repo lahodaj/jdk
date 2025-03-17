@@ -59,6 +59,8 @@ public class Names {
     public final Name _class;
     public final Name _super;
     public final Name _this;
+    public final Name _that;
+
     public final Name var;
     public final Name exports;
     public final Name opens;
@@ -131,6 +133,7 @@ public class Names {
 
     // module names
     public final Name java_base;
+    public final Name java_se;
     public final Name jdk_unsupported;
 
     // attribute names
@@ -256,6 +259,8 @@ public class Names {
         _class = fromString("class");
         _super = fromString("super");
         _this = fromString("this");
+        _that = fromString("that");
+
         var = fromString("var");
         exports = fromString("exports");
         opens = fromString("opens");
@@ -329,6 +334,7 @@ public class Names {
 
         // module names
         java_base = fromString("java.base");
+        java_se = fromString("java.se");
         jdk_unsupported = fromString("jdk.unsupported");
 
         // attribute names

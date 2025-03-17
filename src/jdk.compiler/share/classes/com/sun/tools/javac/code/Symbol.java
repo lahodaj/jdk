@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -366,7 +366,10 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
                                   t.getThrownTypes(),
                                   t.tsym);
         } else if ((flags() & PATTERN) != 0) {
-            return new MethodType(List.of(owner.erasure(types)), types.syms.objectType, List.nil(), t.tsym);
+            MethodSymbol thisAsMethod = (MethodSymbol) this;
+            List<Type> parameterTypes = thisAsMethod.getParameters().map(p -> types.erasure(p.type));
+
+            return new MethodType(parameterTypes, types.syms.objectType, List.nil(), t.tsym);
         } else {
             return t;
         }
@@ -478,6 +481,11 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
      */
     public boolean isDeconstructor() {
         return isPattern() && name == owner.name;
+    }
+
+    public boolean isTotalPattern() {
+        //TODO: some non-deconstructor patterns can also be total, to be implemented.
+        return isDeconstructor() && (flags() & PARTIAL) == 0;
     }
 
     public boolean isDynamic() {
@@ -1728,7 +1736,6 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
 
     /** A class for variable symbols
      */
-    @SuppressWarnings("preview")
     public static class VarSymbol extends Symbol implements VariableElement {
 
         /** The variable's declaration position.
@@ -1825,10 +1832,11 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
         }
 
         public void setLazyConstValue(final Env<AttrContext> env,
+                                      final Env<AttrContext> enclosingEnv,
                                       final Attr attr,
                                       final JCVariableDecl variable)
         {
-            setData((Callable<Object>)() -> attr.attribLazyConstantValue(env, variable, type));
+            setData((Callable<Object>)() -> attr.attribLazyConstantValue(env, enclosingEnv, variable, type));
         }
 
         /**
@@ -2090,9 +2098,11 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
         }
 
         private Name mangledBytecodePatternName(Types types) {
-            List<String> parts = bindings().map(param -> {
+            List<Type> bindingTypes = ((PatternType) this.type).erasedBindingTypes;
+
+            List<String> parts = bindingTypes.map(type -> {
                 var g = new UnSharedSignatureGenerator(types);
-                g.assembleSig(param.erasure(types));
+                g.assembleSig(type);
                 String mangled = name.table.names.fromString(BytecodeName.toBytecodeName(g.toName(name.table.names).toString())).toString();
                 mangled = mangled.toString().replaceFirst("\\\\=", "");
                 return mangled;
@@ -2100,7 +2110,7 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
 
             String postFix = String.join(":", parts);
 
-            return name.table.names.fromString(owner.name.toString() + ":" + postFix);
+            return name.table.names.fromString((isDeconstructor() ? owner.name.toString() : name) + ":" + postFix);
         }
 
         static class UnSharedSignatureGenerator extends Types.SignatureGenerator {

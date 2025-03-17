@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,8 @@
  */
 
 package com.sun.source.tree;
+
+import jdk.internal.javac.PreviewFeature;
 
 /**
  * A visitor of trees, in the style of the visitor design pattern.
@@ -629,4 +631,14 @@ public interface TreeVisitor<R,P> {
      * @return a result value
      */
     R visitMatchStatement(MatchTree node, P p);
+
+    /**
+     * Visits an {@code MatchFailedTree} node.
+     * @param node the node being visited
+     * @param p a parameter value
+     * @return a result value
+     * @since 25
+     */
+    @PreviewFeature(feature=PreviewFeature.Feature.PATTERN_DECLARATIONS, reflective=true)
+    R visitMatchFailStatement(MatchFailedTree node, P p);
 }

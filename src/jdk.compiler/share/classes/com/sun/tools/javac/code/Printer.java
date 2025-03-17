@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -247,6 +247,12 @@ public abstract class Printer implements Type.Visitor<String, Locale>, Symbol.Vi
     @Override
     public String visitMethodType(MethodType t, Locale locale) {
         return "(" + printMethodArgs(t.argtypes, false, locale) + ")" +
+            visit(t.restype, locale);
+    }
+
+    @Override
+    public String visitPatternType(PatternType t, Locale locale) {
+        return "(" + printMethodArgs(t.bindingtypes, false, locale) + ")" +
             visit(t.restype, locale);
     }
 

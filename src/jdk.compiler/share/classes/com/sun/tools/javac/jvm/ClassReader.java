@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -64,11 +64,11 @@ import com.sun.tools.javac.jvm.PoolConstant.NameAndType;
 import com.sun.tools.javac.main.Option;
 import com.sun.tools.javac.resources.CompilerProperties.Errors;
 import com.sun.tools.javac.resources.CompilerProperties.Fragments;
+import com.sun.tools.javac.resources.CompilerProperties.LintWarnings;
 import com.sun.tools.javac.resources.CompilerProperties.Warnings;
 import com.sun.tools.javac.util.*;
 import com.sun.tools.javac.util.ByteBuffer.UnderflowException;
 import com.sun.tools.javac.util.DefinedBy.Api;
-import com.sun.tools.javac.util.JCDiagnostic.DiagnosticPosition;
 import com.sun.tools.javac.util.JCDiagnostic.Fragment;
 
 import static com.sun.tools.javac.code.Flags.*;
@@ -123,10 +123,6 @@ public class ClassReader {
      */
     boolean allowPatterns;
 
-   /** Lint option: warn about classfile issues
-     */
-    boolean lintClassfile;
-
     /** Switch: warn (instead of error) on illegal UTF-8
      */
     boolean warnOnIllegalUtf8;
@@ -146,6 +142,9 @@ public class ClassReader {
 
     /** The symbol table. */
     Symtab syms;
+
+    /** The root Lint config. */
+    Lint lint;
 
     Types types;
 
@@ -309,7 +308,7 @@ public class ClassReader {
 
         typevars = WriteableScope.create(syms.noSymbol);
 
-        lintClassfile = Lint.instance(context).isEnabled(LintCategory.CLASSFILE);
+        lint = Lint.instance(context);
 
         initAttributeReaders();
     }
@@ -858,11 +857,11 @@ public class ClassReader {
                 if (majorVersion > version.major || (majorVersion == version.major && minorVersion >= version.minor))
                     return true;
 
-                if (lintClassfile && !warnedAttrs.contains(name)) {
+                if (!warnedAttrs.contains(name)) {
                     JavaFileObject prev = log.useSource(currentClassFile);
                     try {
-                        log.warning(LintCategory.CLASSFILE, (DiagnosticPosition) null,
-                                    Warnings.FutureAttr(name, version.major, version.minor, majorVersion, minorVersion));
+                        lint.logIfEnabled(
+                                    LintWarnings.FutureAttr(name, version.major, version.minor, majorVersion, minorVersion));
                     } finally {
                         log.useSource(prev);
                     }
@@ -1067,6 +1066,17 @@ public class ClassReader {
                         } finally {
                             readingClassAttr = false;
                         }
+                    } else if (sym.type.hasTag(TypeTag.PATTERN)){
+                        Type mtype = poolReader.getType(nextChar());
+
+                        List<Type> erasedBindingTypes = mtype.getParameterTypes()
+                                .stream()
+                                .map(rc -> types.erasure(rc))
+                                .collect(List.collector());
+                        PatternType patternType = new PatternType(mtype.getParameterTypes(), erasedBindingTypes, syms.voidType, syms.methodClass);
+
+                        sym.type = patternType;
+                        //TODO: no thrown types for PatternType
                     } else {
                         List<Type> thrown = sym.type.getThrownTypes();
                         sym.type = poolReader.getType(nextChar());
@@ -1376,10 +1386,18 @@ public class ClassReader {
                         parameterNameIndicesMp = null;
                         parameterAccessFlags = null;
 
+                        MethodSymbol msym = (MethodSymbol) sym;
+
+                        // todo: refactor/improve
+                        List<Type> erasedBindingTypes = patternType.getParameterTypes()
+                                .stream()
+                                .map(rc -> types.erasure(rc))
+                                .collect(List.collector());
+                        msym.type = new PatternType(patternType.getParameterTypes(), erasedBindingTypes, syms.voidType, syms.methodClass);
+
                         readMemberAttrs(sym);
 
-                        MethodSymbol msym = (MethodSymbol) sym;
-                        msym.bindings = computeParamsFromAttribute(msym, patternType.getParameterTypes(), 0);
+                        msym.bindings = computeParamsFromAttribute(msym, msym.type.asPatternType().getBindingTypes(), 0);
 
                         parameterAnnotations = oldParameterAnnotations;
                         parameterNameIndicesLvt = oldParameterNameIndicesLvt;
@@ -1399,14 +1417,10 @@ public class ClassReader {
                         if (msym.patternFlags.contains(PatternFlags.DECONSTRUCTOR)) {
                             //TODO: should check the method is static, and has a reasonable first/only parameter?
                             //reconstitue the deconstructor back:
-                            MethodType mtype = msym.type.asMethodType();
-                            mtype.argtypes = mtype.argtypes.tail;
                             msym.flags_field &= ~Flags.STATIC;
                         }
 
                         // todo: check if special handling is needed similar to generic methods for binding types
-
-                        msym.type.asMethodType().bindingtypes = patternType.getParameterTypes();
                     }
                 }
             },
@@ -1669,9 +1683,7 @@ public class ClassReader {
         } else if (parameterAnnotations.length != numParameters) {
             //the RuntimeVisibleParameterAnnotations and RuntimeInvisibleParameterAnnotations
             //provide annotations for a different number of parameters, ignore:
-            if (lintClassfile) {
-                log.warning(LintCategory.CLASSFILE, Warnings.RuntimeVisibleInvisibleParamAnnotationsMismatch(currentClassFile));
-            }
+            lint.logIfEnabled(LintWarnings.RuntimeVisibleInvisibleParamAnnotationsMismatch(currentClassFile));
             for (int pnum = 0; pnum < numParameters; pnum++) {
                 readAnnotations();
             }
@@ -2136,14 +2148,12 @@ public class ClassReader {
             // The method wasn't found: emit a warning and recover
             JavaFileObject prevSource = log.useSource(requestingOwner.classfile);
             try {
-                if (lintClassfile) {
-                    if (failure == null) {
-                        log.warning(Warnings.AnnotationMethodNotFound(container, name));
-                    } else {
-                        log.warning(Warnings.AnnotationMethodNotFoundReason(container,
+                if (failure == null) {
+                    lint.logIfEnabled(LintWarnings.AnnotationMethodNotFound(container, name));
+                } else {
+                    lint.logIfEnabled(LintWarnings.AnnotationMethodNotFoundReason(container,
                                                                             name,
                                                                             failure.getDetailValue()));//diagnostic, if present
-                    }
                 }
             } finally {
                 log.useSource(prevSource);
@@ -2776,7 +2786,7 @@ public class ClassReader {
     }
 
     void validateMethodType(Name name, Type t) {
-        if ((!t.hasTag(TypeTag.METHOD) && !t.hasTag(TypeTag.FORALL)) ||
+        if ((!t.hasTag(TypeTag.METHOD) && !t.hasTag(TypeTag.FORALL) && !t.hasTag(TypeTag.PATTERN)) ||
             (name == names.init && !t.getReturnType().hasTag(TypeTag.VOID))) {
             throw badClassFile("method.descriptor.invalid", name);
         }
@@ -3028,9 +3038,7 @@ public class ClassReader {
 
     private void dropParameterAnnotations() {
         parameterAnnotations = null;
-        if (lintClassfile) {
-            log.warning(LintCategory.CLASSFILE, Warnings.RuntimeInvisibleParameterAnnotations(currentClassFile));
-        }
+        lint.logIfEnabled(LintWarnings.RuntimeInvisibleParameterAnnotations(currentClassFile));
     }
     /**
      * Creates the parameter at the position {@code mpIndex} in the parameter list of the owning method.

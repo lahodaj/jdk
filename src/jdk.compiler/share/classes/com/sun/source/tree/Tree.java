@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -722,7 +722,17 @@ public interface Tree {
          * @since 23
          */
         @PreviewFeature(feature=PreviewFeature.Feature.PATTERN_DECLARATIONS, reflective=true)
-        MATCH(MatchTree.class);
+        MATCH(MatchTree.class), //TODO: maybe MATCH_SUCCESS
+
+        /**
+         * Used for instances of {@link MatchFailedTree}.
+         *
+         * @since 25
+         */
+        @PreviewFeature(feature=PreviewFeature.Feature.PATTERN_DECLARATIONS, reflective=true)
+        MATCH_FAILED(MatchFailedTree.class),
+
+        ;
 
         Kind(Class<? extends Tree> intf) {
             associatedInterface = intf;

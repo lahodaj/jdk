@@ -94,7 +94,7 @@ public class PatternDeclarationsBytecodeTest extends TestRunner  {
                     .run()
                     .getOutput(Task.OutputKind.DIRECT);
 
-            if (!javapOut.contains("public static java.lang.Object Test:Ljava\\|lang\\|String\\?:Ljava\\|lang\\|String\\?(test.Test)"))
+            if (!javapOut.contains("public static java.lang.Object Test:Ljava\\|lang\\|String\\?:Ljava\\|lang\\|String\\?(test.Test, test.Test)"))
                 throw new AssertionError("Wrongly generated signature of pattern declaration:\n" + javapOut);
         }
     }
@@ -249,7 +249,7 @@ public class PatternDeclarationsBytecodeTest extends TestRunner  {
             String o = """
                     Pattern:
                           pattern_name: Test
-                          pattern_flags: deconstructor
+                          pattern_flags: deconstructor total
                           pattern_type: (Ljava/lang/String;Ljava/lang/String;)V
                     """;
             containsOrdered(o, javapOut, "Wrongly generated basic structure of Pattern attribute:\n");
@@ -294,7 +294,7 @@ public class PatternDeclarationsBytecodeTest extends TestRunner  {
             String output = """
                   Pattern:
                       pattern_name: Test
-                      pattern_flags: deconstructor
+                      pattern_flags: deconstructor total
                       pattern_type: (Ljava/lang/String;Ljava/lang/String;)V
                       MethodParameters:
                         Name                           Flags

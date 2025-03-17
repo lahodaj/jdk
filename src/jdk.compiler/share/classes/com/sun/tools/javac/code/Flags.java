@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -282,9 +282,10 @@ public class Flags {
      */
     public static final long THROWS = 1L<<47;
 
-    /*
-     * Currently available: Bit 48.
+    /**
+     * Flag to indicate the given deconstructor is partial
      */
+    public static final long PARTIAL = 1L<<48; //Trees + Symbols
 
     /**
      * Flag that marks a synthetic method body for a lambda expression
@@ -402,6 +403,11 @@ public class Flags {
      * Flag to indicate restricted method declaration.
      */
     public static final long RESTRICTED = 1L<<62; // MethodSymbols
+
+    /**
+     * Flag to indicate type annotations have been queued for field initializers.
+     */
+    public static final long FIELD_INIT_TYPE_ANNOTATIONS_QUEUED = 1L<<53; // VarSymbols
 
     /**
      * Flag to indicate that the class/interface was declared with the non-sealed modifier.
@@ -549,7 +555,7 @@ public class Flags {
         DEPRECATED_ANNOTATION(Flags.DEPRECATED_ANNOTATION),
         DEPRECATED_REMOVAL(Flags.DEPRECATED_REMOVAL),
         HAS_RESOURCE(Flags.HAS_RESOURCE),
-        // Bit 48 is currently available
+        PARTIAL(Flags.PARTIAL),
         ANONCONSTR_BASED(Flags.ANONCONSTR_BASED),
         NAME_FILLED(Flags.NAME_FILLED),
         PREVIEW_API(Flags.PREVIEW_API),
