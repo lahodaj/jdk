@@ -27,14 +27,25 @@
  * @modules java.base/java.lang.runtime
  * @enablePreview true
  * @compile CarriersGeneratedClasses.java
- * @run main/othervm CarriersGeneratedClasses arrayCarriersOverall
- * @run main/othervm CarriersGeneratedClasses arrayCarriersPrint
- * @run main/othervm CarriersGeneratedClasses testGeneratedClassesLimited
+ * @run main/othervm CarriersGeneratedClasses measureAndPrint arrays
+ * @run main/othervm CarriersGeneratedClasses measureAndPrint default
+ * @run main/othervm CarriersGeneratedClasses measureAndPrint generating
+ * @run main/othervm CarriersGeneratedClasses verifyGeneratedClassesCount arrays
+ * @run main/othervm CarriersGeneratedClasses verifyGeneratedClassesCount default
  */
+// * @run main/othervm CarriersGeneratedClasses verifyGeneratedClassesCount generating
+// * @run main/othervm CarriersGeneratedClasses printTrace arrays
+// * @run main/othervm CarriersGeneratedClasses printTrace default
+// * @run main/othervm CarriersGeneratedClasses printTrace generating
 
+import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
 import java.lang.runtime.ArrayCarriers;
+import java.lang.runtime.Carriers;
+import java.lang.runtime.GeneratingCarriers;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import jdk.jfr.consumer.RecordedClass;
 import jdk.jfr.consumer.RecordedEvent;
 import jdk.jfr.consumer.RecordedFrame;
@@ -42,18 +53,27 @@ import jdk.jfr.consumer.RecordedStackTrace;
 import jdk.jfr.consumer.RecordingStream;
 
 public class CarriersGeneratedClasses {
-    private static final String CARRIERS_CLASS = ArrayCarriers.class.getName();
+    private static final CarriersConfiguration ARRAY_CARRIERS_CONFIGURATION = new CarriersConfiguration(ArrayCarriers.class.getName(), ArrayCarriers::initializingConstructor, ArrayCarriers::component);
+    private static final CarriersConfiguration DEFAULT_CARRIERS_CONFIGURATION = new CarriersConfiguration(Carriers.class.getName(), Carriers::initializingConstructor, Carriers::component);
+    private static final CarriersConfiguration GENERATING_CARRIERS_CONFIGURATION = new CarriersConfiguration(GeneratingCarriers.class.getName(), GeneratingCarriers::initializingConstructor, GeneratingCarriers::component);
 
     public static void main(String[] args) throws Throwable {
+        System.err.println("==========================configuration: " + args[1] + ", method: " + args[0] + "==============================");
+        CarriersConfiguration configuration = switch (args[1]) {
+            case "arrays" -> ARRAY_CARRIERS_CONFIGURATION;
+            case "default" -> DEFAULT_CARRIERS_CONFIGURATION;
+            case "generating" -> GENERATING_CARRIERS_CONFIGURATION;
+            default -> throw new AssertionError("Unknown carriers configuration: " + args[1]);
+        };
         switch (args[0]) {
-            case "arrayCarriersOverall" -> arrayCarriersOverall();
-            case "arrayCarriersPrint" -> arrayCarriersPrint();
-            case "testGeneratedClassesLimited" -> testGeneratedClassesLimited();
+            case "measureAndPrint" -> measureAndPrint(configuration);
+            case "printTrace" -> printTrace(configuration);
+            case "verifyGeneratedClassesCount" -> verifyGeneratedClassesCount(configuration);
             default -> throw new AssertionError("Unknown method.");
         }
     }
 
-    static void arrayCarriersOverall() throws Throwable {
+    static void measureAndPrint(CarriersConfiguration configuration) throws Throwable {
         MethodType[] tests = new MethodType[] {
             MethodType.methodType(Object.class),
             MethodType.methodType(Object.class, Object.class),
@@ -77,33 +97,38 @@ public class CarriersGeneratedClasses {
 
         for (MethodType testCase : tests) {
             System.err.println("running: " + testCase);
-            System.err.println("total loaded classes: " + countLoadedClasses(testCase, false));
+            System.err.println("total loaded classes: " + countLoadedClasses(configuration, testCase, false));
         }
     }
 
-    static void arrayCarriersPrint() throws Throwable {
-        countLoadedClasses(MethodType.methodType(Object.class, Object.class, Object.class), false);
-        countLoadedClasses(MethodType.methodType(Object.class, String.class, Object.class), true);
+    static void printTrace(CarriersConfiguration configuration) throws Throwable {
+        countLoadedClasses(configuration, MethodType.methodType(Object.class, Object.class, Object.class), false);
+        countLoadedClasses(configuration, MethodType.methodType(Object.class, String.class, Object.class), true);
     }
 
-    static void testGeneratedClassesLimited() throws Throwable {
-        countLoadedClasses(MethodType.methodType(Object.class, Object.class, Object.class), false);
-        countLoadedClasses(MethodType.methodType(Object.class, String.class, Object.class), false);
-        assertLoadedClasses(MethodType.methodType(Object.class, Object.class, String.class), 0);
+    static void verifyGeneratedClassesCount(CarriersConfiguration configuration) throws Throwable {
+        countLoadedClasses(configuration, MethodType.methodType(Object.class, Object.class, Object.class), false);
+        countLoadedClasses(configuration, MethodType.methodType(Object.class, String.class, Object.class), false);
+        assertLoadedClasses(configuration, MethodType.methodType(Object.class, Object.class, String.class), 0);
 
-        countLoadedClasses(MethodType.methodType(Object.class, int.class, Object.class), false);
+        countLoadedClasses(configuration, MethodType.methodType(Object.class, int.class, Object.class), false);
         for (int i = 0; i < 100; i++) {
-            assertLoadedClasses(MethodType.methodType(Object.class, int.class, String.class), 0);
+            assertLoadedClasses(configuration, MethodType.methodType(Object.class, int.class, String.class), 0);
         }
     }
 
-    private static void assertLoadedClasses(MethodType testCase, int expectedClasses) {
-        int loaded = countLoadedClasses(testCase, false);
+    private static void assertLoadedClasses(CarriersConfiguration configuration,
+                                            MethodType testCase,
+                                            int expectedClasses) {
+        int loaded = countLoadedClasses(configuration, testCase, false);
         if (loaded != expectedClasses) {
             throw new AssertionError("Unexpected loaded classes, expected " + expectedClasses + ", got: " + loaded);
         }
     }
-    private static int countLoadedClasses(MethodType testCase, boolean printTraces) {
+
+    private static int countLoadedClasses(CarriersConfiguration configuration,
+                                          MethodType testCase,
+                                          boolean printTraces) {
         try (var rs = new RecordingStream()) {
             AtomicInteger loadedClasses = new AtomicInteger();
 
@@ -115,7 +140,7 @@ public class CarriersGeneratedClasses {
                     important = true;
                 } else {
                     for (RecordedFrame frame : trace.getFrames()) {
-                        if (frame.getMethod().getType().getName().startsWith(CARRIERS_CLASS)) {
+                        if (frame.getMethod().getType().getName().startsWith(configuration.carriersClass())) {
                             important = true;
                             break;
                         }
@@ -131,10 +156,10 @@ public class CarriersGeneratedClasses {
 
             rs.startAsync();
 
-            ArrayCarriers.initializingConstructor(testCase);
+            configuration.initializer().apply(testCase);
 
             for (int c = 0; c < testCase.parameterCount(); c++) {
-                ArrayCarriers.component(testCase, c);
+                configuration.component().apply(testCase, c);
             }
 
             rs.stop();
@@ -160,4 +185,9 @@ public class CarriersGeneratedClasses {
             }
         }
     }
+
+    private record CarriersConfiguration(String carriersClass,
+                                         Function<MethodType, MethodHandle> initializer,
+                                         BiFunction<MethodType, Integer, MethodHandle> component) {}
+
 }
