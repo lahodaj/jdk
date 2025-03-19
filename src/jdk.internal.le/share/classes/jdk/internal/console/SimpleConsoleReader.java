@@ -33,6 +33,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.IntSupplier;
+import jdk.internal.org.jline.utils.WCWidth;
 
 public class SimpleConsoleReader {
 
@@ -129,8 +130,7 @@ public class SimpleConsoleReader {
                     continue READ;
             }
 
-            result.insert(caret, (char) r);
-            caret++;
+            caret += result.insert(caret, (char) r);
         }
 
         if (!password) {
@@ -141,8 +141,10 @@ public class SimpleConsoleReader {
         out.append("\n\r").flush();
     }
 
-    private static PaintState repaint(Writer out, int firstLineOffset, IntSupplier terminalWidthSupplier, char[] toDisplay, int toDisplayLength, int caret, PaintState prevPaintState) throws IOException {
-        //TODO: compute smaller (ideally minimal) changes, and apply them instead of repainting everything:
+    private static PaintState repaint(Writer out, int firstLineOffset, IntSupplier terminalWidthSupplier, int[] toDisplay, int toDisplayLength, int caret, PaintState prevPaintState) throws IOException {
+        //for simplicity, repaint the whole input buffer
+        //for more efficiency, could compute smaller (ideally minimal) changes,
+        //and apply them instead of repainting everything:
         record DisplayLine(int lineStartIndex, int lineLength) {}
         int terminalWidth = terminalWidthSupplier.getAsInt();
         List<DisplayLine> toDisplayLines = new ArrayList<>();
@@ -151,9 +153,20 @@ public class SimpleConsoleReader {
 
         while (lineStartIndex < toDisplayLength) {
             int currentLineColumns = terminalWidth - lineOffset;
-            int maxCurrentLineLen = Math.min(currentLineColumns, toDisplayLength - lineStartIndex);
-            toDisplayLines.add(new DisplayLine(lineStartIndex, maxCurrentLineLen));
-            lineStartIndex += maxCurrentLineLen;
+            int currentLineEnd = lineStartIndex;
+
+            while (currentLineEnd < toDisplayLength) {
+                currentLineColumns -= WCWidth.wcwidth(toDisplay[currentLineEnd]);
+
+                if (currentLineColumns < 0) {
+                    break;
+                }
+
+                currentLineEnd++;
+            }
+
+            toDisplayLines.add(new DisplayLine(lineStartIndex, currentLineEnd - lineStartIndex));
+            lineStartIndex += currentLineEnd;
             lineOffset = 0;
         }
 
@@ -170,13 +183,23 @@ public class SimpleConsoleReader {
                 out.append("\033[A");
             }
         }
+
+        char[] toPrint = new char[2];
+
         for (Iterator<DisplayLine> it = toDisplayLines.iterator(); it.hasNext();) {
             DisplayLine line = it.next();
-            out.write(toDisplay, line.lineStartIndex(), line.lineLength());
+            for (int o = 0; o < line.lineLength(); o++) {
+                int printLength = Character.toChars(toDisplay[line.lineStartIndex() + o], toPrint, 0);
+
+                out.write(toPrint, 0, printLength);
+            }
+
             if (it.hasNext()) {
                 out.append("\n\r");
             }
         }
+
+        Arrays.fill(toPrint, '\0');
 
         int prevCaretLine = prevPaintState.lines();
 
@@ -222,7 +245,9 @@ public class SimpleConsoleReader {
     }
 
     static final class CleanableBuffer {
-        private char[] data = new char[16];
+        private char pendingHighSurrogate;
+        private int pendingSurrogateCaret = -1;
+        private int[] data = new int[16];
         private int length;
 
         public void delete(int from, int to) {
@@ -234,26 +259,66 @@ public class SimpleConsoleReader {
             return length;
         }
 
-        public void insert(int caret, char c) {
+        public int insert(int caret, char c) {
+            if (Character.isHighSurrogate(c)) {
+                if (pendingSurrogateCaret != (-1)) {
+                    doInsert(pendingSurrogateCaret, (int) c);
+                }
+                pendingHighSurrogate = c;
+                pendingSurrogateCaret = caret;
+                return 0;
+            } else if (Character.isLowSurrogate(c)) {
+                if (pendingSurrogateCaret == (-1)) {
+                    doInsert(caret, (int) c);
+                } else if (pendingSurrogateCaret != caret) {
+                    doInsert(pendingSurrogateCaret, (int) pendingHighSurrogate);
+                    doInsert(caret, (int) c);
+                } else {
+                    doInsert(caret, Character.toCodePoint(pendingHighSurrogate, c));
+                }
+                pendingHighSurrogate = '\0';
+                pendingSurrogateCaret = -1;
+                return 1;
+            } else {
+                doInsert(caret, (int) c);
+                return 1;
+            }
+        }
+
+        private void doInsert(int caret, int codePoint) {
             while (length + 1 >= data.length) {
-                char[] newData = Arrays.copyOf(data, data.length * 2);
+                int[] newData = Arrays.copyOf(data, data.length * 2);
 
                 zeroOut();
                 data = newData;
             }
 
             System.arraycopy(data, caret, data, caret + 1, length - caret);
-            data[caret] = c;
+            data[caret] = codePoint;
             length++;
         }
 
 
         public char[] getData() {
-            return length > 0 ? Arrays.copyOf(data, length) : null;
+            if (length == 0) {
+                return null;
+            }
+
+            char[] tempResult = new char[2 * length];
+            int target = 0;
+
+            for (int source = 0; source < length; source++) {
+                target += Character.toChars(data[source], tempResult, target);
+            }
+
+            char[] result = Arrays.copyOf(tempResult, target);
+            Arrays.fill(tempResult, '\0');
+
+            return result;
         }
 
         public void zeroOut() {
-            Arrays.fill(data, '\0');
+            Arrays.fill(data, 0);
         }
     }
 }
