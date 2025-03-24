@@ -166,7 +166,7 @@ public class SimpleConsoleReader {
             }
 
             toDisplayLines.add(new DisplayLine(lineStartIndex, currentLineEnd - lineStartIndex));
-            lineStartIndex += currentLineEnd;
+            lineStartIndex = currentLineEnd;
             lineOffset = 0;
         }
 

@@ -49,6 +49,7 @@ public class JdkConsoleImplConsoleTest {
         testNavigation();
         testTerminalHandling();
         testSurrogates();
+        testWraps();
     }
 
     private void testNavigation() throws IOException {
@@ -157,6 +158,28 @@ public class JdkConsoleImplConsoleTest {
                          12N\uD83F\uDEEF4
                          56
 
+
+                         """,
+                         terminal.getDisplay());
+        }
+    }
+
+    private void testWraps() throws IOException {
+        {
+            Terminal terminal = new Terminal(5, 5);
+            Thread.ofVirtual().start(() -> {
+                try {
+                    SimpleConsoleReader.doRead(terminal.getInput(), terminal.getOutput(), false, 0, () -> terminal.width);
+                } catch (IOException ex) {
+                    throw new IllegalStateException(ex);
+                }
+            });
+
+            terminal.typed("12345ABCDEabc");
+            assertEquals("""
+                         12345
+                         ABCDE
+                         abc
 
                          """,
                          terminal.getDisplay());
