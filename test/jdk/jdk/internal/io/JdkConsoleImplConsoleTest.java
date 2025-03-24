@@ -23,6 +23,8 @@
 
 /**
  * @test
+ * @bug 8352693
+ * @summary Test simple console reader.
  * @modules jdk.internal.le/jdk.internal.console
  * @run main JdkConsoleImplConsoleTest
  */
