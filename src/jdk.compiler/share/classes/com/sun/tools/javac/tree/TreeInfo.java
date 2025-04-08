@@ -506,7 +506,7 @@ public class TreeInfo {
         int endPos;
         switch (tree.getTag()) {
         case BLOCK:
-            endPos = ((JCBlock) tree).endpos;
+            endPos = ((JCBlock) tree).bracePos;
             break;
         case SYNCHRONIZED:
             return endPos(((JCSynchronized) tree).body);

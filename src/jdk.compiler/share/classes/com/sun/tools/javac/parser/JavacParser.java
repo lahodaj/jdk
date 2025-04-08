@@ -701,27 +701,6 @@ public class JavacParser implements Parser {
 
     protected void storeEnd(JCTree tree, int endpos) {
         endPosTable.storeEnd(tree, endpos);
-
-        // Module, package, class, method, and variable declarations remember their end positions
-        switch (tree.getTag()) {
-        case MODULEDEF:
-            ((JCModuleDecl)tree).endPos = endpos;
-            break;
-        case PACKAGEDEF:
-            ((JCPackageDecl)tree).endPos = endpos;
-            break;
-        case CLASSDEF:
-            ((JCClassDecl)tree).endPos = endpos;
-            break;
-        case METHODDEF:
-            ((JCMethodDecl)tree).endPos = endpos;
-            break;
-        case VARDEF:
-            ((JCVariableDecl)tree).endPos = endpos;
-            break;
-        default:
-            break;
-        }
     }
 
     protected <T extends JCTree> T to(T t) {
@@ -1759,7 +1738,6 @@ public class JavacParser implements Parser {
                 case RBRACE: case EOF:
                     JCSwitchExpression e = to(F.at(switchPos).SwitchExpression(selector,
                                                                                cases.toList()));
-                    e.endpos = token.pos;
                     accept(RBRACE);
                     return e;
                 default:
@@ -2782,7 +2760,6 @@ public class JavacParser implements Parser {
             List<JCTree> defs = classInterfaceOrRecordBody(names.empty, false, false);
             JCModifiers mods = F.at(Position.NOPOS).Modifiers(0);
             body = toP(F.at(pos).AnonymousClassDef(mods, defs));
-            storeEnd(body, S.prevToken().endPos);
         }
         return toP(F.at(newpos).NewClass(encl, typeArgs, t, args, body));
     }
@@ -2838,9 +2815,9 @@ public class JavacParser implements Parser {
             syntaxError(token.pos, Errors.Orphaned(token.kind));
             switchBlockStatementGroups();
         }
-        // the Block node has a field "endpos" for first char of last token, which is
+        // the Block node has a field "bracePos" for first char of last token, which is
         // usually but not necessarily the last char of the last token.
-        t.endpos = token.pos;
+        t.bracePos = token.pos;
         accept(RBRACE);
         return toP(t);
     }
@@ -3161,7 +3138,6 @@ public class JavacParser implements Parser {
             accept(LBRACE);
             List<JCCase> cases = switchBlockStatementGroups();
             JCSwitch t = to(F.at(pos).Switch(selector, cases));
-            t.endpos = token.endPos;
             accept(RBRACE);
             return t;
         }
@@ -3856,7 +3832,6 @@ public class JavacParser implements Parser {
         JCVariableDecl result = toP(F.at(pos).VarDef(mods, name, type, init, declaredUsingVar));
         attach(result, dc);
         result.startPos = startPos;
-        storeEnd(result, S.prevToken().endPos);
         return result;
     }
 
@@ -3945,9 +3920,7 @@ public class JavacParser implements Parser {
                         log.error(token.pos, Errors.WrongReceiver);
                     }
                 }
-                JCVariableDecl result = toP(F.at(pos).ReceiverVarDef(mods, pn, type));
-                storeEnd(result, S.prevToken().endPos);
-                return result;
+                return toP(F.at(pos).ReceiverVarDef(mods, pn, type));
             }
         } else {
             /** if it is a lambda parameter and the token kind is not an identifier,
@@ -3972,10 +3945,8 @@ public class JavacParser implements Parser {
             name = names.empty;
         }
 
-        JCVariableDecl result = toP(F.at(pos).VarDef(mods, name, type, null,
+        return toP(F.at(pos).VarDef(mods, name, type, null,
                 type != null && type.hasTag(IDENT) && ((JCIdent)type).name == names.var));
-        storeEnd(result, S.prevToken().endPos);
-        return result;
     }
 
     /** Resources = Resource { ";" Resources }
@@ -4045,7 +4016,6 @@ public class JavacParser implements Parser {
             JCExpression pid = qualident(false);
             accept(SEMI);
             JCPackageDecl pd = toP(F.at(packagePos).PackageDecl(annotations, pid));
-            storeEnd(pd, S.prevToken().endPos);
             attach(pd, firstToken.docComment());
             consumedToplevelDoc = true;
             defs.append(pd);
@@ -4201,7 +4171,7 @@ public class JavacParser implements Parser {
         JCClassDecl implicit = F.at(primaryPos).ClassDef(
                 implicitMods, name, List.nil(), null, List.nil(), List.nil(),
                 defs.toList());
-        storeEnd(implicit, endPos);
+        storeEnd(implicit, endPos); //TODO - correct?
         topDefs.append(implicit);
         return topDefs.toList();
     }
@@ -4217,11 +4187,9 @@ public class JavacParser implements Parser {
         accept(LBRACE);
         directives = moduleDirectiveList();
         accept(RBRACE);
-        int endPos = S.prevToken().endPos;
         accept(EOF);
 
         JCModuleDecl result = toP(F.at(pos).ModuleDef(mods, kind, name, directives));
-        storeEnd(result, endPos);
         attach(result, dc);
         return result;
     }
@@ -4424,7 +4392,6 @@ public class JavacParser implements Parser {
         List<JCTree> defs = classInterfaceOrRecordBody(name, false, false);
         JCClassDecl result = toP(F.at(pos).ClassDef(
             mods, name, typarams, extending, implementing, permitting, defs));
-        storeEnd(result, S.prevToken().endPos);
         attach(result, dc);
         return result;
     }
@@ -4448,7 +4415,6 @@ public class JavacParser implements Parser {
         saveDanglingDocComments(dc);
 
         List<JCTree> defs = classInterfaceOrRecordBody(name, false, true);
-        int endPos = S.prevToken().endPos;
         java.util.List<JCVariableDecl> fields = new ArrayList<>();
         for (JCVariableDecl field : headerFields) {
             fields.add(field);
@@ -4474,7 +4440,6 @@ public class JavacParser implements Parser {
             defs = defs.prepend(field);
         }
         JCClassDecl result = toP(F.at(pos).ClassDef(mods, name, typarams, null, implementing, defs));
-        storeEnd(result, endPos);
         attach(result, dc);
         return result;
     }
@@ -4515,7 +4480,6 @@ public class JavacParser implements Parser {
         defs = classInterfaceOrRecordBody(name, true, false);
         JCClassDecl result = toP(F.at(pos).ClassDef(
             mods, name, typarams, null, extending, permitting, defs));
-        storeEnd(result, S.prevToken().endPos);
         attach(result, dc);
         return result;
     }
@@ -4564,7 +4528,6 @@ public class JavacParser implements Parser {
         JCClassDecl result = toP(F.at(pos).
             ClassDef(mods, name, List.nil(),
                      null, implementing, defs));
-        storeEnd(result, S.prevToken().endPos);
         attach(result, dc);
         return result;
     }
@@ -4703,12 +4666,10 @@ public class JavacParser implements Parser {
             createPos = identPos;
         JCIdent ident = F.at(identPos).Ident(enumName);
         JCNewClass create = F.at(createPos).NewClass(null, typeArgs, ident, args, body);
-        int endPos = S.prevToken().endPos;
         if (createPos != identPos)
-            storeEnd(create, endPos);
+            storeEnd(create, S.prevToken().endPos);
         ident = F.at(identPos).Ident(enumName);
         JCTree result = toP(F.at(pos).VarDef(mods, name, ident, create));
-        storeEnd(result, endPos);
         attach(result, dc);
         return result;
     }
@@ -5138,7 +5099,6 @@ public class JavacParser implements Parser {
                     toP(F.at(pos).MethodDef(mods, name, type, typarams,
                                             receiverParam, params, thrown,
                                             body, defaultValue));
-            storeEnd(result, S.prevToken().endPos);
             attach(result, dc);
             return result;
         } finally {
@@ -5654,7 +5614,7 @@ public class JavacParser implements Parser {
     /*
      * a functional source tree and end position mappings
      */
-    protected static class SimpleEndPosTable extends AbstractEndPosTable {
+    protected static class SimpleEndPosTable extends BaseEndPosTable {
 
         private final IntHashTable endPosMap;
 
@@ -5665,6 +5625,7 @@ public class JavacParser implements Parser {
 
         public void storeEnd(JCTree tree, int endpos) {
             endPosMap.put(tree, errorEndPos > endpos ? errorEndPos : endpos);
+            super.storeEnd(tree, endpos);
         }
 
         protected <T extends JCTree> T to(T t) {
@@ -5696,13 +5657,11 @@ public class JavacParser implements Parser {
     /*
      * a default skeletal implementation without any mapping overhead.
      */
-    protected static class EmptyEndPosTable extends AbstractEndPosTable {
+    protected static class EmptyEndPosTable extends BaseEndPosTable {
 
         EmptyEndPosTable(JavacParser parser) {
             super(parser);
         }
-
-        public void storeEnd(JCTree tree, int endpos) { /* empty */ }
 
         protected <T extends JCTree> T to(T t) {
             return t;
@@ -5712,12 +5671,54 @@ public class JavacParser implements Parser {
             return t;
         }
 
-        public int getEndPos(JCTree tree) {
-            return Position.NOPOS;
+        public int replaceTree(JCTree oldTree, JCTree newTree) {
+            int endPos = getEndPos(oldTree);
+
+            storeEnd(newTree, endPos);
+            return endPos;
         }
 
-        public int replaceTree(JCTree oldTree, JCTree newTree) {
-            return Position.NOPOS;
+    }
+
+    protected static abstract class BaseEndPosTable extends AbstractEndPosTable {
+
+        BaseEndPosTable(JavacParser parser) {
+            super(parser);
+        }
+
+        public void storeEnd(JCTree tree, int endpos) {
+            if (tree == null) {
+                return ;
+            }
+            switch (tree.getTag()) {
+                case SWITCH ->
+                    ((JCSwitch) tree).endpos = endpos;
+                case SWITCH_EXPRESSION ->
+                    ((JCSwitchExpression) tree).endpos = endpos;
+                case MODULEDEF ->
+                    ((JCModuleDecl) tree).endPos = endpos;
+                case PACKAGEDEF ->
+                    ((JCPackageDecl) tree).endPos = endpos;
+                case CLASSDEF ->
+                    ((JCClassDecl) tree).endPos = endpos;
+                case METHODDEF ->
+                    ((JCMethodDecl) tree).endPos = endpos;
+                case VARDEF ->
+                    ((JCVariableDecl) tree).endPos = endpos;
+            }
+        }
+
+        public int getEndPos(JCTree tree) {
+            return switch (tree.getTag()) {
+                case SWITCH -> ((JCSwitch) tree).endpos;
+                case SWITCH_EXPRESSION -> ((JCSwitchExpression) tree).endpos;
+                case MODULEDEF -> ((JCModuleDecl) tree).endPos;
+                case PACKAGEDEF -> ((JCPackageDecl) tree).endPos;
+                case CLASSDEF -> ((JCClassDecl) tree).endPos;
+                case METHODDEF -> ((JCMethodDecl) tree).endPos;
+                case VARDEF ->  ((JCVariableDecl) tree).endPos;
+                default -> Position.NOPOS;
+            };
         }
 
     }

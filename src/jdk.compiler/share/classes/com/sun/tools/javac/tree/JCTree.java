@@ -1129,7 +1129,7 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
         /** statements */
         public List<JCStatement> stats;
         /** Position of closing brace, optional. */
-        public int endpos = Position.NOPOS;
+        public int bracePos = Position.NOPOS;
         /** If this block contains record pattern, it is necessary to catch
          *  exceptions from the deconstructors and wrap them.
          * The {@code patternMatchingCatch} keeps the list of the deconstructor
