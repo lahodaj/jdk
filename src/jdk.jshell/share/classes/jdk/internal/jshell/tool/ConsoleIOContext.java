@@ -977,20 +977,22 @@ class ConsoleIOContext extends IOContext {
     public synchronized int readUserInput() throws IOException {
         if (pendingBytes == null || pendingBytes.length <= pendingBytesPointer) {
             char userChar = readUserInputChar();
-            StringBuilder dataToConvert = new StringBuilder();
-            dataToConvert.append(userChar);
+            String dataToConvert;
             if (Character.isHighSurrogate(userChar)) {
                 //surrogates cannot be converted independently,
                 //read the low surrogate and append it to dataToConvert:
                 char lowSurrogate = readUserInputChar();
                 if (Character.isLowSurrogate(lowSurrogate)) {
-                    dataToConvert.append(lowSurrogate);
+                    dataToConvert = Character.toString(Character.toCodePoint(userChar, lowSurrogate));
                 } else {
                     //if not the low surrogate, rollback the reading of the character:
                     pendingLinePointer--;
+                    dataToConvert = Character.toString(userChar);
                 }
+            } else {
+                dataToConvert = Character.toString(userChar);
             }
-            pendingBytes = dataToConvert.toString().getBytes();
+            pendingBytes = dataToConvert.getBytes();
             pendingBytesPointer = 0;
         }
         return pendingBytes[pendingBytesPointer++];
