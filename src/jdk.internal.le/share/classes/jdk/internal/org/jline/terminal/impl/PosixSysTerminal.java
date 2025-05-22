@@ -44,7 +44,8 @@ public class PosixSysTerminal extends AbstractPosixTerminal {
         super(name, type, pty, encoding, signalHandler);
         this.input = NonBlocking.nonBlocking(getName(), inputStreamWrapper.apply(pty.getSlaveInput()));
         this.output = new FastBufferedOutputStream(pty.getSlaveOutput());
-        this.reader = NonBlocking.nonBlocking(getName(), input, encoding());
+        Charset stdinEncoding = Charset.forName(System.getProperty("stdin.encoding"), encoding());
+        this.reader = NonBlocking.nonBlocking(getName(), input, stdinEncoding);
         this.writer = new PrintWriter(new OutputStreamWriter(output, encoding()));
         parseInfoCmp();
         if (nativeSignals) {
