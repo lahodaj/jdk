@@ -76,7 +76,7 @@ public interface MessageType {
         ANNOTATION("annotation", "Compound", "com.sun.tools.javac.code.Attribute"),
         BOOLEAN("boolean", "boolean", null),
         COLLECTION("collection", "Collection", "java.util"),
-        FLAG("flag", "Flag", "com.sun.tools.javac.code.Flags"),
+        FLAG("flag", "FlagsEnum", "com.sun.tools.javac.code"),
         FRAGMENT("fragment", "Fragment", null),
         DIAGNOSTIC("diagnostic", "JCDiagnostic", "com.sun.tools.javac.util"),
         MODIFIER("modifier", "Modifier", "javax.lang.model.element"),

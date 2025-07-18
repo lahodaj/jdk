@@ -1129,6 +1129,8 @@ public class Check {
      *  @param tree          The declaration
      */
     long checkFlags(long flags, Symbol sym, JCTree tree) {
+        Assert.check((flags & ~FlagsEnum.TREE_FLAGS) == 0,
+                     () -> Flags.toString((flags & ~Flags.TREE_FLAGS)));
         final DiagnosticPosition pos = tree.pos();
         long mask;
         long implicit = 0;
