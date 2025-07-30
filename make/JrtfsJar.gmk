@@ -50,7 +50,7 @@ JIMAGE_PKGS := \
 # Compile jrt-fs.jar with the interim compiler, as it
 # ends up in the image, this will ensure reproducible classes
 $(eval $(call SetupJavaCompilation, BUILD_JRTFS, \
-    COMPILER := interim, \
+    COMPILER := buildjdk, \
     DISABLED_WARNINGS := options, \
     TARGET_RELEASE := $(TARGET_RELEASE_JDK8), \
     SRC := $(TOPDIR)/src/java.base/share/classes, \
