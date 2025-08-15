@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,9 +23,6 @@
 
 package jdk.vm.ci.hotspot;
 
-import static jdk.vm.ci.common.InitTimer.timer;
-import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntime.runtime;
-
 import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 
@@ -35,8 +32,10 @@ import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.code.InvalidInstalledCodeException;
 import jdk.vm.ci.code.stack.InspectedFrameVisitor;
 import jdk.vm.ci.common.InitTimer;
+import static jdk.vm.ci.common.InitTimer.timer;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime.Option;
+import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntime.runtime;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaConstant;
@@ -291,6 +290,12 @@ final class CompilerToVM {
     native HotSpotResolvedJavaType lookupJClass(long jclass);
 
     /**
+     * Gets the {@code jobject} value wrapped by {@code peerObject}.
+     * Must not be called if {@link Services#IS_IN_NATIVE_IMAGE} is {@code false}.
+     */
+    native long getJObjectValue(HotSpotObjectConstantImpl peerObject);
+
+    /**
      * Resolves the entry at index {@code cpi} in {@code constantPool} to an interned String object.
      *
      * The behavior of this method is undefined if {@code cpi} does not denote an
@@ -429,11 +434,10 @@ final class CompilerToVM {
                     long callerMethodPointer);
 
     /**
-     * Converts the encoded indy index operand of an invokedynamic instruction
+     * Converts the indy index operand of an invokedynamic instruction
      * to an index directly into {@code constantPool}.
      *
      * @param resolve if {@true}, then resolve the entry (which may call a bootstrap method)
-     * @throws IllegalArgumentException if {@code encoded_indy_index} is not an encoded indy index
      * @return {@code JVM_CONSTANT_InvokeDynamic} constant pool entry index for the invokedynamic
      */
     int decodeIndyIndexToCPIndex(HotSpotConstantPool constantPool, int encoded_indy_index, boolean resolve) {
@@ -464,9 +468,19 @@ final class CompilerToVM {
      */
     int decodeMethodIndexToCPIndex(HotSpotConstantPool constantPool, int rawIndex) {
       return decodeMethodIndexToCPIndex(constantPool, constantPool.getConstantPoolPointer(), rawIndex);
-  }
+    }
 
-  private native int decodeMethodIndexToCPIndex(HotSpotConstantPool constantPool, long constantPoolPointer, int rawIndex);
+    private native int decodeMethodIndexToCPIndex(HotSpotConstantPool constantPool, long constantPoolPointer, int rawIndex);
+
+    /**
+     * Returns the number of {@code ResolvedIndyEntry}s present within this constant
+     * pool.
+     */
+    int getNumIndyEntries(HotSpotConstantPool constantPool) {
+        return getNumIndyEntries(constantPool, constantPool.getConstantPoolPointer());
+    }
+
+    private native int getNumIndyEntries(HotSpotConstantPool constantPool, long constantPoolPointer);
 
     /**
      * Resolves the details for invoking the bootstrap method associated with the
@@ -535,11 +549,11 @@ final class CompilerToVM {
      * opcode of the instruction for which the resolution was performed ({@code invokedynamic} or
      * {@code invokevirtual}), or {@code -1} otherwise.
      */
-    int isResolvedInvokeHandleInPool(HotSpotConstantPool constantPool, int cpi) {
-        return isResolvedInvokeHandleInPool(constantPool, constantPool.getConstantPoolPointer(), cpi);
+    int isResolvedInvokeHandleInPool(HotSpotConstantPool constantPool, int cpi, int opcode) {
+        return isResolvedInvokeHandleInPool(constantPool, constantPool.getConstantPoolPointer(), cpi, opcode);
     }
 
-    private native int isResolvedInvokeHandleInPool(HotSpotConstantPool constantPool, long constantPoolPointer, int cpi);
+    private native int isResolvedInvokeHandleInPool(HotSpotConstantPool constantPool, long constantPoolPointer, int cpi, int opcode);
 
     /**
      * Gets the list of type names (in the format of {@link JavaType#getName()}) denoting the
@@ -596,11 +610,11 @@ final class CompilerToVM {
      *              Otherwise, it's treated as a constant pool cache index
      *              for INVOKE{VIRTUAL,SPECIAL,STATIC,INTERFACE}.
      */
-    HotSpotObjectConstantImpl lookupAppendixInPool(HotSpotConstantPool constantPool, int which) {
-        return lookupAppendixInPool(constantPool, constantPool.getConstantPoolPointer(), which);
+    HotSpotObjectConstantImpl lookupAppendixInPool(HotSpotConstantPool constantPool, int which, int opcode) {
+        return lookupAppendixInPool(constantPool, constantPool.getConstantPoolPointer(), which, opcode);
     }
 
-    private native HotSpotObjectConstantImpl lookupAppendixInPool(HotSpotConstantPool constantPool, long constantPoolPointer, int which);
+    private native HotSpotObjectConstantImpl lookupAppendixInPool(HotSpotConstantPool constantPool, long constantPoolPointer, int which, int opcode);
 
     /**
      * Installs the result of a compilation into the code cache.
@@ -639,6 +653,8 @@ final class CompilerToVM {
                     InstalledCode code,
                     long failedSpeculationsAddress,
                     byte[] speculations);
+
+    native String getInvalidationReasonDescription(int invalidationReason);
 
     /**
      * Gets flags specifying optional parts of code info. Only if a flag is set, will the
@@ -828,7 +844,7 @@ final class CompilerToVM {
      * {@code nmethod} associated with {@code nmethodMirror} is also made non-entrant and if
      * {@code deoptimize == true} any current activations of the {@code nmethod} are deoptimized.
      */
-    native void invalidateHotSpotNmethod(HotSpotNmethod nmethodMirror, boolean deoptimize);
+    native void invalidateHotSpotNmethod(HotSpotNmethod nmethodMirror, boolean deoptimize, int invalidationReason);
 
     /**
      * Collects the current values of all JVMCI benchmark counters, summed up over all threads.
@@ -1144,13 +1160,23 @@ final class CompilerToVM {
     native ResolvedJavaMethod[] getDeclaredConstructors(HotSpotResolvedObjectTypeImpl klass, long klassPointer);
 
     /**
-     * Gets the {@link ResolvedJavaMethod}s for all the non-constructor methods of {@code klass}.
+     * Gets the {@link ResolvedJavaMethod}s for all non-overpass and non-initializer
+     * methods of {@code klass}.
      */
     ResolvedJavaMethod[] getDeclaredMethods(HotSpotResolvedObjectTypeImpl klass) {
         return getDeclaredMethods(klass, klass.getKlassPointer());
     }
 
     native ResolvedJavaMethod[] getDeclaredMethods(HotSpotResolvedObjectTypeImpl klass, long klassPointer);
+
+    /**
+     * Gets the {@link ResolvedJavaMethod}s for all methods of {@code klass}.
+     */
+    ResolvedJavaMethod[] getAllMethods(HotSpotResolvedObjectTypeImpl klass) {
+        return getAllMethods(klass, klass.getKlassPointer());
+    }
+
+    native ResolvedJavaMethod[] getAllMethods(HotSpotResolvedObjectTypeImpl klass, long klassPointer);
 
     HotSpotResolvedObjectTypeImpl.FieldInfo[] getDeclaredFieldsInfo(HotSpotResolvedObjectTypeImpl klass) {
         return getDeclaredFieldsInfo(klass, klass.getKlassPointer());
@@ -1510,4 +1536,23 @@ final class CompilerToVM {
     }
 
     native void getOopMapAt(HotSpotResolvedJavaMethodImpl method, long methodPointer, int bci, long[] oopMap);
+
+    /**
+     * If the current thread is a CompilerThread associated with a JVMCI compiler where
+     * newState != CompilerThread::_can_call_java, then _can_call_java is set to newState.
+     *
+     * @returns false if no change was made, otherwise true
+     */
+    native boolean updateCompilerThreadCanCallJava(boolean newState);
+
+    /**
+     * Returns the current {@code CompileBroker} compilation activity mode which is one of:
+     * {@code stop_compilation = 0}, {@code run_compilation = 1} or {@code shutdown_compilation = 2}
+     */
+    native int getCompilationActivityMode();
+
+    /**
+     * Returns whether the current thread is a CompilerThread.
+     */
+    native boolean isCompilerThread();
 }

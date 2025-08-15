@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2022, Red Hat, Inc. All rights reserved.
  * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
- * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,22 +24,24 @@
  *
  */
 
-#include "precompiled.hpp"
 #include "memory/allocation.hpp"
 #include "oops/markWord.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/globals.hpp"
+#include "runtime/javaThread.inline.hpp"
 #include "runtime/lockStack.inline.hpp"
 #include "runtime/objectMonitor.inline.hpp"
 #include "runtime/safepoint.hpp"
 #include "runtime/stackWatermark.hpp"
 #include "runtime/stackWatermarkSet.inline.hpp"
+#include "runtime/synchronizer.inline.hpp"
 #include "runtime/thread.hpp"
 #include "utilities/copy.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/growableArray.hpp"
 #include "utilities/ostream.hpp"
+#include "utilities/sizes.hpp"
 
 #include <type_traits>
 
@@ -103,60 +105,6 @@ void LockStack::verify(const char* msg) const {
 }
 #endif
 
-#ifdef ASSERT
-void LockStack::verify_consistent_lock_order(GrowableArray<oop>& lock_order, bool leaf_frame) const {
-  int top_index = to_index(_top);
-  int lock_index = lock_order.length();
-
-  if (!leaf_frame) {
-    // If the lock_order is not from the leaf frame we must search
-    // for the top_index which fits with the most recent fast_locked
-    // objects in the lock stack.
-    while (lock_index-- > 0) {
-      const oop obj = lock_order.at(lock_index);
-      if (contains(obj)) {
-        for (int index = 0; index < top_index; index++) {
-          if (_base[index] == obj) {
-            // Found top index
-            top_index = index + 1;
-            break;
-          }
-        }
-
-        if (VM_Version::supports_recursive_lightweight_locking()) {
-          // With recursive looks there may be more of the same object
-          while (lock_index-- > 0 && lock_order.at(lock_index) == obj) {
-            top_index++;
-          }
-          assert(top_index <= to_index(_top), "too many obj in lock_order");
-        }
-
-        break;
-      }
-    }
-
-    lock_index = lock_order.length();
-  }
-
-  while (lock_index-- > 0) {
-    const oop obj = lock_order.at(lock_index);
-    const markWord mark = obj->mark_acquire();
-    assert(obj->is_locked(), "must be locked");
-    if (top_index > 0 && obj == _base[top_index - 1]) {
-      assert(mark.is_fast_locked() || mark.monitor()->is_owner_anonymous(),
-             "must be fast_locked or inflated by other thread");
-      top_index--;
-    } else {
-      assert(!mark.is_fast_locked(), "must be inflated");
-      assert(mark.monitor()->owner_raw() == get_thread() ||
-             (!leaf_frame && get_thread()->current_waiting_monitor() == mark.monitor()),
-             "must be owned by (or waited on by) thread");
-      assert(!contains(obj), "must not be on lock_stack");
-    }
-  }
-}
-#endif
-
 void LockStack::print_on(outputStream* st) {
   for (int i = to_index(_top); (--i) >= 0;) {
     st->print("LockStack[%d]: ", i);
@@ -167,4 +115,12 @@ void LockStack::print_on(outputStream* st) {
       st->print_cr("not an oop: " PTR_FORMAT, p2i(o));
     }
   }
+}
+
+OMCache::OMCache(JavaThread* jt) : _entries() {
+  STATIC_ASSERT(std::is_standard_layout<OMCache>::value);
+  STATIC_ASSERT(std::is_standard_layout<OMCache::OMCacheEntry>::value);
+  STATIC_ASSERT(offsetof(OMCache, _null_sentinel) == offsetof(OMCache, _entries) +
+                offsetof(OMCache::OMCacheEntry, _oop) +
+                OMCache::CAPACITY * in_bytes(oop_to_oop_difference()));
 }

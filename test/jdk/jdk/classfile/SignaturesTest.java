@@ -24,7 +24,7 @@
 /*
  * @test
  * @summary Testing Signatures.
- * @bug 8321540 8319463
+ * @bug 8321540 8319463 8357955
  * @run junit SignaturesTest
  */
 import java.io.IOException;
@@ -133,7 +133,7 @@ class SignaturesTest {
                 .filter(p -> Files.isRegularFile(p) && p.toString().endsWith(".class")).forEach(path -> {
             try {
                 var cm = ClassFile.of().parse(path);
-                cm.findAttribute(Attributes.SIGNATURE).ifPresent(csig -> {
+                cm.findAttribute(Attributes.signature()).ifPresent(csig -> {
                     assertEquals(
                             ClassSignature.parseFrom(csig.signature().stringValue()).signatureString(),
                             csig.signature().stringValue(),
@@ -141,7 +141,7 @@ class SignaturesTest {
                     csc.incrementAndGet();
                 });
                 for (var m : cm.methods()) {
-                    m.findAttribute(Attributes.SIGNATURE).ifPresent(msig -> {
+                    m.findAttribute(Attributes.signature()).ifPresent(msig -> {
                         assertEquals(
                                 MethodSignature.parseFrom(msig.signature().stringValue()).signatureString(),
                                 msig.signature().stringValue(),
@@ -150,7 +150,7 @@ class SignaturesTest {
                     });
                 }
                 for (var f : cm.fields()) {
-                    f.findAttribute(Attributes.SIGNATURE).ifPresent(fsig -> {
+                    f.findAttribute(Attributes.signature()).ifPresent(fsig -> {
                         assertEquals(
                                 Signature.parseFrom(fsig.signature().stringValue()).signatureString(),
                                 fsig.signature().stringValue(),
@@ -158,8 +158,8 @@ class SignaturesTest {
                         fsc.incrementAndGet();
                     });
                 }
-                cm.findAttribute(Attributes.RECORD).ifPresent(reca
-                        -> reca.components().forEach(rc -> rc.findAttribute(Attributes.SIGNATURE).ifPresent(rsig -> {
+                cm.findAttribute(Attributes.record()).ifPresent(reca
+                        -> reca.components().forEach(rc -> rc.findAttribute(Attributes.signature()).ifPresent(rsig -> {
                     assertEquals(
                             Signature.parseFrom(rsig.signature().stringValue()).signatureString(),
                             rsig.signature().stringValue(),
@@ -182,10 +182,11 @@ class SignaturesTest {
     @Test
     void testClassSignatureClassDesc() throws IOException {
         var observerCf = ClassFile.of().parse(Path.of(System.getProperty("test.classes"), "SignaturesTest$Observer.class"));
-        var sig = observerCf.findAttribute(Attributes.SIGNATURE).orElseThrow().asClassSignature();
-        var innerSig = (ClassTypeSig) sig.superclassSignature() // ArrayList
-                .typeArgs().getFirst() // Outer<String>.Inner<Long>
-                .boundType().orElseThrow(); // assert it's exact bound
+        var sig = observerCf.findAttribute(Attributes.signature()).orElseThrow().asClassSignature();
+        var arrayListSig = sig.superclassSignature(); // ArrayList
+        var arrayListTypeArg = (TypeArg.Bounded) arrayListSig.typeArgs().getFirst(); // Outer<String>.Inner<Long>
+        assertEquals(TypeArg.Bounded.WildcardIndicator.NONE, arrayListTypeArg.wildcardIndicator());
+        var innerSig = (ClassTypeSig) arrayListTypeArg.boundType();
         assertEquals("Inner", innerSig.className(), "simple name in signature");
         assertEquals(Outer.Inner.class.describeConstable().orElseThrow(), innerSig.classDesc(),
                 "ClassDesc derived from signature");
@@ -297,6 +298,20 @@ class SignaturesTest {
         <T::LA>()V
         (TT;I)VI
         """.lines().forEach(assertThrows(MethodSignature::parseFrom));
+    }
+
+    @Test
+    void testArraySignatureLimits() {
+        var sig = Signature.parseFrom("I");
+        var arrSig = Signature.parseFrom("[I");
+        for (int dim : List.of(256, -1, 0))
+            Assertions.assertThrows(IllegalArgumentException.class, () -> Signature.ArrayTypeSig.of(dim, sig));
+        for (int dim : List.of(255, -1, 0))
+            Assertions.assertThrows(IllegalArgumentException.class, () -> Signature.ArrayTypeSig.of(dim, arrSig));
+        for (int dim : List.of(255, 1))
+            Signature.ArrayTypeSig.of(dim, sig);
+        for (int dim : List.of(254, 1))
+            Signature.ArrayTypeSig.of(dim, arrSig);
     }
 
     private Consumer<String> assertThrows(Function<String, ?> parser) {

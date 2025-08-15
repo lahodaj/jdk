@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,10 +25,12 @@ package sun.jvm.hotspot.code;
 import sun.jvm.hotspot.compiler.ImmutableOopMap;
 import sun.jvm.hotspot.compiler.ImmutableOopMapSet;
 import sun.jvm.hotspot.debugger.Address;
+import sun.jvm.hotspot.oops.CIntField;
 import sun.jvm.hotspot.runtime.VM;
 import sun.jvm.hotspot.runtime.VMObject;
 import sun.jvm.hotspot.types.AddressField;
 import sun.jvm.hotspot.types.CIntegerField;
+import sun.jvm.hotspot.types.JShortField;
 import sun.jvm.hotspot.types.Type;
 import sun.jvm.hotspot.types.TypeDataBase;
 import sun.jvm.hotspot.utilities.Assert;
@@ -41,39 +43,51 @@ import sun.jvm.hotspot.utilities.Observer;
 public class CodeBlob extends VMObject {
   private static AddressField nameField;
   private static CIntegerField sizeField;
-  private static CIntegerField headerSizeField;
+  private static CIntegerField kindField;
   private static CIntegerField relocationSizeField;
+  private static CIntField     headerSizeField;
   private static CIntegerField contentOffsetField;
   private static CIntegerField codeOffsetField;
-  private static CIntegerField frameCompleteOffsetField;
+  private static CIntField     frameCompleteOffsetField;
   private static CIntegerField dataOffsetField;
   private static CIntegerField frameSizeField;
   private static AddressField  oopMapsField;
+  private static AddressField  mutableDataField;
+  private static CIntegerField mutableDataSizeField;
+  private static CIntegerField callerMustGCArgumentsField;
+
+  // Kinds of CodeBlobs that we need to know about.
+  private static int NMethodKind;
+  private static int RuntimeStubKind;
+  private static int UpcallKind;
+
+  private static Class[] wrapperClasses;
 
   public CodeBlob(Address addr) {
     super(addr);
   }
-
-  protected static       int     matcherInterpreterFramePointerReg;
 
   private static void initialize(TypeDataBase db) {
     Type type = db.lookupType("CodeBlob");
 
     nameField                = type.getAddressField("_name");
     sizeField                = type.getCIntegerField("_size");
-    headerSizeField          = type.getCIntegerField("_header_size");
+    kindField                = type.getCIntegerField("_kind");
     relocationSizeField      = type.getCIntegerField("_relocation_size");
+    headerSizeField          = new CIntField(type.getCIntegerField("_header_size"), 0);
     contentOffsetField       = type.getCIntegerField("_content_offset");
     codeOffsetField          = type.getCIntegerField("_code_offset");
-    frameCompleteOffsetField = type.getCIntegerField("_frame_complete_offset");
+    frameCompleteOffsetField = new CIntField(type.getCIntegerField("_frame_complete_offset"), 0);
     dataOffsetField          = type.getCIntegerField("_data_offset");
     frameSizeField           = type.getCIntegerField("_frame_size");
     oopMapsField             = type.getAddressField("_oop_maps");
+    callerMustGCArgumentsField = type.getCIntegerField("_caller_must_gc_arguments");
+    mutableDataField         = type.getAddressField("_mutable_data");
+    mutableDataSizeField     = type.getCIntegerField("_mutable_data_size");
 
-    if (VM.getVM().isServerCompiler()) {
-      matcherInterpreterFramePointerReg =
-          db.lookupIntConstant("Matcher::interpreter_frame_pointer_reg").intValue();
-    }
+    NMethodKind        = db.lookupIntConstant("CodeBlobKind::Nmethod").intValue();
+    RuntimeStubKind    = db.lookupIntConstant("CodeBlobKind::RuntimeStub").intValue();
+    UpcallKind         = db.lookupIntConstant("CodeBlobKind::Upcall").intValue();
   }
 
   static {
@@ -82,6 +96,20 @@ public class CodeBlob extends VMObject {
         initialize(VM.getVM().getTypeDataBase());
       }
     });
+  }
+
+  public static Class<?> getClassFor(Address addr) {
+      CodeBlob cb = new CodeBlob(addr);
+      int kind = cb.getKind();
+      if (kind == NMethodKind) {
+          return NMethod.class;
+      } else if (kind == UpcallKind) {
+          return UpcallStub.class;
+      } else {
+          // All other CodeBlob kinds have no special functionality in SA and can be
+          // represented by the generic CodeBlob class.
+          return CodeBlob.class;
+      }
   }
 
   public Address headerBegin()    { return getAddress(); }
@@ -103,7 +131,7 @@ public class CodeBlob extends VMObject {
   // Offsets
   public int getContentOffset()   { return (int) contentOffsetField.getValue(addr); }
 
-  public int getCodeOffset()      { return (int) codeOffsetField   .getValue(addr); }
+  public int getCodeOffset()      { return (int) codeOffsetField.getValue(addr); }
 
   public long getFrameCompleteOffset() { return frameCompleteOffsetField.getValue(addr); }
 
@@ -114,6 +142,15 @@ public class CodeBlob extends VMObject {
 
   public int getHeaderSize()      { return (int) headerSizeField.getValue(addr); }
 
+
+  // Mutable data
+  public int getMutableDataSize()   { return (int) mutableDataSizeField.getValue(addr); }
+
+  public Address mutableDataBegin() { return mutableDataField.getValue(addr); }
+
+  public Address mutableDataEnd()   { return mutableDataBegin().addOffsetTo(getMutableDataSize());  }
+
+
   public long getFrameSizeWords() {
     return (int) frameSizeField.getValue(addr);
   }
@@ -122,8 +159,11 @@ public class CodeBlob extends VMObject {
     return CStringUtilities.getString(nameField.getValue(addr));
   }
 
-  /** OopMap for frame; can return null if none available */
+  public int getKind() {
+    return (int) kindField.getValue(addr);
+  }
 
+  /** OopMap for frame; can return null if none available */
   public ImmutableOopMapSet getOopMaps() {
     Address value = oopMapsField.getValue(addr);
     if (value == null) {
@@ -134,43 +174,29 @@ public class CodeBlob extends VMObject {
 
 
   // Typing
-  public boolean isBufferBlob()         { return false; }
+  public boolean isNMethod()            { return getKind() == NMethodKind; }
 
-  public boolean isCompiled()           { return false; }
+  public boolean isRuntimeStub()        { return getKind() == RuntimeStubKind; }
 
-  public boolean isNMethod()            { return false; }
+  public boolean isUpcallStub()         { return getKind() == UpcallKind; }
 
-  public boolean isRuntimeStub()        { return false; }
-
-  public boolean isDeoptimizationStub() { return false; }
-
-  public boolean isUncommonTrapStub()   { return false; }
-
-  public boolean isExceptionStub()      { return false; }
-
-  public boolean isSafepointStub()      { return false; }
-
-  public boolean isAdapterBlob()        { return false; }
-
-  // Fine grain nmethod support: isNmethod() == isJavaMethod() || isNativeMethod() || isOSRMethod()
   public boolean isJavaMethod()         { return false; }
 
   public boolean isNativeMethod()       { return false; }
 
-  /** On-Stack Replacement method */
-  public boolean isOSRMethod()          { return false; }
 
   public NMethod asNMethodOrNull() {
     if (isNMethod()) return (NMethod)this;
     return null;
   }
 
-  // FIXME: add getRelocationSize()
   public int getContentSize()      { return (int) contentEnd().minus(contentBegin()); }
 
   public int getCodeSize()         { return (int) codeEnd()   .minus(codeBegin());    }
 
   public int getDataSize()         { return (int) dataEnd()   .minus(dataBegin());    }
+
+  public int getRelocationSize()   { return (int) relocationSizeField.getValue(addr); }
 
   // Containment
   public boolean blobContains(Address addr)    { return headerBegin() .lessThanOrEqual(addr) && dataEnd()   .greaterThan(addr); }
@@ -200,7 +226,9 @@ public class CodeBlob extends VMObject {
   }
 
   // Returns true, if the next frame is responsible for GC'ing oops passed as arguments
-  public boolean callerMustGCArguments() { return false; }
+  public boolean callerMustGCArguments() {
+    return callerMustGCArgumentsField.getValue(addr) != 0;
+  }
 
   public void print() {
     printOn(System.out);

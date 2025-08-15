@@ -425,7 +425,8 @@ public interface TreeVisitor<R,P> {
      * @param node the node being visited
      * @param p a parameter value
      * @return a result value
-     * @since 12
+     *
+     * @since 14
      */
     R visitSwitchExpression(SwitchExpressionTree node, P p);
 
@@ -620,7 +621,8 @@ public interface TreeVisitor<R,P> {
      * @param node the node being visited
      * @param p a parameter value
      * @return a result value
-     * @since 13
+     *
+     * @since 14
      */
     R visitYield(YieldTree node, P p);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2025, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2020, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -30,6 +30,10 @@
 #include "runtime/abstract_vm_version.hpp"
 #include "utilities/sizes.hpp"
 
+class stringStream;
+
+#define BIT_MASK(flag) (1ULL<<(flag))
+
 class VM_Version : public Abstract_VM_Version {
   friend class VMStructs;
   friend class JVMCIVMStructs;
@@ -46,6 +50,7 @@ protected:
   static int _dcache_line_size;
   static int _icache_line_size;
   static int _initial_sve_vector_length;
+  static int _max_supported_sve_vector_length;
   static bool _rop_protection;
   static uintptr_t _pac_mask;
 
@@ -64,6 +69,8 @@ public:
   // Initialization
   static void initialize();
   static void check_virtualizations();
+
+  static void insert_features_names(uint64_t features, stringStream& ss);
 
   static void print_platform_virtualization_info(outputStream*);
 
@@ -124,10 +131,13 @@ enum Ampere_CPU_Model {
     decl(SHA2,          sha256,        6)     \
     decl(CRC32,         crc32,         7)     \
     decl(LSE,           lse,           8)     \
+    decl(FPHP,          fphp,          9)     \
+    decl(ASIMDHP,       asimdhp,       10)    \
     decl(DCPOP,         dcpop,         16)    \
     decl(SHA3,          sha3,          17)    \
     decl(SHA512,        sha512,        21)    \
     decl(SVE,           sve,           22)    \
+    decl(SB,            sb,            29)    \
     decl(PACA,          paca,          30)    \
     /* flags above must follow Linux HWCAP */ \
     decl(SVEBITPERM,    svebitperm,    27)    \
@@ -135,16 +145,31 @@ enum Ampere_CPU_Model {
     decl(A53MAC,        a53mac,        31)
 
   enum Feature_Flag {
-#define DECLARE_CPU_FEATURE_FLAG(id, name, bit) CPU_##id = (1 << bit),
+#define DECLARE_CPU_FEATURE_FLAG(id, name, bit) CPU_##id = bit,
     CPU_FEATURE_FLAGS(DECLARE_CPU_FEATURE_FLAG)
 #undef DECLARE_CPU_FEATURE_FLAG
+    MAX_CPU_FEATURES
   };
+
+  STATIC_ASSERT(sizeof(_features) * BitsPerByte >= MAX_CPU_FEATURES);
+
+  static const char* _features_names[MAX_CPU_FEATURES];
 
   // Feature identification
 #define CPU_FEATURE_DETECTION(id, name, bit) \
-  static bool supports_##name() { return (_features & CPU_##id) != 0; };
+  static bool supports_##name() { return supports_feature(CPU_##id); }
   CPU_FEATURE_FLAGS(CPU_FEATURE_DETECTION)
 #undef CPU_FEATURE_DETECTION
+
+  static void set_feature(Feature_Flag flag) {
+    _features |= BIT_MASK(flag);
+  }
+  static void clear_feature(Feature_Flag flag) {
+    _features &= (~BIT_MASK(flag));
+  }
+  static bool supports_feature(Feature_Flag flag) {
+    return (_features & BIT_MASK(flag)) != 0;
+  }
 
   static int cpu_family()                     { return _cpu; }
   static int cpu_model()                      { return _model; }
@@ -164,7 +189,8 @@ enum Ampere_CPU_Model {
 
   static int icache_line_size() { return _icache_line_size; }
   static int dcache_line_size() { return _dcache_line_size; }
-  static int get_initial_sve_vector_length()  { return _initial_sve_vector_length; };
+  static int get_initial_sve_vector_length()        { return _initial_sve_vector_length; };
+  static int get_max_supported_sve_vector_length()  { return _max_supported_sve_vector_length; };
 
   // Aarch64 supports fast class initialization checks
   static bool supports_fast_class_init_checks() { return true; }

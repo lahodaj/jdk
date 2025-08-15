@@ -30,7 +30,6 @@
 #include "memory/iterator.hpp"
 #include "oops/markWord.hpp"
 
-class HeapRegion;
 class G1CollectedHeap;
 class G1RemSet;
 class G1ConcurrentMark;
@@ -108,6 +107,10 @@ public:
   void set_ref_discoverer(ReferenceDiscoverer* rd) {
     set_ref_discoverer_internal(rd);
   }
+
+#ifdef ASSERT
+  bool skip_card_enqueue_set() const { return _skip_card_enqueue != Uninitialized; }
+#endif
 };
 
 // RAII object to properly set the _skip_card_enqueue field in G1ScanEvacuatedObjClosure.

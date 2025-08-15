@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -303,6 +303,16 @@ public class TreeInfo {
         }
     }
 
+    /**
+     * Is the given method invocation an invocation of this(...) or super(...)?
+     */
+    public static boolean isConstructorCall(JCMethodInvocation invoke) {
+        Name name = TreeInfo.name(invoke.meth);
+        Names names = name.table.names;
+
+        return (name == names._this || name == names._super);
+    }
+
     /** Finds super() invocations and translates them using the given mapping.
      */
     public static void mapSuperCalls(JCBlock block, Function<? super JCExpressionStatement, ? extends JCStatement> mapper) {
@@ -334,11 +344,13 @@ public class TreeInfo {
         @Override
         public void visitClassDef(JCClassDecl tree) {
             // don't descend any further
+            result = tree;
         }
 
         @Override
         public void visitLambda(JCLambda tree) {
             // don't descend any further
+            result = tree;
         }
     }
 
@@ -478,13 +490,6 @@ public class TreeInfo {
         return (docComments == null) ? null : docComments.getCommentText(tree);
     }
 
-    public static DCTree.DCDocComment getCommentTree(Env<?> env, JCTree tree) {
-        DocCommentTable docComments = (tree.hasTag(JCTree.Tag.TOPLEVEL))
-                ? ((JCCompilationUnit) tree).docComments
-                : env.toplevel.docComments;
-        return (docComments == null) ? null : docComments.getCommentTree(tree);
-    }
-
     /** The position of the first statement in a block, or the position of
      *  the block itself if it is empty.
      */
@@ -495,12 +500,12 @@ public class TreeInfo {
             return tree.pos;
     }
 
-    /** The end position of given tree, if it is a block with
-     *  defined endpos.
+    /** The closing brace position of given tree, if it is a block with
+     *  defined bracePos.
      */
     public static int endPos(JCTree tree) {
-        if (tree.hasTag(BLOCK) && ((JCBlock) tree).endpos != Position.NOPOS)
-            return ((JCBlock) tree).endpos;
+        if (tree.hasTag(BLOCK) && ((JCBlock) tree).bracePos != Position.NOPOS)
+            return ((JCBlock) tree).bracePos;
         else if (tree.hasTag(SYNCHRONIZED))
             return endPos(((JCSynchronized) tree).body);
         else if (tree.hasTag(TRY)) {
@@ -508,11 +513,11 @@ public class TreeInfo {
             return endPos((t.finalizer != null) ? t.finalizer
                           : (t.catchers.nonEmpty() ? t.catchers.last().body : t.body));
         } else if (tree.hasTag(SWITCH) &&
-                   ((JCSwitch) tree).endpos != Position.NOPOS) {
-            return ((JCSwitch) tree).endpos;
+                   ((JCSwitch) tree).bracePos != Position.NOPOS) {
+            return ((JCSwitch) tree).bracePos;
         } else if (tree.hasTag(SWITCH_EXPRESSION) &&
-                   ((JCSwitchExpression) tree).endpos != Position.NOPOS) {
-            return ((JCSwitchExpression) tree).endpos;
+                   ((JCSwitchExpression) tree).bracePos != Position.NOPOS) {
+            return ((JCSwitchExpression) tree).bracePos;
         } else
             return tree.pos;
     }
@@ -645,11 +650,6 @@ public class TreeInfo {
         if (tree == null)
             return Position.NOPOS;
 
-        if (endPosTable == null) {
-            // fall back on limited info in the tree
-            return endPos(tree);
-        }
-
         int mapPos = endPosTable.getEndPos(tree);
         if (mapPos != Position.NOPOS)
             return mapPos;
@@ -730,8 +730,8 @@ public class TreeInfo {
 
 
     /** A DiagnosticPosition with the preferred position set to the
-     *  end position of given tree, if it is a block with
-     *  defined endpos.
+     *  closing brace position of given tree, if it is a block with
+     *  defined closing brace position.
      */
     public static DiagnosticPosition diagEndPos(final JCTree tree) {
         final int endPos = TreeInfo.endPos(tree);

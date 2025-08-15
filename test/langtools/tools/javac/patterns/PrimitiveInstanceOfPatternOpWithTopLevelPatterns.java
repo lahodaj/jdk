@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,7 @@
 
 /*
  * @test
- * @bug 8304487 8325257
+ * @bug 8304487 8325257 8327683 8330387 8357185
  * @summary Compiler Implementation for Primitive types in patterns, instanceof, and switch (Preview)
  * @enablePreview
  * @compile PrimitiveInstanceOfPatternOpWithTopLevelPatterns.java
@@ -44,6 +44,7 @@ public class PrimitiveInstanceOfPatternOpWithTopLevelPatterns {
         assertEquals(true,  unboxingWithObject());
         assertEquals(true,  wideningReferenceConversionUnboxing(42));
         assertEquals(true,  wideningReferenceConversionUnboxing2(Byte.valueOf((byte) 42)));
+        assertEquals(true,  wideningReferenceConversionUnboxing3(0x1000000));
         assertEquals(true,  wideningReferenceConversionUnboxingAndWideningPrimitive(42));
         assertEquals(true,  unboxingAndWideningPrimitiveExact());
         assertEquals(false, unboxingAndWideningPrimitiveNotExact());
@@ -51,6 +52,7 @@ public class PrimitiveInstanceOfPatternOpWithTopLevelPatterns {
         assertEquals(true,  narrowingAndUnboxing());
         assertEquals(true,  patternExtractRecordComponent());
         assertEquals(true,  exprMethod());
+        assertEquals(true,  exprMethodSideEffect());
         assertEquals(true,  exprStaticallyQualified());
     }
 
@@ -121,6 +123,10 @@ public class PrimitiveInstanceOfPatternOpWithTopLevelPatterns {
         return i instanceof byte bb;
     }
 
+    public static <T extends Integer> boolean wideningReferenceConversionUnboxing3(T i) {
+        return i instanceof float ff;
+    }
+
     public static <T extends Integer> boolean wideningReferenceConversionUnboxingAndWideningPrimitive(T i) {
         return i instanceof double ii;
     }
@@ -166,6 +172,13 @@ public class PrimitiveInstanceOfPatternOpWithTopLevelPatterns {
     public static int meth() {return 42;}
     public static boolean exprMethod() {
         return meth() instanceof int ii;
+    }
+
+    static int sideEffect;
+    public static Integer methSideEffect() { sideEffect++; return 42;}
+    public static boolean exprMethodSideEffect() {
+        sideEffect = 5;
+        return methSideEffect() instanceof int ii && sideEffect == 6;
     }
 
     public class A1 {

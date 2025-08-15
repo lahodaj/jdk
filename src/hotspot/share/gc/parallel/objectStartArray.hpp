@@ -42,7 +42,7 @@ class ObjectStartArray : public CHeapObj<mtGC> {
   DEBUG_ONLY(MemRegion  _covered_region;)
 
   // BOT array
-  PSVirtualSpace  _virtual_space;
+  PSVirtualSpace* _virtual_space;
 
   // Biased array-start of BOT array for fast heap-addr / BOT entry translation
   uint8_t*        _offset_base;
@@ -57,7 +57,8 @@ class ObjectStartArray : public CHeapObj<mtGC> {
 
   // Mapping from object start array entry to address of first word
   HeapWord* addr_for_entry(const uint8_t* const p) const {
-    size_t delta = pointer_delta(p, _offset_base, sizeof(uint8_t));
+    // _offset_base can be "negative", so can't use pointer_delta().
+    size_t delta = p - _offset_base;
     HeapWord* result = (HeapWord*) (delta << CardTable::card_shift());
     assert(_covered_region.contains(result),
            "out of bounds accessor from card marking array");
@@ -73,7 +74,7 @@ class ObjectStartArray : public CHeapObj<mtGC> {
   void verify_for_block(HeapWord* blk_start, HeapWord* blk_end) const;
 
  public:
-  void initialize(MemRegion reserved_region);
+  ObjectStartArray(MemRegion covered_region);
 
   // Heap old-gen resizing
   void set_covered_region(MemRegion mr);

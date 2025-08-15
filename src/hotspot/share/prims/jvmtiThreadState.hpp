@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -77,16 +77,17 @@ class JvmtiEnvThreadStateIterator : public StackObj {
 //
 // Virtual Thread Mount State Transition (VTMS transition) mechanism
 //
-class JvmtiVTMSTransitionDisabler {
+class JvmtiVTMSTransitionDisabler : public AnyObj {
  private:
   static volatile int _VTMS_transition_disable_for_one_count; // transitions for one virtual thread are disabled while it is positive
   static volatile int _VTMS_transition_disable_for_all_count; // transitions for all virtual threads are disabled while it is positive
   static volatile bool _SR_mode;                         // there is an active suspender or resumer
-  static volatile int _VTMS_transition_count;            // current number of VTMS transitions
   static volatile int _sync_protocol_enabled_count;      // current number of JvmtiVTMSTransitionDisablers enabled sync protocol
-  static volatile bool _sync_protocol_enabled_permanently; // seen a suspender: JvmtiVTMSTraansitionDisabler protocol is enabled permanently
+  static volatile bool _sync_protocol_enabled_permanently; // seen a suspender: JvmtiVTMSTransitionDisabler protocol is enabled permanently
 
   bool _is_SR;                                           // is suspender or resumer
+  bool _is_virtual;                                      // target thread is virtual
+  bool _is_self;                                         // JvmtiVTMSTransitionDisabler is a no-op for current platform, carrier or virtual thread
   jthread _thread;                                       // virtual thread to disable transitions for, no-op if it is a platform thread
 
   DEBUG_ONLY(static void print_info();)
@@ -99,8 +100,6 @@ class JvmtiVTMSTransitionDisabler {
   static bool _VTMS_notify_jvmti_events;                 // enable notifications from VirtualThread about VTMS events
   static bool VTMS_notify_jvmti_events()             { return _VTMS_notify_jvmti_events; }
   static void set_VTMS_notify_jvmti_events(bool val) { _VTMS_notify_jvmti_events = val; }
-
-  static void set_VTMS_transition_count(bool val)    { _VTMS_transition_count = val; }
 
   static void inc_sync_protocol_enabled_count()      { Atomic::inc(&_sync_protocol_enabled_count); }
   static void dec_sync_protocol_enabled_count()      { Atomic::dec(&_sync_protocol_enabled_count); }
@@ -193,6 +192,8 @@ class JvmtiThreadState : public CHeapObj<mtInternal> {
   bool              _pending_interp_only_mode;
   bool              _pending_step_for_popframe;
   bool              _pending_step_for_earlyret;
+  bool              _top_frame_is_exiting;
+  bool              _saved_interp_only_mode;
   int               _hide_level;
 
  public:
@@ -213,7 +214,6 @@ class JvmtiThreadState : public CHeapObj<mtInternal> {
 
   // This is only valid when is_interp_only_mode() returns true
   int               _cur_stack_depth;
-  int               _saved_interp_only_mode;
 
   JvmtiThreadEventEnable _thread_event_enable;
 
@@ -275,13 +275,14 @@ class JvmtiThreadState : public CHeapObj<mtInternal> {
 
   // Used by the interpreter for fullspeed debugging support
   bool is_interp_only_mode()                {
-    return _thread == nullptr ?  _saved_interp_only_mode != 0 : _thread->is_interp_only_mode();
+    return _thread == nullptr ? _saved_interp_only_mode : _thread->is_interp_only_mode();
   }
   void enter_interp_only_mode();
   void leave_interp_only_mode();
 
   static void unbind_from(JvmtiThreadState* state, JavaThread* thread);
   static void bind_to(JvmtiThreadState* state, JavaThread* thread);
+  static void process_pending_interp_only(JavaThread* current);
 
   // access to the linked list of all JVMTI thread states
   static JvmtiThreadState *first() {
@@ -310,6 +311,8 @@ class JvmtiThreadState : public CHeapObj<mtInternal> {
   // Also used for carrier threads to clear/restore _thread.
   void set_thread(JavaThread* thread);
   oop get_thread_oop();
+
+  void update_thread_oop_during_vm_start();
 
   inline bool is_virtual() { return _is_virtual; } // the _thread is virtual
 
@@ -358,6 +361,11 @@ class JvmtiThreadState : public CHeapObj<mtInternal> {
   void clr_pending_step_for_earlyret() { _pending_step_for_earlyret = false; }
   bool is_pending_step_for_earlyret()  { return _pending_step_for_earlyret;  }
   void process_pending_step_for_earlyret();
+
+  // For synchronization between NotifyFramePop and FramePop posting code.
+  void set_top_frame_is_exiting() { _top_frame_is_exiting = true;  }
+  void clr_top_frame_is_exiting() { _top_frame_is_exiting = false; }
+  bool top_frame_is_exiting()     { return _top_frame_is_exiting;  }
 
   // Setter and getter method is used to send redefined class info
   // when class file load hook event is posted.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -40,7 +40,6 @@ class G1ConcurrentMark;
 class G1EvacFailureRegions;
 class G1EvacInfo;
 class G1GCPhaseTimes;
-class G1HRPrinter;
 class G1MonitoringSupport;
 class G1MonotonicArenaMemoryStats;
 class G1NewTracer;
@@ -69,7 +68,6 @@ class G1YoungCollector {
   STWGCTimer* gc_timer_stw() const;
   G1NewTracer* gc_tracer_stw() const;
 
-  G1HRPrinter* hr_printer() const;
   G1MonitoringSupport* monitoring_support() const;
   G1GCPhaseTimes* phase_times() const;
   G1Policy* policy() const;
@@ -81,6 +79,7 @@ class G1YoungCollector {
   G1YoungGCAllocationFailureInjector* allocation_failure_injector() const;
 
   GCCause::Cause _gc_cause;
+  size_t _allocation_word_size;
 
   bool _concurrent_operation_is_full_mark;
 
@@ -139,7 +138,8 @@ class G1YoungCollector {
   bool evacuation_alloc_failed() const;
 
 public:
-  G1YoungCollector(GCCause::Cause gc_cause);
+  G1YoungCollector(GCCause::Cause gc_cause,
+                   size_t allocation_word_size);
   void collect();
 
   bool concurrent_operation_is_full_mark() const { return _concurrent_operation_is_full_mark; }

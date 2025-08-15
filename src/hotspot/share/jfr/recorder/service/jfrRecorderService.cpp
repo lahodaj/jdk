@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,6 @@
  *
  */
 
-#include "precompiled.hpp"
 #include "jfrfiles/jfrEventClasses.hpp"
 #include "jfr/jni/jfrJavaSupport.hpp"
 #include "jfr/leakprofiler/leakProfiler.hpp"
@@ -368,13 +367,14 @@ static u4 flush_typeset(JfrCheckpointManager& checkpoint_manager, JfrChunkWriter
 class MetadataEvent : public StackObj {
  private:
   JfrChunkWriter& _cw;
+  size_t _elements;
  public:
-  MetadataEvent(JfrChunkWriter& cw) : _cw(cw) {}
+  MetadataEvent(JfrChunkWriter& cw) : _cw(cw), _elements(0) {}
   bool process() {
-    JfrMetadataEvent::write(_cw);
+    _elements = JfrMetadataEvent::write(_cw);
     return true;
   }
-  size_t elements() const { return 1; }
+  size_t elements() const { return _elements; }
 };
 
 typedef WriteContent<MetadataEvent> WriteMetadata;
@@ -393,14 +393,22 @@ static u4 write_metadata(JfrChunkWriter& chunkwriter) {
   return invoke(wm);
 }
 
-template <typename Instance, void(Instance::*func)()>
-class JfrVMOperation : public VM_Operation {
+class JfrSafepointClearVMOperation : public VM_Operation {
  private:
-  Instance& _instance;
+  JfrRecorderService& _instance;
  public:
-  JfrVMOperation(Instance& instance) : _instance(instance) {}
-  void doit() { (_instance.*func)(); }
-  VMOp_Type type() const { return VMOp_JFRCheckpoint; }
+  JfrSafepointClearVMOperation(JfrRecorderService& instance) : _instance(instance) {}
+  void doit() { _instance.safepoint_clear(); }
+  VMOp_Type type() const { return VMOp_JFRSafepointClear; }
+};
+
+class JfrSafepointWriteVMOperation : public VM_Operation {
+ private:
+  JfrRecorderService& _instance;
+ public:
+  JfrSafepointWriteVMOperation(JfrRecorderService& instance) : _instance(instance) {}
+  void doit() { _instance.safepoint_write(); }
+  VMOp_Type type() const { return VMOp_JFRSafepointWrite; }
 };
 
 JfrRecorderService::JfrRecorderService() :
@@ -470,19 +478,19 @@ void JfrRecorderService::pre_safepoint_clear() {
 }
 
 void JfrRecorderService::invoke_safepoint_clear() {
-  JfrVMOperation<JfrRecorderService, &JfrRecorderService::safepoint_clear> safepoint_task(*this);
+  JfrSafepointClearVMOperation op(*this);
   ThreadInVMfromNative transition(JavaThread::current());
-  VMThread::execute(&safepoint_task);
+  VMThread::execute(&op);
 }
 
 void JfrRecorderService::safepoint_clear() {
   assert(SafepointSynchronize::is_at_safepoint(), "invariant");
-  _checkpoint_manager.begin_epoch_shift();
   _storage.clear();
+  _checkpoint_manager.notify_threads();
   _chunkwriter.set_time_stamp();
   JfrDeprecationManager::on_safepoint_clear();
   JfrStackTraceRepository::clear();
-  _checkpoint_manager.end_epoch_shift();
+  _checkpoint_manager.shift_epoch();
 }
 
 void JfrRecorderService::post_safepoint_clear() {
@@ -577,22 +585,21 @@ void JfrRecorderService::pre_safepoint_write() {
 }
 
 void JfrRecorderService::invoke_safepoint_write() {
-  JfrVMOperation<JfrRecorderService, &JfrRecorderService::safepoint_write> safepoint_task(*this);
+  JfrSafepointWriteVMOperation op(*this);
   // can safepoint here
   ThreadInVMfromNative transition(JavaThread::current());
-  VMThread::execute(&safepoint_task);
+  VMThread::execute(&op);
 }
 
 void JfrRecorderService::safepoint_write() {
   assert(SafepointSynchronize::is_at_safepoint(), "invariant");
-  _checkpoint_manager.begin_epoch_shift();
   JfrStackTraceRepository::clear_leak_profiler();
   _checkpoint_manager.on_rotation();
   _storage.write_at_safepoint();
   _chunkwriter.set_time_stamp();
   JfrDeprecationManager::on_safepoint_write();
   write_stacktrace(_stack_trace_repository, _chunkwriter, true);
-  _checkpoint_manager.end_epoch_shift();
+  _checkpoint_manager.shift_epoch();
 }
 
 void JfrRecorderService::post_safepoint_write() {
@@ -639,17 +646,11 @@ static void write_thread_local_buffer(JfrChunkWriter& chunkwriter, Thread* t) {
 
 size_t JfrRecorderService::flush() {
   size_t total_elements = flush_metadata(_chunkwriter);
-  const size_t storage_elements = flush_storage(_storage, _chunkwriter);
-  if (0 == storage_elements) {
-    return total_elements;
-  }
-  total_elements += storage_elements;
+  total_elements += flush_storage(_storage, _chunkwriter);
   if (_string_pool.is_modified()) {
     total_elements += flush_stringpool(_string_pool, _chunkwriter);
   }
-  if (_stack_trace_repository.is_modified()) {
-    total_elements += flush_stacktrace(_stack_trace_repository, _chunkwriter);
-  }
+  total_elements += flush_stacktrace(_stack_trace_repository, _chunkwriter);
   return flush_typeset(_checkpoint_manager, _chunkwriter) + total_elements;
 }
 

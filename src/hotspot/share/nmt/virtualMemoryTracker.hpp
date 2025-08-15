@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,14 +25,28 @@
 #ifndef SHARE_NMT_VIRTUALMEMORYTRACKER_HPP
 #define SHARE_NMT_VIRTUALMEMORYTRACKER_HPP
 
-#include "memory/allocation.hpp"
-#include "memory/metaspace.hpp" // For MetadataType
-#include "memory/metaspaceStats.hpp"
 #include "nmt/allocationSite.hpp"
-#include "nmt/nmtCommon.hpp"
-#include "utilities/linkedlist.hpp"
+#include "nmt/vmatree.hpp"
+#include "nmt/regionsTree.hpp"
+#include "runtime/atomic.hpp"
 #include "utilities/nativeCallStack.hpp"
 #include "utilities/ostream.hpp"
+
+// VirtualMemoryTracker (VMT) is an internal class of the MemTracker.
+// All the Hotspot code use only the MemTracker interface to register the memory operations in NMT.
+// Memory regions can be reserved/committed/uncommitted/released by calling MemTracker API which in turn call the corresponding functions in VMT.
+// VMT uses RegionsTree to hold and manage the memory regions. Each region has two nodes that each one has address of the region (start/end) and
+// state (reserved/released/committed) and MemTag of the regions before and after it.
+//
+// The memory operations of Reserve/Commit/Uncommit/Release are tracked by updating/inserting/deleting the nodes in the tree. When an operation
+// changes nodes in the tree, the summary of the changes is returned back in a SummaryDiff struct. This struct shows that how much reserve/commit amount
+// of any specific MemTag is changed. The summary of every operation is accumulated in VirtualMemorySummary class.
+//
+// Not all operations are valid in VMT. The following predicates are checked before the operation is applied to the tree and/or VirtualMemorySummary:
+//   - committed size of a MemTag should be <= of its reserved size
+//   - uncommitted size of a MemTag should be <= of its committed size
+//   - released size of a MemTag should be <= of its reserved size
+
 
 /*
  * Virtual memory counter
@@ -76,8 +90,8 @@ class VirtualMemory {
 class VirtualMemoryAllocationSite : public AllocationSite {
   VirtualMemory _c;
  public:
-  VirtualMemoryAllocationSite(const NativeCallStack& stack, MEMFLAGS flag) :
-    AllocationSite(stack, flag) { }
+  VirtualMemoryAllocationSite(const NativeCallStack& stack, MemTag mem_tag) :
+    AllocationSite(stack, mem_tag) { }
 
   inline void reserve_memory(size_t sz)  { _c.reserve_memory(sz);  }
   inline void commit_memory (size_t sz)  { _c.commit_memory(sz);   }
@@ -94,22 +108,22 @@ class VirtualMemorySnapshot : public ResourceObj {
   friend class VirtualMemorySummary;
 
  private:
-  VirtualMemory  _virtual_memory[mt_number_of_types];
+  VirtualMemory  _virtual_memory[mt_number_of_tags];
 
  public:
-  inline VirtualMemory* by_type(MEMFLAGS flag) {
-    int index = NMTUtil::flag_to_index(flag);
+  inline VirtualMemory* by_tag(MemTag mem_tag) {
+    int index = NMTUtil::tag_to_index(mem_tag);
     return &_virtual_memory[index];
   }
 
-  inline const VirtualMemory* by_type(MEMFLAGS flag) const {
-    int index = NMTUtil::flag_to_index(flag);
+  inline const VirtualMemory* by_tag(MemTag mem_tag) const {
+    int index = NMTUtil::tag_to_index(mem_tag);
     return &_virtual_memory[index];
   }
 
   inline size_t total_reserved() const {
     size_t amount = 0;
-    for (int index = 0; index < mt_number_of_types; index ++) {
+    for (int index = 0; index < mt_number_of_tags; index ++) {
       amount += _virtual_memory[index].reserved();
     }
     return amount;
@@ -117,14 +131,14 @@ class VirtualMemorySnapshot : public ResourceObj {
 
   inline size_t total_committed() const {
     size_t amount = 0;
-    for (int index = 0; index < mt_number_of_types; index ++) {
+    for (int index = 0; index < mt_number_of_tags; index ++) {
       amount += _virtual_memory[index].committed();
     }
     return amount;
   }
 
   void copy_to(VirtualMemorySnapshot* s) {
-    for (int index = 0; index < mt_number_of_types; index ++) {
+    for (int index = 0; index < mt_number_of_tags; index ++) {
       s->_virtual_memory[index] = _virtual_memory[index];
     }
   }
@@ -133,34 +147,34 @@ class VirtualMemorySnapshot : public ResourceObj {
 class VirtualMemorySummary : AllStatic {
  public:
 
-  static inline void record_reserved_memory(size_t size, MEMFLAGS flag) {
-    as_snapshot()->by_type(flag)->reserve_memory(size);
+  static inline void record_reserved_memory(size_t size, MemTag mem_tag) {
+    as_snapshot()->by_tag(mem_tag)->reserve_memory(size);
   }
 
-  static inline void record_committed_memory(size_t size, MEMFLAGS flag) {
-    as_snapshot()->by_type(flag)->commit_memory(size);
+  static inline void record_committed_memory(size_t size, MemTag mem_tag) {
+    as_snapshot()->by_tag(mem_tag)->commit_memory(size);
   }
 
-  static inline void record_uncommitted_memory(size_t size, MEMFLAGS flag) {
-    as_snapshot()->by_type(flag)->uncommit_memory(size);
+  static inline void record_uncommitted_memory(size_t size, MemTag mem_tag) {
+    as_snapshot()->by_tag(mem_tag)->uncommit_memory(size);
   }
 
-  static inline void record_released_memory(size_t size, MEMFLAGS flag) {
-    as_snapshot()->by_type(flag)->release_memory(size);
+  static inline void record_released_memory(size_t size, MemTag mem_tag) {
+    as_snapshot()->by_tag(mem_tag)->release_memory(size);
   }
 
-  // Move virtual memory from one memory type to another.
-  // Virtual memory can be reserved before it is associated with a memory type, and tagged
+  // Move virtual memory from one memory tag to another.
+  // Virtual memory can be reserved before it is associated with a memory tag, and tagged
   // as 'unknown'. Once the memory is tagged, the virtual memory will be moved from 'unknown'
-  // type to specified memory type.
-  static inline void move_reserved_memory(MEMFLAGS from, MEMFLAGS to, size_t size) {
-    as_snapshot()->by_type(from)->release_memory(size);
-    as_snapshot()->by_type(to)->reserve_memory(size);
+  // tag to specified memory tag.
+  static inline void move_reserved_memory(MemTag from, MemTag to, size_t size) {
+    as_snapshot()->by_tag(from)->release_memory(size);
+    as_snapshot()->by_tag(to)->reserve_memory(size);
   }
 
-  static inline void move_committed_memory(MEMFLAGS from, MEMFLAGS to, size_t size) {
-    as_snapshot()->by_type(from)->uncommit_memory(size);
-    as_snapshot()->by_type(to)->commit_memory(size);
+  static inline void move_committed_memory(MemTag from, MemTag to, size_t size) {
+    as_snapshot()->by_tag(from)->uncommit_memory(size);
+    as_snapshot()->by_tag(to)->commit_memory(size);
   }
 
   static void snapshot(VirtualMemorySnapshot* s);
@@ -275,136 +289,124 @@ class CommittedMemoryRegion : public VirtualMemoryRegion {
   NativeCallStack  _stack;
 
  public:
-  CommittedMemoryRegion(address addr, size_t size, const NativeCallStack& stack) :
-    VirtualMemoryRegion(addr, size), _stack(stack) { }
+  CommittedMemoryRegion()
+    : VirtualMemoryRegion((address)1, 1), _stack(NativeCallStack::empty_stack()) { }
+
+  CommittedMemoryRegion(address addr, size_t size, const NativeCallStack& stack)
+    : VirtualMemoryRegion(addr, size), _stack(stack) { }
 
   inline void set_call_stack(const NativeCallStack& stack) { _stack = stack; }
   inline const NativeCallStack* call_stack() const         { return &_stack; }
+  bool equals(const ReservedMemoryRegion& other) const;
 };
 
-
-typedef LinkedListIterator<CommittedMemoryRegion> CommittedRegionIterator;
-
-int compare_committed_region(const CommittedMemoryRegion&, const CommittedMemoryRegion&);
 class ReservedMemoryRegion : public VirtualMemoryRegion {
  private:
-  SortedLinkedList<CommittedMemoryRegion, compare_committed_region>
-    _committed_regions;
-
   NativeCallStack  _stack;
-  MEMFLAGS         _flag;
+  MemTag         _mem_tag;
 
  public:
+  bool is_valid() { return base() != (address)1 && size() != 1;}
+
+  ReservedMemoryRegion()
+    : VirtualMemoryRegion((address)1, 1), _stack(NativeCallStack::empty_stack()), _mem_tag(mtNone) { }
+
   ReservedMemoryRegion(address base, size_t size, const NativeCallStack& stack,
-    MEMFLAGS flag = mtNone) :
-    VirtualMemoryRegion(base, size), _stack(stack), _flag(flag) { }
+    MemTag mem_tag = mtNone)
+    : VirtualMemoryRegion(base, size), _stack(stack), _mem_tag(mem_tag) { }
 
 
-  ReservedMemoryRegion(address base, size_t size) :
-    VirtualMemoryRegion(base, size), _stack(NativeCallStack::empty_stack()), _flag(mtNone) { }
+  ReservedMemoryRegion(address base, size_t size)
+    : VirtualMemoryRegion(base, size), _stack(NativeCallStack::empty_stack()), _mem_tag(mtNone) { }
 
   // Copy constructor
-  ReservedMemoryRegion(const ReservedMemoryRegion& rr) :
-    VirtualMemoryRegion(rr.base(), rr.size()) {
+  ReservedMemoryRegion(const ReservedMemoryRegion& rr)
+    : VirtualMemoryRegion(rr.base(), rr.size()) {
     *this = rr;
   }
 
   inline void  set_call_stack(const NativeCallStack& stack) { _stack = stack; }
   inline const NativeCallStack* call_stack() const          { return &_stack;  }
 
-  void  set_flag(MEMFLAGS flag);
-  inline MEMFLAGS flag() const            { return _flag;  }
-
-  // uncommitted thread stack bottom, above guard pages if there is any.
-  address thread_stack_uncommitted_bottom() const;
-
-  bool    add_committed_region(address addr, size_t size, const NativeCallStack& stack);
-  bool    remove_uncommitted_region(address addr, size_t size);
-
-  size_t  committed_size() const;
-
-  // move committed regions that higher than specified address to
-  // the new region
-  void    move_committed_regions(address addr, ReservedMemoryRegion& rgn);
-
-  CommittedRegionIterator iterate_committed_regions() const {
-    return CommittedRegionIterator(_committed_regions.head());
-  }
+  inline MemTag mem_tag() const            { return _mem_tag;  }
 
   ReservedMemoryRegion& operator= (const ReservedMemoryRegion& other) {
     set_base(other.base());
     set_size(other.size());
 
-    _stack =         *other.call_stack();
-    _flag  =         other.flag();
-    _committed_regions.clear();
-
-    CommittedRegionIterator itr = other.iterate_committed_regions();
-    const CommittedMemoryRegion* rgn = itr.next();
-    while (rgn != nullptr) {
-      _committed_regions.add(*rgn);
-      rgn = itr.next();
-    }
+    _stack = *other.call_stack();
+    _mem_tag = other.mem_tag();
 
     return *this;
   }
 
-  const char* flag_name() const { return NMTUtil::flag_to_name(_flag); }
-
- private:
-  // The committed region contains the uncommitted region, subtract the uncommitted
-  // region from this committed region
-  bool remove_uncommitted_region(LinkedListNode<CommittedMemoryRegion>* node,
-    address addr, size_t sz);
-
-  bool add_committed_region(const CommittedMemoryRegion& rgn) {
-    assert(rgn.base() != nullptr, "Invalid base address");
-    assert(size() > 0, "Invalid size");
-    return _committed_regions.add(rgn) != nullptr;
-  }
+  const char* tag_name() const { return NMTUtil::tag_to_name(_mem_tag); }
 };
-
-int compare_reserved_region_base(const ReservedMemoryRegion& r1, const ReservedMemoryRegion& r2);
 
 class VirtualMemoryWalker : public StackObj {
  public:
    virtual bool do_allocation_site(const ReservedMemoryRegion* rgn) { return false; }
 };
 
-// Main class called from MemTracker to track virtual memory allocations, commits and releases.
-class VirtualMemoryTracker : AllStatic {
-  friend class VirtualMemoryTrackerTest;
-  friend class CommittedVirtualMemoryTest;
+
+class VirtualMemoryTracker {
+  RegionsTree _tree;
 
  public:
-  static bool initialize(NMT_TrackingLevel level);
+  VirtualMemoryTracker(bool is_detailed_mode) : _tree(is_detailed_mode) { }
 
-  static bool add_reserved_region (address base_addr, size_t size, const NativeCallStack& stack, MEMFLAGS flag = mtNone);
-
-  static bool add_committed_region      (address base_addr, size_t size, const NativeCallStack& stack);
-  static bool remove_uncommitted_region (address base_addr, size_t size);
-  static bool remove_released_region    (address base_addr, size_t size);
-  static bool remove_released_region    (ReservedMemoryRegion* rgn);
-  static void set_reserved_region_type  (address addr, MEMFLAGS flag);
+  void add_reserved_region       (address base_addr, size_t size, const NativeCallStack& stack, MemTag mem_tag = mtNone);
+  void add_committed_region      (address base_addr, size_t size, const NativeCallStack& stack);
+  void remove_uncommitted_region (address base_addr, size_t size);
+  void remove_released_region    (address base_addr, size_t size);
+  void set_reserved_region_tag   (address addr, size_t size, MemTag mem_tag);
 
   // Given an existing memory mapping registered with NMT, split the mapping in
   //  two. The newly created two mappings will be registered under the call
-  //  stack and the memory flags of the original section.
-  static bool split_reserved_region(address addr, size_t size, size_t split, MEMFLAGS flag, MEMFLAGS split_flag);
+  //  stack and the memory tags of the original section.
+  void split_reserved_region(address addr, size_t size, size_t split, MemTag mem_tag, MemTag split_mem_tag);
 
   // Walk virtual memory data structure for creating baseline, etc.
-  static bool walk_virtual_memory(VirtualMemoryWalker* walker);
+  bool walk_virtual_memory(VirtualMemoryWalker* walker);
 
   // If p is contained within a known memory region, print information about it to the
   // given stream and return true; false otherwise.
-  static bool print_containing_region(const void* p, outputStream* st);
+  bool print_containing_region(const void* p, outputStream* st);
 
   // Snapshot current thread stacks
-  static void snapshot_thread_stacks();
+  void snapshot_thread_stacks();
+  void apply_summary_diff(VMATree::SummaryDiff diff);
+  size_t committed_size(const ReservedMemoryRegion* rmr);
+  address thread_stack_uncommitted_bottom(const ReservedMemoryRegion* rmr);
 
- private:
-  static SortedLinkedList<ReservedMemoryRegion, compare_reserved_region_base>* _reserved_regions;
+  RegionsTree* tree() { return &_tree; }
+
+  class Instance : public AllStatic {
+    friend class VirtualMemoryTrackerTest;
+    friend class CommittedVirtualMemoryTest;
+
+    static VirtualMemoryTracker* _tracker;
+
+   public:
+    using RegionData = VMATree::RegionData;
+    static bool initialize(NMT_TrackingLevel level);
+
+    static void add_reserved_region       (address base_addr, size_t size, const NativeCallStack& stack, MemTag mem_tag = mtNone);
+    static void add_committed_region      (address base_addr, size_t size, const NativeCallStack& stack);
+    static void remove_uncommitted_region (address base_addr, size_t size);
+    static void remove_released_region    (address base_addr, size_t size);
+    static void set_reserved_region_tag   (address addr, size_t size, MemTag mem_tag);
+    static void split_reserved_region(address addr, size_t size, size_t split, MemTag mem_tag, MemTag split_mem_tag);
+    static bool walk_virtual_memory(VirtualMemoryWalker* walker);
+    static bool print_containing_region(const void* p, outputStream* st);
+    static void snapshot_thread_stacks();
+    static void apply_summary_diff(VMATree::SummaryDiff diff);
+    static size_t committed_size(const ReservedMemoryRegion* rmr);
+    // uncommitted thread stack bottom, above guard pages if there is any.
+    static address thread_stack_uncommitted_bottom(const ReservedMemoryRegion* rmr);
+
+    static RegionsTree* tree() { return _tracker->tree(); }
+  };
 };
 
 #endif // SHARE_NMT_VIRTUALMEMORYTRACKER_HPP
-

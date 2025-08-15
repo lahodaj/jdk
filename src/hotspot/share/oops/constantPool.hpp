@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -37,7 +37,8 @@
 #include "utilities/align.hpp"
 #include "utilities/bytes.hpp"
 #include "utilities/constantTag.hpp"
-#include "utilities/resourceHash.hpp"
+#include "utilities/hashTable.hpp"
+#include "utilities/macros.hpp"
 
 // A ConstantPool is an array containing class constants as described in the
 // class file.
@@ -76,12 +77,49 @@ public:
   }
 };
 
+class BSMAttributeEntry {
+  friend class ConstantPool;
+  u2 _bootstrap_method_index;
+  u2 _argument_count;
+
+  // The argument indexes are stored right after the object, in a contiguous array.
+  // [ bsmi_0 argc_0 arg_00 arg_01 ... arg_0N bsmi_1 argc_1 arg_10 ... arg_1N ... ]
+  // So in order to find the argument array, jump over ourselves.
+  const u2* argument_indexes() const {
+    return reinterpret_cast<const u2*>(this + 1);
+  }
+  u2* argument_indexes() {
+    return reinterpret_cast<u2*>(this + 1);
+  }
+  // These are overlays on top of the operands array. Do not construct.
+  BSMAttributeEntry() = delete;
+
+public:
+  // Offsets for SA
+  enum {
+    _bsmi_offset = 0,
+    _argc_offset = 1,
+    _argv_offset = 2
+  };
+
+  int bootstrap_method_index() const {
+    return _bootstrap_method_index;
+  }
+  int argument_count() const {
+    return _argument_count;
+  }
+  int argument_index(int n) const {
+    assert(checked_cast<u2>(n) < _argument_count, "oob");
+    return argument_indexes()[n];
+  }
+};
+
 class ConstantPool : public Metadata {
   friend class VMStructs;
   friend class JVMCIVMStructs;
   friend class BytecodeInterpreter;  // Directly extracts a klass in the pool for fast instanceof/checkcast
   friend class Universe;             // For null constructor
-  friend class ClassPrelinker;       // CDS
+  friend class AOTConstantPoolResolver;
  private:
   // If you add a new field that points to any metaspace object, you
   // must add this field to ConstantPool::metaspace_pointers_do().
@@ -108,7 +146,8 @@ class ConstantPool : public Metadata {
     _has_preresolution    = 1,       // Flags
     _on_stack             = 2,
     _is_shared            = 4,
-    _has_dynamic_constant = 8
+    _has_dynamic_constant = 8,
+    _is_for_method_handle_intrinsic = 16
   };
 
   u2              _flags;  // old fashioned bit twiddling
@@ -215,6 +254,9 @@ class ConstantPool : public Metadata {
   bool has_dynamic_constant() const       { return (_flags & _has_dynamic_constant) != 0; }
   void set_has_dynamic_constant()         { _flags |= _has_dynamic_constant; }
 
+  bool is_for_method_handle_intrinsic() const  { return (_flags & _is_for_method_handle_intrinsic) != 0; }
+  void set_is_for_method_handle_intrinsic()    { _flags |= _is_for_method_handle_intrinsic; }
+
   // Klass holding pool
   InstanceKlass* pool_holder() const      { return _pool_holder; }
   void set_pool_holder(InstanceKlass* k)  { _pool_holder = k; }
@@ -247,14 +289,6 @@ class ConstantPool : public Metadata {
   Array<Klass*>* resolved_klasses() const       { return _resolved_klasses; }
   void allocate_resolved_klasses(ClassLoaderData* loader_data, int num_klasses, TRAPS);
   void initialize_unresolved_klasses(ClassLoaderData* loader_data, TRAPS);
-
-  // Invokedynamic indexes.
-  // They must look completely different from normal indexes.
-  // The main reason is that byte swapping is sometimes done on normal indexes.
-  // Finally, it is helpful for debugging to tell the two apart.
-  static bool is_invokedynamic_index(int i) { return (i < 0); }
-  static int  decode_invokedynamic_index(int i) { assert(is_invokedynamic_index(i),  ""); return ~i; }
-  static int  encode_invokedynamic_index(int i) { assert(!is_invokedynamic_index(i), ""); return ~i; }
 
   // Given the per-instruction index of an indy instruction, report the
   // main constant pool entry for its bootstrap specifier.
@@ -522,10 +556,6 @@ class ConstantPool : public Metadata {
     assert(tag_at(cp_index).has_bootstrap(), "Corrupted constant pool");
     return extract_low_short_from_int(*int_at_addr(cp_index));
   }
-  int bootstrap_operand_base(int cp_index) {
-    int bsms_attribute_index = bootstrap_methods_attribute_index(cp_index);
-    return operand_offset_at(operands(), bsms_attribute_index);
-  }
   // The first part of the operands array consists of an index into the second part.
   // Extract a 32-bit index value from the first part.
   static int operand_offset_at(Array<u2>* operands, int bsms_attribute_index) {
@@ -563,47 +593,26 @@ class ConstantPool : public Metadata {
     else
       return operand_offset_at(operands, nextidx);
   }
-  int bootstrap_operand_limit(int cp_index) {
-    int bsms_attribute_index = bootstrap_methods_attribute_index(cp_index);
-    return operand_limit_at(operands(), bsms_attribute_index);
-  }
 #endif //ASSERT
 
-  // Layout of InvokeDynamic and Dynamic bootstrap method specifier
-  // data in second part of operands array.  This encodes one record in
-  // the BootstrapMethods attribute.  The whole specifier also includes
-  // the name and type information from the main constant pool entry.
-  enum {
-         _indy_bsm_offset  = 0,  // CONSTANT_MethodHandle bsm
-         _indy_argc_offset = 1,  // u2 argc
-         _indy_argv_offset = 2   // u2 argv[argc]
-  };
-
   // These functions are used in RedefineClasses for CP merge
-
   int operand_offset_at(int bsms_attribute_index) {
     assert(0 <= bsms_attribute_index &&
            bsms_attribute_index < operand_array_length(operands()),
            "Corrupted CP operands");
     return operand_offset_at(operands(), bsms_attribute_index);
   }
-  u2 operand_bootstrap_method_ref_index_at(int bsms_attribute_index) {
+
+  BSMAttributeEntry* bsm_attribute_entry(int bsms_attribute_index) {
     int offset = operand_offset_at(bsms_attribute_index);
-    return operands()->at(offset + _indy_bsm_offset);
+    return reinterpret_cast<BSMAttributeEntry*>(operands()->adr_at(offset));
   }
-  u2 operand_argument_count_at(int bsms_attribute_index) {
-    int offset = operand_offset_at(bsms_attribute_index);
-    u2 argc = operands()->at(offset + _indy_argc_offset);
-    return argc;
-  }
-  u2 operand_argument_index_at(int bsms_attribute_index, int j) {
-    int offset = operand_offset_at(bsms_attribute_index);
-    return operands()->at(offset + _indy_argv_offset + j);
-  }
+
   int operand_next_offset_at(int bsms_attribute_index) {
-    int offset = operand_offset_at(bsms_attribute_index) + _indy_argv_offset
-                   + operand_argument_count_at(bsms_attribute_index);
-    return offset;
+    BSMAttributeEntry* bsme = bsm_attribute_entry(bsms_attribute_index);
+    u2* argv_start = bsme->argument_indexes();
+    int offset = argv_start - operands()->data();
+    return offset + bsme->argument_count();
   }
   // Compare a bootstrap specifier data in the operands arrays
   bool compare_operand_to(int bsms_attribute_index1, const constantPoolHandle& cp2,
@@ -620,23 +629,19 @@ class ConstantPool : public Metadata {
 
   u2 bootstrap_method_ref_index_at(int cp_index) {
     assert(tag_at(cp_index).has_bootstrap(), "Corrupted constant pool");
-    int op_base = bootstrap_operand_base(cp_index);
-    return operands()->at(op_base + _indy_bsm_offset);
+    int bsmai = bootstrap_methods_attribute_index(cp_index);
+    return bsm_attribute_entry(bsmai)->bootstrap_method_index();
   }
   u2 bootstrap_argument_count_at(int cp_index) {
     assert(tag_at(cp_index).has_bootstrap(), "Corrupted constant pool");
-    int op_base = bootstrap_operand_base(cp_index);
-    u2 argc = operands()->at(op_base + _indy_argc_offset);
-    DEBUG_ONLY(int end_offset = op_base + _indy_argv_offset + argc;
-               int next_offset = bootstrap_operand_limit(cp_index));
-    assert(end_offset == next_offset, "matched ending");
-    return argc;
+    int bsmai = bootstrap_methods_attribute_index(cp_index);
+    return bsm_attribute_entry(bsmai)->argument_count();
   }
   u2 bootstrap_argument_index_at(int cp_index, int j) {
-    int op_base = bootstrap_operand_base(cp_index);
-    DEBUG_ONLY(int argc = operands()->at(op_base + _indy_argc_offset));
-    assert((uint)j < (uint)argc, "oob");
-    return operands()->at(op_base + _indy_argv_offset + j);
+    int bsmai = bootstrap_methods_attribute_index(cp_index);
+    BSMAttributeEntry* bsme = bsm_attribute_entry(bsmai);
+    assert((uint)j < (uint)bsme->argument_count(), "oob");
+    return bsm_attribute_entry(bsmai)->argument_index(j);
   }
 
   // The following methods (name/signature/klass_ref_at, klass_ref_at_noresolve,
@@ -669,6 +674,8 @@ class ConstantPool : public Metadata {
 
   int to_cp_index(int which, Bytecodes::Code code);
 
+  bool is_resolved(int which, Bytecodes::Code code);
+
   // Lookup for entries consisting of (name_index, signature_index)
   u2 name_ref_index_at(int cp_index);            // ==  low-order jshort of name_and_type_at(cp_index)
   u2 signature_ref_index_at(int cp_index);       // == high-order jshort of name_and_type_at(cp_index)
@@ -684,10 +691,12 @@ class ConstantPool : public Metadata {
 #if INCLUDE_CDS
   // CDS support
   objArrayOop prepare_resolved_references_for_archiving() NOT_CDS_JAVA_HEAP_RETURN_(nullptr);
-  void add_dumped_interned_strings() NOT_CDS_JAVA_HEAP_RETURN;
-  bool maybe_archive_resolved_klass_at(int cp_index);
   void remove_unshareable_info();
   void restore_unshareable_info(TRAPS);
+private:
+  void remove_unshareable_entries();
+  void remove_resolved_klass_if_non_deterministic(int cp_index);
+  template <typename Function> void iterate_archivable_resolved_references(Function function);
 #endif
 
  private:
@@ -761,9 +770,9 @@ class ConstantPool : public Metadata {
 
   // Used by compiler to prevent classloading.
   static Method*          method_at_if_loaded      (const constantPoolHandle& this_cp, int which);
-  static bool       has_appendix_at_if_loaded      (const constantPoolHandle& this_cp, int which);
-  static oop            appendix_at_if_loaded      (const constantPoolHandle& this_cp, int which);
-  static bool has_local_signature_at_if_loaded     (const constantPoolHandle& this_cp, int which);
+  static bool       has_appendix_at_if_loaded      (const constantPoolHandle& this_cp, int which, Bytecodes::Code code);
+  static oop            appendix_at_if_loaded      (const constantPoolHandle& this_cp, int which, Bytecodes::Code code);
+  static bool has_local_signature_at_if_loaded     (const constantPoolHandle& this_cp, int which, Bytecodes::Code code);
   static Klass*            klass_at_if_loaded      (const constantPoolHandle& this_cp, int which);
 
   // Routines currently used for annotations (only called by jvm.cpp) but which might be used in the
@@ -785,7 +794,7 @@ class ConstantPool : public Metadata {
   int pre_resolve_shared_klasses(TRAPS);
 
   // Debugging
-  const char* printable_name_at(int cp_index) PRODUCT_RETURN0;
+  const char* printable_name_at(int cp_index) PRODUCT_RETURN_NULL;
 
  private:
 
@@ -863,7 +872,7 @@ class ConstantPool : public Metadata {
 
  private:
   class SymbolHash: public CHeapObj<mtSymbol> {
-    ResourceHashtable<const Symbol*, u2, 256, AnyObj::C_HEAP, mtSymbol, Symbol::compute_hash> _table;
+    HashTable<const Symbol*, u2, 256, AnyObj::C_HEAP, mtSymbol, Symbol::compute_hash> _table;
 
    public:
     void add_if_absent(const Symbol* sym, u2 value) {

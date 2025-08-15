@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,7 +29,6 @@
 #include "gc/shared/blockOffsetTable.hpp"
 #include "gc/shared/cardTable.hpp"
 #include "memory/memRegion.hpp"
-#include "memory/virtualspace.hpp"
 #include "utilities/globalDefinitions.hpp"
 
 // This implementation of "G1BlockOffsetTable" divides the covered region
@@ -48,7 +47,7 @@ private:
 
   void check_offset(size_t offset, const char* msg) const {
     assert(offset < CardTable::card_size_in_words(),
-           "%s - offset: " SIZE_FORMAT ", N_words: %u",
+           "%s - offset: %zu, N_words: %u",
            msg, offset, CardTable::card_size_in_words());
   }
 
@@ -56,12 +55,17 @@ private:
   // For performance these have to devolve to array accesses in product builds.
   inline uint8_t offset_array(uint8_t* addr) const;
 
-  inline void set_offset_array_raw(uint8_t* addr, uint8_t offset);
   inline void set_offset_array(uint8_t* addr, uint8_t offset);
 
   inline void set_offset_array(uint8_t* addr, HeapWord* high, HeapWord* low);
 
   inline void set_offset_array(uint8_t* left, uint8_t* right, uint8_t offset);
+
+  // Mapping from address to object start array entry
+  inline uint8_t* entry_for_addr(const void* const p) const;
+
+  // Mapping from object start array entry to address of first word
+  inline HeapWord* addr_for_entry(const uint8_t* const p) const;
 
   void check_address(uint8_t* addr, const char* msg) const NOT_DEBUG_RETURN;
 
@@ -74,6 +78,9 @@ private:
 
   void check_all_cards(uint8_t* left_card, uint8_t* right_card) const NOT_DEBUG_RETURN;
 
+  void verify_offset(uint8_t* card_index, uint8_t upper) const NOT_DEBUG_RETURN;
+  void verify_for_block(HeapWord* blk_start, HeapWord* blk_end) const NOT_DEBUG_RETURN;
+
   static HeapWord* align_up_by_card_size(HeapWord* const addr) {
     return align_up(addr, CardTable::card_size());
   }
@@ -82,10 +89,7 @@ public:
 
   // Return the number of slots needed for an offset array
   // that covers mem_region_words words.
-  static size_t compute_size(size_t mem_region_words) {
-    size_t number_of_slots = (mem_region_words / CardTable::card_size_in_words());
-    return ReservedSpace::allocation_align_size_up(number_of_slots);
-  }
+  static size_t compute_size(size_t mem_region_words);
 
   // Returns how many bytes of the heap a single byte of the BOT corresponds to.
   static size_t heap_map_factor() {
@@ -96,21 +100,12 @@ public:
   // in the heap parameter.
   G1BlockOffsetTable(MemRegion heap, G1RegionToSpaceMapper* storage);
 
-  // Mapping from address to object start array entry
-  uint8_t* entry_for_addr(const void* const p) const;
-
-  // Mapping from object start array entry to address of first word
-  HeapWord* addr_for_entry(const uint8_t* const p) const;
-
   static bool is_crossing_card_boundary(HeapWord* const obj_start,
                                         HeapWord* const obj_end) {
     HeapWord* cur_card_boundary = align_up_by_card_size(obj_start);
     // strictly greater-than
     return obj_end > cur_card_boundary;
   }
-
-  void verify_offset(uint8_t* card_index, uint8_t upper) const NOT_DEBUG_RETURN;
-  void verify_for_block(HeapWord* blk_start, HeapWord* blk_end) const NOT_DEBUG_RETURN;
 
   // Returns the address of the start of the block reaching into the card containing
   // "addr".

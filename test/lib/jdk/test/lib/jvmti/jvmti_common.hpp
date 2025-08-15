@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -56,7 +56,7 @@
 
 #define COMPLAIN LOG
 
-
+void sleep_ms(int millis);
 const char* TranslateState(jint flags);
 const char* TranslateError(jvmtiError err);
 
@@ -239,7 +239,7 @@ print_method(jvmtiEnv *jvmti, JNIEnv* jni, jmethodID method, jint depth) {
   check_jvmti_status(jni, err, "print_method: error in JVMTI GetMethodName");
 
   LOG("%2d: %s: %s%s\n", depth, cname, mname, msign);
-  fflush(0);
+  fflush(nullptr);
   deallocate(jvmti, jni, (void*)cname);
   deallocate(jvmti, jni, (void*)mname);
   deallocate(jvmti, jni, (void*)msign);
@@ -283,7 +283,7 @@ get_thread_info(jvmtiEnv *jvmti, JNIEnv* jni, jthread thread) {
 
 static jint
 get_thread_state(jvmtiEnv *jvmti, JNIEnv* jni, jthread thread) {
-  jint thread_state;
+  jint thread_state = 0;
   jvmtiError err = jvmti->GetThreadState(thread, &thread_state);
   check_jvmti_status(jni, err, "get_thread_state: error in JVMTI GetThreadState call");
   return thread_state;
@@ -380,6 +380,24 @@ find_method(jvmtiEnv *jvmti, JNIEnv *jni, jclass klass, const char* mname) {
   return method;
 }
 
+// Wait for target thread to reach the required JVMTI thread state.
+// The state jint bitmask is returned by the JVMTI GetThreadState.
+// Some examples are:
+// - JVMTI_THREAD_STATE_WAITING
+// - JVMTI_THREAD_STATE_BLOCKED_ON_MONITOR_ENTER
+// - JVMTI_THREAD_STATE_SLEEPING
+static void
+wait_for_state(jvmtiEnv *jvmti, JNIEnv *jni, jthread thread, jint exp_state) {
+  while (true) {
+    // Allow a bitmask to designate expected thread state. E.g., if two bits are expected
+    // than check they both are present in the state mask returned by JVMTI GetThreadState.
+    if ((get_thread_state(jvmti, jni, thread) & exp_state) == exp_state) {
+      break;
+    }
+    sleep_ms(100);
+  }
+}
+
 #define MAX_FRAME_COUNT_PRINT_STACK_TRACE 200
 
 static void
@@ -429,7 +447,27 @@ static jthread get_current_thread(jvmtiEnv *jvmti, JNIEnv* jni) {
   return thread;
 }
 
+/* Used in a couple of nsk/jvmti/scenarios tests to convert jbyteArray to a JVMTI allocated */
+static unsigned char* jni_array_to_jvmti_allocated(jvmtiEnv *jvmti, JNIEnv *jni, jbyteArray arr, jint* len_ptr) {
+    unsigned char* new_arr = nullptr;
 
+    jint len = jni->GetArrayLength(arr);
+    if (len <= 0) {
+      fatal(jni, "JNI GetArrayLength returned a non-positive value");
+    }
+    jbyte* jni_arr = jni->GetByteArrayElements(arr, nullptr);
+    if (jni_arr == nullptr) {
+      fatal(jni, "JNI GetByteArrayElements returned nullptr");
+    }
+    jvmtiError err = jvmti->Allocate(len, &new_arr);
+    check_jvmti_status(jni, err, "JVMTI Allocate returned an error code");
+
+    memcpy(new_arr, jni_arr, (size_t)len);
+    jni->ReleaseByteArrayElements(arr, jni_arr, JNI_ABORT);
+
+    *len_ptr = len;
+    return new_arr;
+}
 
 /* Commonly used helper functions */
 const char*

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -80,6 +80,7 @@ import javax.print.attribute.standard.MediaSizeName;
 import javax.print.attribute.standard.MediaTray;
 import javax.print.attribute.standard.NumberUp;
 import javax.print.attribute.standard.OrientationRequested;
+import javax.print.attribute.standard.OutputBin;
 import javax.print.attribute.standard.PDLOverrideSupported;
 import javax.print.attribute.standard.PageRanges;
 import javax.print.attribute.standard.PagesPerMinute;
@@ -105,7 +106,7 @@ import javax.print.event.PrintServiceAttributeListener;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-public class IPPPrintService implements PrintService, SunPrinterJobService {
+public final class IPPPrintService implements PrintService, SunPrinterJobService {
 
     public static final boolean debugPrint;
     private static final String debugPrefix = "IPPPrintService>> ";
@@ -118,9 +119,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
     private static final String FORCE_PIPE_PROP = "sun.print.ippdebug";
 
     static {
-        @SuppressWarnings("removal")
-        String debugStr = java.security.AccessController.doPrivileged(
-                  new sun.security.action.GetPropertyAction(FORCE_PIPE_PROP));
+        String debugStr = System.getProperty(FORCE_PIPE_PROP);
 
         debugPrint = "true".equalsIgnoreCase(debugStr);
     }
@@ -138,6 +137,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
     private DocFlavor[] supportedDocFlavors;
     private Class<?>[] supportedCats;
     private MediaTray[] mediaTrays;
+    private OutputBin[] outputBins;
     private MediaSizeName[] mediaSizeNames;
     private CustomMediaSizeName[] customMediaSizeNames;
     private int defaultMediaIndex;
@@ -211,6 +211,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
         new RequestingUserName("", Locale.getDefault()),
         //SheetCollate.UNCOLLATED, //CUPS has no sheet collate?
         Sides.ONE_SIDED,
+        OutputBin.TOP,
     };
 
 
@@ -440,6 +441,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
             if ((urlConnection = getIPPConnection(myURL)) == null) {
                 mediaSizeNames = new MediaSizeName[0];
                 mediaTrays = new MediaTray[0];
+                outputBins = new OutputBin[0];
                 debug_println(debugPrefix+"initAttributes, NULL urlConnection ");
                 init = true;
                 return;
@@ -460,6 +462,9 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
                         cps = new CUPSPrinter(printer);
                         mediaSizeNames = cps.getMediaSizeNames();
                         mediaTrays = cps.getMediaTrays();
+                        outputBins = PrintServiceLookupProvider.isMac()
+                                ? cps.getOutputBins()
+                                : getSupportedOutputBins();
                         customMediaSizeNames = cps.getCustomMediaSizeNames();
                         defaultMediaIndex = cps.getDefaultMediaIndex();
                         rawResolutions = cps.getRawResolutions();
@@ -493,6 +498,11 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
                 mediaTrays = new MediaTray[trayList.size()];
                 mediaTrays = trayList.toArray(mediaTrays);
             }
+
+            if (outputBins == null) {
+                outputBins = getSupportedOutputBins();
+            }
+
             urlConnection.disconnect();
 
             init = true;
@@ -500,17 +510,14 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
     }
 
 
+    @Override
     public DocPrintJob createPrintJob() {
-        @SuppressWarnings("removal")
-        SecurityManager security = System.getSecurityManager();
-        if (security != null) {
-            security.checkPrintJobAccess();
-        }
         // REMIND: create IPPPrintJob
         return new UnixPrintJob(this);
     }
 
 
+    @Override
     public synchronized Object
         getSupportedAttributeValues(Class<? extends Attribute> category,
                                     DocFlavor flavor,
@@ -567,8 +574,15 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
                 flavor.equals(DocFlavor.SERVICE_FORMATTED.PAGEABLE) ||
                 flavor.equals(DocFlavor.SERVICE_FORMATTED.PRINTABLE) ||
                 !isIPPSupportedImages(flavor.getMimeType())) {
-                Chromaticity[]arr = new Chromaticity[1];
-                arr[0] = Chromaticity.COLOR;
+                Chromaticity[] arr;
+                if (PrintServiceLookupProvider.isMac()) {
+                    arr = new Chromaticity[2];
+                    arr[0] = Chromaticity.COLOR;
+                    arr[1] = Chromaticity.MONOCHROME;
+                } else {
+                    arr = new Chromaticity[1];
+                    arr[0] = Chromaticity.COLOR;
+                }
                 return (arr);
             } else {
                 return null;
@@ -577,15 +591,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
             if (flavor == null ||
                 flavor.equals(DocFlavor.SERVICE_FORMATTED.PAGEABLE) ||
                 flavor.equals(DocFlavor.SERVICE_FORMATTED.PRINTABLE)) {
-                try {
                     return new Destination((new File("out.ps")).toURI());
-                } catch (SecurityException se) {
-                    try {
-                        return new Destination(new URI("file:out.ps"));
-                    } catch (URISyntaxException e) {
-                        return null;
-                    }
-                }
             }
             return null;
         } else if (category == Fidelity.class) {
@@ -787,11 +793,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
                 return null;
             }
         } else if (category == RequestingUserName.class) {
-            String userName = "";
-            try {
-              userName = System.getProperty("user.name", "");
-            } catch (SecurityException se) {
-            }
+            String userName = System.getProperty("user.name", "");
             return new RequestingUserName(userName, null);
         } else if (category == Sides.class) {
             // The printer takes care of Sides so if short-edge
@@ -827,6 +829,8 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
                 new PrinterResolution[supportedRes.length];
             System.arraycopy(supportedRes, 0, arr, 0, supportedRes.length);
             return arr;
+        } else if (category == OutputBin.class) {
+            return Arrays.copyOf(outputBins, outputBins.length);
         }
 
         return null;
@@ -834,7 +838,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
 
     //This class is for getting all pre-defined Finishings
     @SuppressWarnings("serial") // JDK implementation class
-    private static class ExtFinishing extends Finishings {
+    private static final class ExtFinishing extends Finishings {
         ExtFinishing(int value) {
             super(100); // 100 to avoid any conflicts with predefined values.
         }
@@ -846,6 +850,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
     }
 
 
+    @Override
     public AttributeSet getUnsupportedAttributes(DocFlavor flavor,
                                                  AttributeSet attributes) {
         if (flavor != null && !isDocFlavorSupported(flavor)) {
@@ -880,6 +885,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
     }
 
 
+    @Override
     public synchronized DocFlavor[] getSupportedDocFlavors() {
 
         if (supportedDocFlavors != null) {
@@ -976,6 +982,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
     }
 
 
+    @Override
     public boolean isDocFlavorSupported(DocFlavor flavor) {
         if (supportedDocFlavors == null) {
             getSupportedDocFlavors();
@@ -1053,7 +1060,27 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
         return new Media[0];
     }
 
+    private OutputBin[] getSupportedOutputBins() {
+        if ((getAttMap != null) && getAttMap.containsKey("output-bin-supported")) {
 
+            AttributeClass attribClass = getAttMap.get("output-bin-supported");
+
+            if (attribClass != null) {
+                String[] values = attribClass.getArrayOfStringValues();
+                if (values == null || values.length == 0) {
+                    return null;
+                }
+                OutputBin[] outputBinNames = new OutputBin[values.length];
+                for (int i = 0; i < values.length; i++) {
+                    outputBinNames[i] = CustomOutputBin.createOutputBin(values[i], values[i]);
+                }
+                return outputBinNames;
+            }
+        }
+        return null;
+    }
+
+    @Override
     public synchronized Class<?>[] getSupportedAttributeCategories() {
         if (supportedCats != null) {
             Class<?> [] copyCats = new Class<?>[supportedCats.length];
@@ -1070,6 +1097,11 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
                 (PrintRequestAttribute)printReqAttribDefault[i];
             if (getAttMap != null &&
                 getAttMap.containsKey(pra.getName()+"-supported")) {
+
+                if (pra == OutputBin.TOP && (outputBins == null || outputBins.length == 0)) {
+                    continue;
+                }
+
                 catList.add(pra.getCategory());
             }
         }
@@ -1125,6 +1157,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
     }
 
 
+    @Override
     public boolean
         isAttributeCategorySupported(Class<? extends Attribute> category)
     {
@@ -1148,6 +1181,11 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
             return true;
         }
 
+        if (category == OutputBin.class
+                && (outputBins == null || outputBins.length == 0)) {
+            return false;
+        }
+
         for (int i=0;i<supportedCats.length;i++) {
             if (category == supportedCats[i]) {
                 return true;
@@ -1157,6 +1195,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
         return false;
     }
 
+    @Override
     @SuppressWarnings("unchecked")
     public synchronized <T extends PrintServiceAttribute>
         T getAttribute(Class<T> category)
@@ -1226,6 +1265,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
     }
 
 
+    @Override
     public synchronized PrintServiceAttributeSet getAttributes() {
         if (!init) {
             // get all attributes for the first time.
@@ -1346,6 +1386,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
     }
 
 
+    @Override
     public boolean isAttributeValueSupported(Attribute attr,
                                              DocFlavor flavor,
                                              AttributeSet attributes) {
@@ -1376,7 +1417,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
                 flavor.equals(DocFlavor.SERVICE_FORMATTED.PAGEABLE) ||
                 flavor.equals(DocFlavor.SERVICE_FORMATTED.PRINTABLE) ||
                 !isIPPSupportedImages(flavor.getMimeType())) {
-                return attr == Chromaticity.COLOR;
+                return PrintServiceLookupProvider.isMac() || attr == Chromaticity.COLOR;
             } else {
                 return false;
             }
@@ -1478,11 +1519,24 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
                DialogTypeSelection dst = (DialogTypeSelection)attr;
                return attr == DialogTypeSelection.COMMON;
             }
+        } else if (attr.getCategory() == OutputBin.class) {
+            if (attr instanceof CustomOutputBin) {
+                return true;
+            }
+            String name = attr.toString();
+            for (OutputBin outputBin : outputBins) {
+                String choice = ((CustomOutputBin) outputBin).getChoiceName();
+                if (name.equalsIgnoreCase(choice) || name.replaceAll("-", "").equalsIgnoreCase(choice)) {
+                    return true;
+                }
+            }
+            return false;
         }
         return true;
     }
 
 
+    @Override
     public synchronized Object
         getDefaultAttributeValue(Class<? extends Attribute> category)
     {
@@ -1521,15 +1575,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
         } else if (category == Chromaticity.class) {
             return Chromaticity.COLOR;
         } else if (category == Destination.class) {
-            try {
-                return new Destination((new File("out.ps")).toURI());
-            } catch (SecurityException se) {
-                try {
-                    return new Destination(new URI("file:out.ps"));
-                } catch (URISyntaxException e) {
-                    return null;
-                }
-            }
+            return new Destination((new File("out.ps")).toURI());
         } else if (category == Fidelity.class) {
             return Fidelity.FIDELITY_FALSE;
         } else if (category == Finishings.class) {
@@ -1621,11 +1667,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
                 return new PageRanges(1, Integer.MAX_VALUE);
             }
         } else if (category == RequestingUserName.class) {
-            String userName = "";
-            try {
-              userName = System.getProperty("user.name", "");
-            } catch (SecurityException se) {
-            }
+            String userName = System.getProperty("user.name", "");
             return new RequestingUserName(userName, null);
         } else if (category == SheetCollate.class) {
             return SheetCollate.UNCOLLATED;
@@ -1646,6 +1688,10 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
              } else {
                  return new PrinterResolution(300, 300, PrinterResolution.DPI);
              }
+        } else if (category == OutputBin.class) {
+            if (attribClass != null) {
+                return CustomOutputBin.createOutputBin(attribClass.getStringValue(), attribClass.getStringValue());
+            }
         }
 
         return null;
@@ -1681,6 +1727,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
         return false;
     }
 
+    @Override
     public ServiceUIFactory getServiceUIFactory() {
         return null;
     }
@@ -1693,6 +1740,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
         }
     }
 
+    @Override
     public void addPrintServiceAttributeListener(
                                  PrintServiceAttributeListener listener) {
         synchronized (this) {
@@ -1706,6 +1754,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
         }
     }
 
+    @Override
     public void removePrintServiceAttributeListener(
                                   PrintServiceAttributeListener listener) {
         synchronized (this) {
@@ -1724,6 +1773,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
         return printer;
     }
 
+    @Override
     public String getName() {
         /*
          * Mac is using printer-info IPP attribute for its human-readable printer
@@ -1742,6 +1792,7 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
     }
 
 
+    @Override
     public boolean usesClass(Class<?> c) {
         return (c == sun.print.PSPrinterJob.class);
     }
@@ -1815,18 +1866,12 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
                                    AttributeClass.TAG_URI,
                                    ""+myURI)};
 
-            @SuppressWarnings("removal")
-            OutputStream os = java.security.AccessController.
-                doPrivileged(new java.security.PrivilegedAction<OutputStream>() {
-                    public OutputStream run() {
-                        try {
-                            return urlConnection.getOutputStream();
-                        } catch (Exception e) {
-                        }
-                        return null;
-                    }
-                });
 
+            OutputStream os = null;
+            try {
+                os = urlConnection.getOutputStream();
+            } catch (Exception e) {
+            }
             if (os == null) {
                 return;
             }
@@ -2074,16 +2119,19 @@ public class IPPPrintService implements PrintService, SunPrinterJobService {
         return (s.length() == 2) ? s :  "0"+s;
     }
 
+    @Override
     public String toString() {
         return "IPP Printer : " + getName();
     }
 
+    @Override
     public boolean equals(Object obj) {
         return  (obj == this ||
                  (obj instanceof IPPPrintService &&
                   ((IPPPrintService)obj).getName().equals(getName())));
     }
 
+    @Override
     public int hashCode() {
         return this.getClass().hashCode()+getName().hashCode();
     }
