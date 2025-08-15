@@ -97,7 +97,7 @@ public class ElementKindVisitorPreview<R, P> extends ElementKindVisitor14<R, P> 
      * @param p {@inheritDoc ElementKindVisitor6}
      * @return  the result of {@code defaultAction}
      *
-     * @since 23
+     * @since 26
      */
     @Override
     @PreviewFeature(feature=PreviewFeature.Feature.DERIVED_RECORD_CREATION, reflective=true)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -223,7 +223,7 @@ public interface Tree {
 
         /**
          * Used for instances of {@link DerivedInstanceTree}.
-         * @since 23
+         * @since 26
          */
         @PreviewFeature(feature=PreviewFeature.Feature.DERIVED_RECORD_CREATION, reflective=true)
         DERIVED_INSTANCE(DerivedInstanceTree.class),
