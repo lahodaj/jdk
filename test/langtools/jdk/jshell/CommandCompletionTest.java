@@ -54,6 +54,7 @@ import jdk.jshell.SourceCodeAnalysis.Suggestion;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
 public class CommandCompletionTest extends ReplToolTesting {
@@ -355,9 +356,8 @@ public class CommandCompletionTest extends ReplToolTesting {
                                   .map(file -> file.getFileName().toString().replace(" ", "\\ "))
                                   .orElse(null);
         }
-        if (selectedFile == null) {
-            throw new SkipException("No suitable file(s) found for this test in " + home);
-        }
+        Assumptions.assumeTrue(selectedFile != null,
+                               "No suitable file(s) found for this test in " + home);
         try (Stream<Path> content = Files.list(home)) {
             completions = content.filter(CLASSPATH_FILTER)
                                  .filter(file -> file.getFileName().toString().startsWith(selectedFile.replace("\\ ", " ")))
