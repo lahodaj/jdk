@@ -35,7 +35,10 @@
 
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.TestInstance.Lifecycle;
 
+@TestInstance(Lifecycle.PER_CLASS)
 public class LocalExecutionClassPathTest extends LocalExecutionTestSupport {
 
     @Override

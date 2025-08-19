@@ -99,7 +99,7 @@ public class CompletenessStressTest extends KullaTesting {
         };
     }
 
-    public static Object[][] dataProvider() throws IOException {
+    public Object[][] dataProvider() throws IOException {
         File[] srcDirs = getDirectoriesToTest();
         List<String[]> list = new ArrayList<>();
         for (File srcDir : srcDirs) {

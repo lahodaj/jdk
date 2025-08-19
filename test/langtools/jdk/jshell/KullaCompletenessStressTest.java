@@ -30,12 +30,13 @@
  */
 
 import java.io.File;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.TestInstance.Lifecycle;
 
-import org.junit.jupiter.api.Test;
-
+@TestInstance(Lifecycle.PER_CLASS)
 public class KullaCompletenessStressTest extends CompletenessStressTest {
     @Override
-    @Test
     public File[] getDirectoriesToTest() {
         String src = System.getProperty("test.src");
         File file;
@@ -44,11 +45,10 @@ public class KullaCompletenessStressTest extends CompletenessStressTest {
         } else {
             file = new File(src, "../../../src/jdk.jshell/share/classes");
         }
-        if (!file.exists()) {
-            System.out.println("jdk.jshell sources are not exist. Test has been skipped. Path: " + file.toString());
-            return new File[]{};
-        }else {
-            return new File[]{file};
-        }
+
+        Assumptions.assumeTrue(file.exists(),
+                               "jdk.jshell sources are not exist. Test has been skipped. Path: " + file.toString());
+
+        return new File[]{file};
     }
 }
