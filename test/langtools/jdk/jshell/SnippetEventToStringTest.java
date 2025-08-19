@@ -25,7 +25,7 @@
  * @test
  * @bug 8350808
  * @summary Check for proper formatting of SnippetEvent.toString()
- * @run testng SnippetEventToStringTest
+ * @run junit SnippetEventToStringTest
  */
 
 import java.util.Map;
@@ -35,14 +35,13 @@ import jdk.jshell.JShell;
 import jdk.jshell.SnippetEvent;
 import jdk.jshell.execution.LocalExecutionControlProvider;
 
-import org.testng.annotations.DataProvider;
-import org.testng.annotations.Test;
-import static org.testng.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 public class SnippetEventToStringTest {
 
-    @DataProvider(name = "cases")
-    public String[][] sourceLevels() {
+    public static String[][] sourceLevels() {
         return new String[][] {
             { "*",                              ",causeSnippet=null" },
             { "123",                            ",value=123" },
@@ -50,11 +49,12 @@ public class SnippetEventToStringTest {
         };
     }
 
-    @Test(dataProvider = "cases")
+    @ParameterizedTest
+    @MethodSource("sourceLevels")
     private void verifySnippetEvent(String source, String match) {
         try (JShell jsh = JShell.builder().executionEngine(new LocalExecutionControlProvider(), Map.of()).build()) {
             List<SnippetEvent> result = jsh.eval(source);
-            assertEquals(result.size(), 1);
+            assertEquals(1, result.size());
             String string = result.get(0).toString();
             if (!string.contains(match))
                 throw new AssertionError(String.format("\"%s\" not found in \"%s\"", match, string));
