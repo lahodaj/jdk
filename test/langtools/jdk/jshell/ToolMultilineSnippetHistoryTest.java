@@ -31,18 +31,16 @@
  *     jdk.jshell/jdk.jshell:open
  * @build UITesting
  * @build ToolMultilineSnippetHistoryTest
- * @run testng ToolMultilineSnippetHistoryTest
+ * @run junit ToolMultilineSnippetHistoryTest
  */
 
-import org.testng.annotations.Test;
-
-@Test
 public class ToolMultilineSnippetHistoryTest extends UITesting {
 
     public ToolMultilineSnippetHistoryTest() {
         super(true);
     }
 
+    @org.junit.jupiter.api.Test
     public void testUpArrow() throws Exception {
         doRunTest((inputSink, out) -> {
             inputSink.write("int x=\n44\n");

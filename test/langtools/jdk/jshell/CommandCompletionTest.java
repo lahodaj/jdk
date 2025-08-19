@@ -32,7 +32,7 @@
  * @library /tools/lib
  * @build toolbox.ToolBox toolbox.JarTask toolbox.JavacTask
  * @build ReplToolTesting TestingInputStream Compiler
- * @run testng CommandCompletionTest
+ * @run junit CommandCompletionTest
  */
 
 import java.io.IOException;
@@ -46,16 +46,15 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.testng.SkipException;
-import org.testng.annotations.Test;
 
 import jdk.internal.jshell.tool.JShellTool;
 import jdk.internal.jshell.tool.JShellToolBuilder;
 import jdk.jshell.SourceCodeAnalysis.Suggestion;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import org.junit.jupiter.api.Test;
 
 public class CommandCompletionTest extends ReplToolTesting {
 
@@ -94,7 +93,7 @@ public class CommandCompletionTest extends ReplToolTesting {
     public void assertCompletion(String code, boolean isSmart, String... expected) {
         List<String> completions = computeCompletions(code, isSmart);
         List<String> expectedL = Arrays.asList(expected);
-        assertEquals(completions, expectedL, "Command: " + code + ", output: " +
+        assertEquals(expectedL, completions, "Command: " + code + ", output: " +
                 completions.toString() + ", expected: " + expectedL.toString());
     }
 
