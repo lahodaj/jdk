@@ -99,10 +99,12 @@ public class TestSegments {
     }
 
 
-    @Test(expectedExceptions = { OutOfMemoryError.class,
-                                 IllegalArgumentException.class })
+    @Test
     public void testAllocateTooBig() {
-        Arena.ofAuto().allocate(Long.MAX_VALUE, 1);
+        //TODO: originally was expecting either OutOfMemoryError.class or IllegalArgumentException.class, is that correct/intended?
+        Assertions.assertThrows(OutOfMemoryError.class, () -> {
+            Arena.ofAuto().allocate(Long.MAX_VALUE, 1);
+        });
     }
 
     @Test
@@ -251,7 +253,7 @@ public class TestSegments {
         };
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments=false) //JUnit will automagically close all parameters that are AutoCloseable, but not every Arena here can be closed - is this correct?
     @MethodSource("scopes")
     public void testIsAccessibleBy(Arena arena, boolean isConfined) {
         MemorySegment segment = MemorySegment.NULL.reinterpret(arena, null);

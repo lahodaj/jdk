@@ -190,7 +190,7 @@ public class TestNulls {
         addReplacements(Set.class, null, Stream.of(new Object[] { null }).collect(Collectors.toSet()));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments=false) //JUnit automagically closes AutoCloseable parameters, that appears to be incompatible with this test
     @MethodSource("cases")
     public void testNulls(String testName, Method meth, Object receiver, Object[] args) {
         try {

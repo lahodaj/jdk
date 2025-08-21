@@ -197,7 +197,7 @@ public class TestAsyncSocketChannels extends AbstractChannelsTest {
                 var readHandler = new TestHandler();
                 asc2.read(readBuffers, 0, 16, 30L, SECONDS, null, readHandler);
                 readHandler.await().assertCompleteWith(expectedCount);
-                assertEquals(clear(writeBuffers), flip(readBuffers));
+                assertArrayEquals(clear(writeBuffers), flip(readBuffers)); //TODO: bug in the conversion tool, does not detect the array
             }
         }
     }

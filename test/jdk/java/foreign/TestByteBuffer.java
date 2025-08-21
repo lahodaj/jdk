@@ -332,8 +332,8 @@ public class TestByteBuffer {
                     assertEquals(segment.isReadOnly(), byteBuffer.isReadOnly());
                     assertTrue(byteBuffer.isDirect());
                 } catch (IOException e) {
-                    if (e.getMessage().equals("Function not implemented"))
-                        throw new SkipException(e.getMessage(), e);
+                    Assumptions.assumeFalse(e.getMessage().equals("Function not implemented"),
+                                            e.getMessage()); //TODO: originally was also keeping the exception
                 } finally {
                     if (arena.scope() != Arena.global().scope()) {
                         arena.close();
@@ -364,8 +364,8 @@ public class TestByteBuffer {
             segment.unload();
             segment.isLoaded();
         } catch(IOException e) {
-            if (e.getMessage().equals("Function not implemented"))
-                throw new SkipException(e.getMessage(), e);
+            Assumptions.assumeFalse(e.getMessage().equals("Function not implemented"),
+                                    e.getMessage()); //TODO: originally was also keeping the exception
         }
     }
 

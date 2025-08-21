@@ -334,8 +334,9 @@ public class TestLayouts {
 
     @ParameterizedTest
     @MethodSource("layoutsAndAlignments")
-    public void testBadSequenceElementAlignmentTooBig(MemoryLayout layout, long byteAlign) {
+    public void testBadSequenceElementAlignmentTooBig(MemoryLayout layoutParam, long byteAlign) {
         Assertions.assertThrows(IllegalArgumentException.class, () -> {
+            MemoryLayout layout = layoutParam;
             layout = layout.withByteAlignment(layout.byteSize() * 2); // hyper-align
             MemoryLayout.sequenceLayout(1, layout);
         }); 
@@ -381,8 +382,9 @@ public class TestLayouts {
 
     @ParameterizedTest
     @MethodSource("layoutsAndAlignments")
-    public void testBadStruct(MemoryLayout layout, long byteAlign) {
+    public void testBadStruct(MemoryLayout layoutParam, long byteAlign) {
         Assertions.assertThrows(IllegalArgumentException.class, () -> {
+            MemoryLayout layout = layoutParam;
             layout = layout.withByteAlignment(layout.byteSize() * 2); // hyper-align
             MemoryLayout.structLayout(layout, layout);
         }); 

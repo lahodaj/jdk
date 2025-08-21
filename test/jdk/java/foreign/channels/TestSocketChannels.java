@@ -47,6 +47,7 @@ import java.lang.foreign.MemorySegment;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -151,7 +152,7 @@ public class TestSocketChannels extends AbstractChannelsTest {
             Arena scope = drop;
             var segment = scope.allocate(10, 1);
             ByteBuffer bb = segment.asByteBuffer();
-            List<ThrowingRunnable> ioOps = List.of(
+            List<Executable> ioOps = List.of(
                     () -> channel.write(bb),
                     () -> channel.read(bb),
                     () -> channel.write(new ByteBuffer[] {bb}),
@@ -185,7 +186,7 @@ public class TestSocketChannels extends AbstractChannelsTest {
             long expectedCount = remaining(writeBuffers);
             assertEquals(expectedCount, writeNBytes(sc1, writeBuffers, 0, 32, expectedCount));
             assertEquals(expectedCount, readNBytes(sc2, readBuffers, 0, 32, expectedCount));
-            assertEquals(clear(writeBuffers), flip(readBuffers));
+            assertArrayEquals(clear(writeBuffers), flip(readBuffers)); //TODO: bug in the conversion tool, does not detect the array
         }
     }
 
@@ -209,7 +210,7 @@ public class TestSocketChannels extends AbstractChannelsTest {
             long expectedCount = remaining(writeBuffers);
             assertEquals(expectedCount, writeNBytes(sc1, writeBuffers, 0, 32, expectedCount));
             assertEquals(expectedCount, readNBytes(sc2, readBuffers, 0, 32, expectedCount));
-            assertEquals(clear(writeBuffers), flip(readBuffers));
+            assertArrayEquals(clear(writeBuffers), flip(readBuffers)); //TODO: bug in the conversion tool, does not detect the array
         }
     }
 

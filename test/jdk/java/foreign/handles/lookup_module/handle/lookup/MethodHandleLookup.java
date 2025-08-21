@@ -37,15 +37,17 @@ import java.lang.foreign.SymbolLookup;
 import java.nio.file.Path;
 import java.util.function.Consumer;
 
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 public class MethodHandleLookup {
 
-    @Test(dataProvider = "restrictedMethods")
+    @ParameterizedTest
+    @MethodSource("restrictedMethods")
     public void testRestrictedHandles(MethodHandle handle, String testName) throws Throwable {
         new handle.invoker.MethodHandleInvoker().call(handle);
     }
 
-    @DataProvider(name = "restrictedMethods")
     static Object[][] restrictedMethods() {
         try {
             return new Object[][]{
