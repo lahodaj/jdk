@@ -23,7 +23,7 @@
 
 /*
  * @test
- * @run testng/othervm --enable-native-access=ALL-UNNAMED StdLibTest
+ * @run junit/othervm --enable-native-access=ALL-UNNAMED StdLibTest
  */
 
 import java.lang.invoke.MethodHandle;
@@ -45,61 +45,71 @@ import java.util.stream.Stream;
 
 import java.lang.foreign.*;
 
-import org.testng.annotations.*;
+import org.junit.jupiter.api.Assertions;
+import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import static org.testng.Assert.*;
-
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class StdLibTest extends NativeTestHelper {
 
     final static Linker abi = Linker.nativeLinker();
 
     private StdLibHelper stdLibHelper = new StdLibHelper();
 
-    @Test(dataProvider = "stringPairs")
+    @ParameterizedTest
+    @MethodSource("stringPairs")
     void test_strcat(String s1, String s2) throws Throwable {
-        assertEquals(stdLibHelper.strcat(s1, s2), s1 + s2);
+        Assertions.assertEquals(s1 + s2, stdLibHelper.strcat(s1, s2));
     }
 
-    @Test(dataProvider = "stringPairs")
+    @ParameterizedTest
+    @MethodSource("stringPairs")
     void test_strcmp(String s1, String s2) throws Throwable {
-        assertEquals(Math.signum(stdLibHelper.strcmp(s1, s2)), Math.signum(s1.compareTo(s2)));
+        Assertions.assertEquals(Math.signum(s1.compareTo(s2)), Math.signum(stdLibHelper.strcmp(s1, s2)));
     }
 
-    @Test(dataProvider = "strings")
+    @ParameterizedTest
+    @MethodSource("strings")
     void test_puts(String s) throws Throwable {
         assertTrue(stdLibHelper.puts(s) >= 0);
     }
 
-    @Test(dataProvider = "strings")
+    @ParameterizedTest
+    @MethodSource("strings")
     void test_strlen(String s) throws Throwable {
-        assertEquals(stdLibHelper.strlen(s), s.length());
+        Assertions.assertEquals(s.length(), stdLibHelper.strlen(s));
     }
 
-    @Test(dataProvider = "instants")
+    @ParameterizedTest
+    @MethodSource("instants")
     void test_time(Instant instant) throws Throwable {
         StdLibHelper.Tm tm = stdLibHelper.gmtime(instant.getEpochSecond());
         LocalDateTime localTime = LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
-        assertEquals(tm.sec(), localTime.getSecond());
-        assertEquals(tm.min(), localTime.getMinute());
-        assertEquals(tm.hour(), localTime.getHour());
+        Assertions.assertEquals(localTime.getSecond(), tm.sec());
+        Assertions.assertEquals(localTime.getMinute(), tm.min());
+        Assertions.assertEquals(localTime.getHour(), tm.hour());
         //day pf year in Java has 1-offset
-        assertEquals(tm.yday(), localTime.getDayOfYear() - 1);
-        assertEquals(tm.mday(), localTime.getDayOfMonth());
+        Assertions.assertEquals(localTime.getDayOfYear() - 1, tm.yday());
+        Assertions.assertEquals(localTime.getDayOfMonth(), tm.mday());
         //days of week starts from Sunday in C, but on Monday in Java, also account for 1-offset
-        assertEquals((tm.wday() + 6) % 7, localTime.getDayOfWeek().getValue() - 1);
+        Assertions.assertEquals(localTime.getDayOfWeek().getValue() - 1, (tm.wday() + 6) % 7);
         //month in Java has 1-offset
-        assertEquals(tm.mon(), localTime.getMonth().getValue() - 1);
-        assertEquals(tm.isdst(), ZoneOffset.UTC.getRules()
-                .isDaylightSavings(Instant.ofEpochMilli(instant.getEpochSecond() * 1000)));
+        Assertions.assertEquals(localTime.getMonth().getValue() - 1, tm.mon());
+        Assertions.assertEquals(ZoneOffset.UTC.getRules()
+                .isDaylightSavings(Instant.ofEpochMilli(instant.getEpochSecond() * 1000)), tm.isdst());
     }
 
-    @Test(dataProvider = "ints")
+    @ParameterizedTest
+    @MethodSource("ints")
     void test_qsort(List<Integer> ints) throws Throwable {
         if (ints.size() > 0) {
             int[] input = ints.stream().mapToInt(i -> i).toArray();
             int[] sorted = stdLibHelper.qsort(input);
             Arrays.sort(input);
-            assertEquals(sorted, input);
+            assertArrayEquals(input, sorted);
         }
     }
 
@@ -116,7 +126,8 @@ public class StdLibTest extends NativeTestHelper {
         fail("All values are the same! " + val);
     }
 
-    @Test(dataProvider = "printfArgs")
+    @ParameterizedTest
+    @MethodSource("printfArgs")
     void test_printf(List<PrintfArg> args) throws Throwable {
         String javaFormatArgs = args.stream()
                 .map(a -> a.javaFormat)
@@ -132,7 +143,7 @@ public class StdLibTest extends NativeTestHelper {
                 .map(a -> a.javaValue).toArray());
 
         int found = stdLibHelper.printf(nativeFormatString, args);
-        assertEquals(found, expected.length());
+        Assertions.assertEquals(expected.length(), found);
     }
 
     @Test
@@ -331,21 +342,18 @@ public class StdLibTest extends NativeTestHelper {
 
     /*** data providers ***/
 
-    @DataProvider
     public static Object[][] ints() {
         return perms(0, new Integer[] { 0, 1, 2, 3, 4 }).stream()
                 .map(l -> new Object[] { l })
                 .toArray(Object[][]::new);
     }
 
-    @DataProvider
     public static Object[][] strings() {
         return perms(0, new String[] { "a", "b", "c" }).stream()
                 .map(l -> new Object[] { String.join("", l) })
                 .toArray(Object[][]::new);
     }
 
-    @DataProvider
     public static Object[][] stringPairs() {
         Object[][] strings = strings();
         Object[][] stringPairs = new Object[strings.length * strings.length][];
@@ -358,7 +366,6 @@ public class StdLibTest extends NativeTestHelper {
         return stringPairs;
     }
 
-    @DataProvider
     public static Object[][] instants() {
         Instant start = ZonedDateTime.of(LocalDateTime.parse("2017-01-01T00:00:00"), ZoneOffset.UTC).toInstant();
         Instant end = ZonedDateTime.of(LocalDateTime.parse("2017-12-31T00:00:00"), ZoneOffset.UTC).toInstant();
@@ -370,7 +377,6 @@ public class StdLibTest extends NativeTestHelper {
         return instants;
     }
 
-    @DataProvider
     public static Object[][] printfArgs() {
         ArrayList<List<PrintfArg>> res = new ArrayList<>();
         List<List<PrintfArg>> perms = new ArrayList<>(perms(0, PrintfArg.values()));

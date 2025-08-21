@@ -21,7 +21,6 @@
  * questions.
  */
 
-import org.testng.annotations.*;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -34,7 +33,8 @@ import java.nio.file.Paths;
 import java.util.function.Consumer;
 
 import static java.lang.foreign.ValueLayout.*;
-import static org.testng.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 /*
  * @test
@@ -42,7 +42,7 @@ import static org.testng.Assert.*;
  * @requires sun.arch.data.model == "64"
  * @requires vm.flavor != "zero"
  *
- * @run testng/othervm -Xmx6G TestStringEncodingJumbo
+ * @run junit/othervm -Xmx6G TestStringEncodingJumbo
  */
 
 public class TestStringEncodingJumbo {
@@ -53,7 +53,7 @@ public class TestStringEncodingJumbo {
             segment.fill((byte) 1);
             segment.set(JAVA_BYTE, Integer.MAX_VALUE + 10L, (byte) 0);
             String big = segment.getString(100);
-            assertEquals(big.length(), Integer.MAX_VALUE - (100 - 10));
+            assertEquals(Integer.MAX_VALUE - (100 - 10), big.length());
         });
     }
 

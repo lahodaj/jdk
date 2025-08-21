@@ -27,14 +27,13 @@
  * @modules java.base/jdk.internal.foreign
  * @build NativeTestHelper CallGeneratorHelper TestUpcallBase
  *
- * @run testng/othervm/native -XX:+IgnoreUnrecognizedVMOptions -XX:-VerifyDependencies
+ * @run junit/othervm/native -XX:+IgnoreUnrecognizedVMOptions -XX:-VerifyDependencies
  *   --enable-native-access=ALL-UNNAMED -Dgenerator.sample.factor=17
  *   TestUpcallAsync
  */
 
 import java.lang.foreign.*;
 
-import org.testng.annotations.Test;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -44,7 +43,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class TestUpcallAsync extends TestUpcallBase {
 
     static {
@@ -52,7 +55,8 @@ public class TestUpcallAsync extends TestUpcallBase {
         System.loadLibrary("AsyncInvokers");
     }
 
-    @Test(dataProvider="functions", dataProviderClass=CallGeneratorHelper.class)
+    @ParameterizedTest
+    @MethodSource("functions")
     public void testUpcallsAsync(int count, String fName, Ret ret, List<ParamType> paramTypes, List<StructFieldType> fields) throws Throwable {
         List<Consumer<Object>> returnChecks = new ArrayList<>();
         List<Consumer<Object>> argChecks = new ArrayList<>();

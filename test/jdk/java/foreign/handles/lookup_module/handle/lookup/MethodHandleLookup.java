@@ -37,7 +37,6 @@ import java.lang.foreign.SymbolLookup;
 import java.nio.file.Path;
 import java.util.function.Consumer;
 
-import org.testng.annotations.*;
 
 public class MethodHandleLookup {
 

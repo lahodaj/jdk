@@ -26,16 +26,16 @@
  * @test
  * @summary Test passing of a structure which contains a double with 4 Byte alignment on AIX.
  *
- * @run testng/othervm/native --enable-native-access=ALL-UNNAMED Test4BAlignedDouble
+ * @run junit/othervm/native --enable-native-access=ALL-UNNAMED Test4BAlignedDouble
  */
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import org.testng.annotations.Test;
 
 import static java.lang.foreign.ValueLayout.*;
+import org.junit.jupiter.api.Test;
 
 public class Test4BAlignedDouble {
 

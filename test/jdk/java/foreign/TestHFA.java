@@ -26,16 +26,16 @@
  * @test
  * @summary Test passing of Homogeneous Float Aggregates.
  *
- * @run testng/othervm/native --enable-native-access=ALL-UNNAMED TestHFA
+ * @run junit/othervm/native --enable-native-access=ALL-UNNAMED TestHFA
  */
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import org.testng.annotations.Test;
 
 import static java.lang.foreign.ValueLayout.*;
+import org.junit.jupiter.api.Test;
 
 public class TestHFA {
 

@@ -37,7 +37,6 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import jdk.internal.foreign.Utils;
-import org.testng.annotations.*;
 
 public class CallGeneratorHelper extends NativeTestHelper {
 
@@ -151,7 +150,6 @@ public class CallGeneratorHelper extends NativeTestHelper {
         }
     }
 
-    @DataProvider(name = "functions")
     public static Object[][] functions() {
         int functions = 0;
         List<Object[]> downcalls = new ArrayList<>();

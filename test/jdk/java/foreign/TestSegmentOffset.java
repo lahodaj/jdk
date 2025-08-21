@@ -23,30 +23,31 @@
 
 /*
  * @test
- * @run testng TestSegmentOffset
+ * @run junit TestSegmentOffset
  */
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 
-import org.testng.SkipException;
-import org.testng.annotations.DataProvider;
-import org.testng.annotations.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntFunction;
 import static java.lang.System.out;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
-import static org.testng.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class TestSegmentOffset {
 
-    @Test(dataProvider = "slices")
+    @ParameterizedTest
+    @MethodSource("slices")
     public void testOffset(SegmentSlice s1, SegmentSlice s2) {
-        if (s1.kind != s2.kind) {
-            throw new SkipException("Slices of different segment kinds");
-        }
+        Assumptions.assumeFalse(s1.kind != s2.kind, "Slices of different segment kinds");
         if (s1.contains(s2)) {
             // check that a segment and its overlapping segment point to same elements
             long offset = s1.offset(s2);
@@ -54,7 +55,7 @@ public class TestSegmentOffset {
                 out.format("testOffset s1:%s, s2:%s, offset:%d, i:%s\n", s1, s2, offset, i);
                 byte expected = s2.segment.get(JAVA_BYTE, i);
                 byte found = s1.segment.get(JAVA_BYTE, i + offset);
-                assertEquals(found, expected);
+                assertEquals(expected, found);
             }
         } else if (!s2.contains(s1)) {
             // disjoint segments - check that offset is out of bounds
@@ -116,7 +117,6 @@ public class TestSegmentOffset {
         }
     }
 
-    @DataProvider(name = "slices")
     static Object[][] slices() {
         int[] sizes = { 16, 8, 4, 2, 1 };
         List<SegmentSlice> slices = new ArrayList<>();
