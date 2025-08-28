@@ -1,0 +1,4 @@
+nb-java-lsp-server
+node_modules
+out
+server/target
