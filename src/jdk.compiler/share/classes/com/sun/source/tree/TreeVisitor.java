@@ -276,6 +276,15 @@ public interface TreeVisitor<R,P> {
     R visitBindingPattern(BindingPatternTree node, P p);
 
     /**
+     * Visits a {@code ConstantPatternTree} node.
+     * @param node the node being visited
+     * @param p a parameter value
+     * @return a result value
+     * @since 99
+     */
+    R visitConstantPattern(ConstantPatternTree node, P p);
+
+    /**
      * Visits a {@code DefaultCaseLabelTree} node.
      * @param node the node being visited
      * @param p a parameter value

@@ -1403,6 +1403,7 @@ public class TreeInfo {
     public static Type primaryPatternType(JCTree pat) {
         return switch (pat.getTag()) {
             case BINDINGPATTERN -> pat.type;
+            case CONSTANTPATTERN -> pat.type;
             case RECORDPATTERN -> ((JCRecordPattern) pat).type;
             case ANYPATTERN -> ((JCAnyPattern) pat).type;
             default -> throw new AssertionError();

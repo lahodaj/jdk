@@ -4238,6 +4238,13 @@ public class Attr extends JCTree.Visitor {
     }
 
     @Override
+    public void visitConstantPattern(JCConstantPattern tree) {
+        attribExpr(tree.expr, env, resultInfo.pt);
+        tree.type = tree.expr.type;
+        //TODO: check the value is constant!
+    }
+
+    @Override
     public void visitRecordPattern(JCRecordPattern tree) {
         Type site;
 

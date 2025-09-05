@@ -93,6 +93,7 @@ import com.sun.tools.javac.tree.JCTree.JCClassDecl;
 import com.sun.tools.javac.tree.JCTree.JCContinue;
 import com.sun.tools.javac.tree.JCTree.JCDoWhileLoop;
 import com.sun.tools.javac.tree.JCTree.JCConstantCaseLabel;
+import com.sun.tools.javac.tree.JCTree.JCConstantPattern;
 import com.sun.tools.javac.tree.JCTree.JCExpressionStatement;
 import com.sun.tools.javac.tree.JCTree.JCFieldAccess;
 import com.sun.tools.javac.tree.JCTree.JCLambda;
@@ -309,6 +310,14 @@ public class TransPatterns extends TreeTranslator {
     }
 
     @Override
+    public void visitConstantPattern(JCConstantPattern tree) {
+        //TODO: fully-featured check. Should there be a runtime support? I assume yes??
+        MethodSymbol equalsMethod = rs.resolveInternalMethod(tree.pos(), env, syms.objectsType, names.equals, List.of(syms.objectType, syms.objectType), List.nil());
+        JCMethodInvocation equals = make.Apply(List.nil(), make.QualIdent(equalsMethod), List.of(make.Ident(currentValue), tree.expr));
+        result = equals.setType(syms.booleanType);
+    }
+
+    @Override
     public void visitRecordPattern(JCRecordPattern tree) {
         //record patterns should be resolved by the constructs that use them.
         Assert.error();
@@ -355,11 +364,15 @@ public class TransPatterns extends TreeTranslator {
             } else if (nestedPattern instanceof JCAnyPattern nestedAnyPattern) {
                 allowNull = true;
                 nestedBinding = nestedAnyPattern;
-            }
-            else {
-                nestedBinding = (JCBindingPattern) nestedPattern;
+            } else if (nestedPattern instanceof JCConstantPattern nestedConstantPattern) {
+                nestedBinding = nestedConstantPattern;
+                allowNull = false;
+            } else if (nestedPattern instanceof JCBindingPattern nestedBindingPattern) {
+                nestedBinding = nestedBindingPattern;
                 allowNull = types.isSubtype(componentType,
                                             types.boxedTypeOrType(types.erasure(nestedBinding.type)));
+            } else {
+                throw Assert.error();
             }
             JCMethodInvocation componentAccessor =
                     make.at(recordPattern.pos()).App(make.Select(convert(make.Ident(recordBinding), recordBinding.type),

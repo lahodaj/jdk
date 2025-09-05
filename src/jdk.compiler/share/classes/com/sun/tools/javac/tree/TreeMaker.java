@@ -504,6 +504,12 @@ public class TreeMaker implements JCTree.Factory {
         return tree;
     }
 
+    public JCConstantPattern ConstantPattern(JCExpression expr) {
+        JCConstantPattern tree = new JCConstantPattern(expr);
+        tree.pos = pos;
+        return tree;
+    }
+
     public JCDefaultCaseLabel DefaultCaseLabel() {
         JCDefaultCaseLabel tree = new JCDefaultCaseLabel();
         tree.pos = pos;

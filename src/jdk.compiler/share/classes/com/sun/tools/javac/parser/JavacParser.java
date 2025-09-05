@@ -983,6 +983,14 @@ public class JavacParser implements Parser {
                                   boolean allowVar, boolean checkGuard) {
         JCPattern pattern;
         mods = mods != null ? mods : optFinal(0);
+        boolean constantPattern = mods.flags == 0 && mods.annotations.isEmpty() && parsedType == null &&
+                                  analyzePattern(0) == PatternResult.EXPRESSION;
+
+        if (constantPattern) {
+            JCExpression expr = parseExpression();
+            return toP(F.at(expr.pos()).ConstantPattern(expr));
+        }
+
         JCExpression e;
         if (token.kind == UNDERSCORE && parsedType == null) {
             nextToken();
@@ -3365,6 +3373,7 @@ public class JavacParser implements Parser {
             nextToken();
             label = toP(F.at(patternPos).DefaultCaseLabel());
         } else {
+            //TODO: constants should be parsed as constant patterns - either all, or at least some
             JCModifiers mods = optFinal(0);
             boolean pattern = mods.flags != 0 || mods.annotations.nonEmpty() ||
                               analyzePattern(0) == PatternResult.PATTERN;

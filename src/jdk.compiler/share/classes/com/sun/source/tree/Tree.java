@@ -234,6 +234,13 @@ public interface Tree {
         BINDING_PATTERN(BindingPatternTree.class),
 
         /**
+         * Used for instances of {@link ConstantPatternTree}.
+         *
+         * @since 99
+         */
+        CONSTANT_PATTERN(ConstantPatternTree.class),
+
+        /**
          * Used for instances of {@link DefaultCaseLabelTree}.
          *
          * @since 21

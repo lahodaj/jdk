@@ -510,6 +510,13 @@ public class TreeCopier<P> implements TreeVisitor<JCTree,P> {
     }
 
     @DefinedBy(Api.COMPILER_TREE)
+    public JCTree visitConstantPattern(ConstantPatternTree node, P p) {
+        JCConstantPattern t = (JCConstantPattern) node;
+        JCExpression expr = copy(t.expr, p);
+        return M.at(t.pos).ConstantPattern(expr);
+    }
+
+    @DefinedBy(Api.COMPILER_TREE)
     public JCTree visitDefaultCaseLabel(DefaultCaseLabelTree node, P p) {
         JCDefaultCaseLabel t = (JCDefaultCaseLabel) node;
         return M.at(t.pos).DefaultCaseLabel();

@@ -315,6 +315,11 @@ public class TreeScanner extends Visitor {
     }
 
     @Override
+    public void visitConstantPattern(JCConstantPattern tree) {
+        scan(tree.expr);
+    }
+
+    @Override
     public void visitDefaultCaseLabel(JCDefaultCaseLabel tree) {
     }
 

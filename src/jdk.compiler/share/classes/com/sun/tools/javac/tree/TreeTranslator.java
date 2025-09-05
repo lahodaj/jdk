@@ -369,6 +369,11 @@ public class TreeTranslator extends JCTree.Visitor {
         result = tree;
     }
 
+    public void visitConstantPattern(JCConstantPattern tree) {
+        tree.expr = translate(tree.expr);
+        result = tree;
+    }
+
     public void visitAnyPattern(JCAnyPattern tree) {
         result = tree;
     }

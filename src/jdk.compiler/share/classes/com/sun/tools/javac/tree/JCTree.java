@@ -245,6 +245,7 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
          */
         ANYPATTERN,
         BINDINGPATTERN,
+        CONSTANTPATTERN,
         RECORDPATTERN,
 
         /* Case labels.
@@ -2374,6 +2375,41 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
         }
     }
 
+    public static class JCConstantPattern extends JCPattern
+            implements ConstantPatternTree {
+        public JCExpression expr;
+
+        protected JCConstantPattern(JCExpression expr) {
+            this.expr = expr;
+        }
+
+        @Override @DefinedBy(Api.COMPILER_TREE)
+        public ExpressionTree getExpression() {
+            return expr;
+        }
+
+        @Override
+        public void accept(Visitor v) {
+            v.visitConstantPattern(this);
+        }
+
+        @DefinedBy(Api.COMPILER_TREE)
+        public Kind getKind() {
+            return Kind.CONSTANT_PATTERN;
+        }
+
+        @Override
+        @DefinedBy(Api.COMPILER_TREE)
+        public <R, D> R accept(TreeVisitor<R, D> v, D d) {
+            return v.visitConstantPattern(this, d);
+        }
+
+        @Override
+        public Tag getTag() {
+            return CONSTANTPATTERN;
+        }
+    }
+
     public static class JCDefaultCaseLabel extends JCCaseLabel
             implements DefaultCaseLabelTree {
 
@@ -3570,6 +3606,7 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
         public void visitTypeTest(JCInstanceOf that)         { visitTree(that); }
         public void visitAnyPattern(JCAnyPattern that)       { visitTree(that); }
         public void visitBindingPattern(JCBindingPattern that) { visitTree(that); }
+        public void visitConstantPattern(JCConstantPattern that) { visitTree(that); }
         public void visitDefaultCaseLabel(JCDefaultCaseLabel that) { visitTree(that); }
         public void visitConstantCaseLabel(JCConstantCaseLabel that) { visitTree(that); }
         public void visitPatternCaseLabel(JCPatternCaseLabel that) { visitTree(that); }

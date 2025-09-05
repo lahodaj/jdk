@@ -794,6 +794,21 @@ public class TreeScanner<R,P> implements TreeVisitor<R,P> {
     /**
      * {@inheritDoc}
      *
+     * @implSpec This implementation scans the children in left to right order.
+     *
+     * @param node  {@inheritDoc}
+     * @param p  {@inheritDoc}
+     * @return the result of scanning
+     * @since 99
+     */
+    @Override
+    public R visitConstantPattern(ConstantPatternTree node, P p) {
+        return scan(node.getExpression(), p);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
      * @implSpec This implementation returns {@code null}.
      *
      * @param node  {@inheritDoc}
