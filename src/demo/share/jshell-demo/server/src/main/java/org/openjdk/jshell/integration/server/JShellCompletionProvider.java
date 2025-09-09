@@ -52,7 +52,7 @@ public class JShellCompletionProvider  {
         while (cont) {
             cont = false;
             SourceCodeAnalysis.CompletionInfo completeness = analysis.analyzeCompletion(input);
-            if (completeness.completeness().isComplete()) {
+            if (completeness.completeness().isComplete() && !completeness.remaining().isBlank()) {
                 input = completeness.remaining();
                 cont = true;
             }
@@ -101,6 +101,11 @@ public class JShellCompletionProvider  {
                 default -> "";
             };
 
+            if (state.completionContext().contains(CompletionContext.TYPES_AS_ANNOTATIONS)) {
+                insert = "@" + insert;
+                label = "@" + label;
+            }
+
             String type = switch (el.getKind()) {
                 case METHOD -> ((ExecutableElement) el).getReturnType().toString();
                 case BINDING_VARIABLE, ENUM_CONSTANT, EXCEPTION_PARAMETER, FIELD, LOCAL_VARIABLE, PARAMETER, RECORD_COMPONENT, RESOURCE_VARIABLE -> el.asType().toString();
@@ -116,8 +121,6 @@ public class JShellCompletionProvider  {
             result.setLabelDetails(details);
             result.setData(suggestion.documentation());
             result.setSortText((suggestion.matchesType() ? "0" : "1") + ":" + suggestion.keyword());
-            
-            
 
             return result;
         }
@@ -148,17 +151,19 @@ public class JShellCompletionProvider  {
     private static int position2Offset(String content, Position position) {
         int line = position.getLine();
         int pos = 0;
+        int lastLineStart = 0;
         while (line > 0) {
             while (pos < content.length()) {
                 if (content.charAt(pos) == '\n') {
                     pos++;
+                    lastLineStart = pos;
                     break;
                 }
                 pos++;
             }
             line--;
         }
-        return pos + position.getCharacter();
+        return lastLineStart + position.getCharacter();
     }
     
     private static Position offset2Position(String content, int offset) {
@@ -170,8 +175,9 @@ public class JShellCompletionProvider  {
             if (content.charAt(pos) == '\n') {
                 line++;
                 character = 0;
+            } else {
+                character++;
             }
-            character++;
             pos++;
         }
 
