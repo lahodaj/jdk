@@ -20,7 +20,29 @@
 -->
 
 This is a demo extension for VS Code, showing enhanced JShell code completion.
-Based on original NB VS Code extension, which in turn was based on "lsp-sample" from:
-https://github.com/microsoft/vscode-extension-samples
 
-# Building
+__Warning:__ This is not a functional extension. The only purpose of this demo is to
+show what is possible with the experimental API for JShell code completion. It is
+also not guaranteed the API will be finalized.
+
+# Use
+
+To see the feature in action:
+
+- have a build of JDK from this branch ready: https://github.com/lahodaj/jdk/tree/JDK-8366691 ; lets mark the directory with the JDK image `JDK_IMAGE`
+- build this demo:
+```
+$ JAVA_HOME=$JDK_IMAGE npm run build-server
+$ npm install
+$ npm run compile
+```
+- open this directory in VS Code, and start the extension (press `F5`)
+- create a file with extension `.jshell`
+- code completion should work inside this file, for JShell snippets
+
+![a screenshot showing the code completion in action](demo-jshell-cc.png)
+
+# History
+
+Based on original NetBeans VS Code extension, which in turn was based on "lsp-sample" from:
+https://github.com/microsoft/vscode-extension-samples
