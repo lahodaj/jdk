@@ -24,10 +24,14 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import static javax.lang.model.element.ElementKind.CONSTRUCTOR;
 import static javax.lang.model.element.ElementKind.MODULE;
+import static javax.lang.model.element.ElementKind.PACKAGE;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.QualifiedNameable;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
 import jdk.jshell.JShell;
 import jdk.jshell.SourceCodeAnalysis;
 import jdk.jshell.SourceCodeAnalysis.CompletionContext;
@@ -77,7 +81,7 @@ public class JShellCompletionProvider  {
                     if (state.completionContext().contains(CompletionContext.ANNOTATION_ATTRIBUTE)) {
                         yield " = ";
                     } else {
-                        yield ((ExecutableElement) el).getParameters().stream().map(ve -> ve.asType().toString() + " " + ve.getSimpleName()).collect(Collectors.joining(", ", "(", ")"));
+                        yield ((ExecutableElement) el).getParameters().stream().map(ve -> simpleName(ve.asType()).toString() + " " + ve.getSimpleName()).collect(Collectors.joining(", ", "(", ")"));
                     }
                 }
                 default -> "";
@@ -125,6 +129,7 @@ public class JShellCompletionProvider  {
             return result;
         }
     }
+
     private static CharSequence simpleName(Element el) {
         return switch (el.getKind()) {
             case MODULE, PACKAGE -> ((QualifiedNameable) el).getQualifiedName();
@@ -146,6 +151,27 @@ public class JShellCompletionProvider  {
         } else {
             return simpleName(el);
         }
+    }
+
+    private static CharSequence simpleName(TypeMirror type) {
+        return switch (type.getKind()) {
+            case DECLARED -> {
+                DeclaredType dt = (DeclaredType) type;
+                StringBuilder result = new StringBuilder();
+                Element clazz = dt.asElement();
+
+                result.append(clazz.getSimpleName());
+                if (!dt.getTypeArguments().isEmpty()) {
+                    result.append(dt.getTypeArguments()
+                                    .stream()
+                                    .map(JShellCompletionProvider::simpleName)
+                                    .collect(Collectors.joining(", ", "<", ">")));
+                }
+
+                yield result;
+            }
+            default -> type.toString();
+        };
     }
 
     private static int position2Offset(String content, Position position) {
