@@ -20,6 +20,8 @@ package org.openjdk.jshell.integration.server;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonPrimitive;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +42,7 @@ import org.eclipse.lsp4j.InitializeParams;
 import org.eclipse.lsp4j.InitializeResult;
 import org.eclipse.lsp4j.ServerCapabilities;
 import org.eclipse.lsp4j.SetTraceParams;
+import org.eclipse.lsp4j.TextDocumentContentChangeEvent;
 import org.eclipse.lsp4j.TextDocumentSyncKind;
 import org.eclipse.lsp4j.jsonrpc.Launcher;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
@@ -73,7 +76,24 @@ public class Server {
 
             @Override
             public void didChange(DidChangeTextDocumentParams dctdp) {
-                open2Content.put(dctdp.getTextDocument().getUri(), dctdp.getContentChanges().get(0).getText());
+                String uri = dctdp.getTextDocument().getUri();
+                String content = open2Content.get(uri);
+
+                record Change(int start, int end, String newText) {}
+
+                List<Change> changes = new ArrayList<>();
+                for (TextDocumentContentChangeEvent c : dctdp.getContentChanges()) {
+                    changes.add(new Change(Utils.position2Offset(content, c.getRange().getStart()),
+                                           Utils.position2Offset(content, c.getRange().getEnd()),
+                                           c.getText()));
+                }
+
+                Collections.sort(changes, (c1, c2) -> c2.start - c1.start);
+                for (Change c : changes) {
+                    content = content.substring(0, c.start) + c.newText() + content.substring(c.end);
+                }
+
+                open2Content.put(uri, content);
             }
 
             @Override
@@ -133,7 +153,7 @@ public class Server {
         @Override
         public CompletableFuture<InitializeResult> initialize(InitializeParams init) {
             ServerCapabilities capabilities = new ServerCapabilities();
-            capabilities.setTextDocumentSync(TextDocumentSyncKind.Full);
+            capabilities.setTextDocumentSync(TextDocumentSyncKind.Incremental);
             final CompletionOptions complOpts = new CompletionOptions();
             complOpts.setResolveProvider(true);
             capabilities.setCompletionProvider(complOpts);

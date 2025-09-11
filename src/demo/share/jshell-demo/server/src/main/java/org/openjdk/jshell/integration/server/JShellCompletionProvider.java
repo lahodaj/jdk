@@ -28,7 +28,6 @@ import static javax.lang.model.element.ElementKind.PACKAGE;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.QualifiedNameable;
-import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
@@ -48,7 +47,7 @@ import org.eclipse.lsp4j.jsonrpc.messages.Either;
 public class JShellCompletionProvider  {
 
     public static List<CompletionItem> computeCodeCompletion(String content, Position position) {
-        int offset = position2Offset(content, position);
+        int offset = Utils.position2Offset(content, position);
         JShell jshell = JShell.create();
         SourceCodeAnalysis analysis = jshell.sourceCodeAnalysis();
         String input = content.substring(0, offset);
@@ -69,7 +68,7 @@ public class JShellCompletionProvider  {
         if (suggestion.keyword() != null) {
             CompletionItem result = new CompletionItem(suggestion.keyword());
 
-            result.setTextEdit(Either.forLeft(new TextEdit(new Range(offset2Position(content, suggestion.anchor()), offset2Position(content, cursor)), suggestion.keyword())));
+            result.setTextEdit(Either.forLeft(new TextEdit(new Range(Utils.offset2Position(content, suggestion.anchor()), Utils.offset2Position(content, cursor)), suggestion.keyword())));
             result.setSortText((suggestion.matchesType() ? "0" : "1") + ":" + suggestion.keyword());
 
             return result;
@@ -119,7 +118,7 @@ public class JShellCompletionProvider  {
             CompletionItem result = new CompletionItem(label);
 
             result.setInsertTextFormat(InsertTextFormat.Snippet);
-            result.setTextEdit(Either.forLeft(new TextEdit(new Range(offset2Position(content, suggestion.anchor()), offset2Position(content, cursor)), insert)));
+            result.setTextEdit(Either.forLeft(new TextEdit(new Range(Utils.offset2Position(content, suggestion.anchor()), Utils.offset2Position(content, cursor)), insert)));
             CompletionItemLabelDetails details = new CompletionItemLabelDetails();
             details.setDescription(type);
             result.setLabelDetails(details);
@@ -174,39 +173,4 @@ public class JShellCompletionProvider  {
         };
     }
 
-    private static int position2Offset(String content, Position position) {
-        int line = position.getLine();
-        int pos = 0;
-        int lastLineStart = 0;
-        while (line > 0) {
-            while (pos < content.length()) {
-                if (content.charAt(pos) == '\n') {
-                    pos++;
-                    lastLineStart = pos;
-                    break;
-                }
-                pos++;
-            }
-            line--;
-        }
-        return lastLineStart + position.getCharacter();
-    }
-    
-    private static Position offset2Position(String content, int offset) {
-        int line = 0;
-        int character = 0;
-        int pos = 0;
-
-        while (pos < offset) {
-            if (content.charAt(pos) == '\n') {
-                line++;
-                character = 0;
-            } else {
-                character++;
-            }
-            pos++;
-        }
-
-        return new Position(line, character);
-    }
 }
