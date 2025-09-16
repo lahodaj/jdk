@@ -314,11 +314,17 @@ public class TransPatterns extends TreeTranslator {
     @Override
     public void visitConstantPattern(JCConstantPattern tree) {
         if (tree.type.isPrimitive()) {
-            OperatorSymbol eq = operators.resolveBinary(tree.pos(), Tag.EQ, currentValue.type, tree.type);
+            JCExpression instance = make.Ident(currentValue);
+
+            if (!instance.type.isPrimitive()) {
+                instance = make.TypeCast(tree.type.baseType(), instance);
+            }
+
+            OperatorSymbol eq = operators.resolveBinary(tree.pos(), Tag.EQ, instance.type, tree.type);
             TypeSymbol param = eq.type.getParameterTypes().get(0).tsym;
 
             if (param != syms.floatType.tsym && param != syms.doubleType.tsym) {
-                JCBinary equals = make.Binary(Tag.EQ, make.Ident(currentValue), tree.expr);
+                JCBinary equals = make.Binary(Tag.EQ, instance, tree.expr);
                 equals.operator = eq;
                 equals.type = syms.booleanType;
 
@@ -1067,8 +1073,12 @@ public class TransPatterns extends TreeTranslator {
     }
 
     private LoadableConstant toLoadableConstant(JCCaseLabel l, Type selector) {
-        if (l.hasTag(Tag.PATTERNCASELABEL)) {
-            Type principalType = principalType(((JCPatternCaseLabel) l).pat);
+        if (l instanceof JCPatternCaseLabel pcl) {
+            if (pcl.pat instanceof JCConstantPattern cp) {
+                return toLoadableConstant(cp.expr, selector);
+            }
+
+            Type principalType = principalType(pcl.pat);
 
             if (target.switchBootstrapOnlyAllowsReferenceTypesAsCaseLabels()) {
                 principalType = types.boxedTypeOrType(principalType);
@@ -1084,32 +1094,34 @@ public class TransPatterns extends TreeTranslator {
                 return makePrimitive(l.pos(), principalType);
             }
         } else if (l.hasTag(Tag.CONSTANTCASELABEL) && !TreeInfo.isNullCaseLabel(l)) {
-            JCExpression expr = ((JCConstantCaseLabel) l).expr;
-            Symbol sym = TreeInfo.symbol(expr);
-            if (sym != null && sym.isEnum() && sym.kind == Kind.VAR) {
-                if (selector.tsym.isEnum()) {
-                    return LoadableConstant.String(sym.getSimpleName().toString());
-                } else {
-                    return createEnumDesc(l.pos(), (ClassSymbol) sym.owner, sym.getSimpleName());
-                }
-            } else {
-                Assert.checkNonNull(expr.type.constValue());
-
-                return switch (expr.type.getTag()) {
-                    case BOOLEAN -> makeBooleanConstant(l.pos(), (Integer) expr.type.constValue());
-                    case BYTE, CHAR, SHORT, INT -> LoadableConstant.Int((Integer) expr.type.constValue());
-                    case LONG -> LoadableConstant.Long((Long) expr.type.constValue());
-                    case FLOAT -> LoadableConstant.Float((Float) expr.type.constValue());
-                    case DOUBLE -> LoadableConstant.Double((Double) expr.type.constValue());
-                    case CLASS -> LoadableConstant.String((String) expr.type.constValue());
-                    default -> throw new AssertionError();
-                };
-            }
+            return toLoadableConstant(((JCConstantCaseLabel) l).expr, selector);
         } else {
             return null;
         }
     }
 
+    private LoadableConstant toLoadableConstant(JCExpression expr, Type selector) {
+        Symbol sym = TreeInfo.symbol(expr);
+        if (sym != null && sym.isEnum() && sym.kind == Kind.VAR) {
+            if (selector.tsym.isEnum()) {
+                return LoadableConstant.String(sym.getSimpleName().toString());
+            } else {
+                return createEnumDesc(expr.pos(), (ClassSymbol) sym.owner, sym.getSimpleName());
+            }
+        } else {
+            Assert.checkNonNull(expr.type.constValue());
+
+            return switch (expr.type.getTag()) {
+                case BOOLEAN -> makeBooleanConstant(expr.pos(), (Integer) expr.type.constValue());
+                case BYTE, CHAR, SHORT, INT -> LoadableConstant.Int((Integer) expr.type.constValue());
+                case LONG -> LoadableConstant.Long((Long) expr.type.constValue());
+                case FLOAT -> LoadableConstant.Float((Float) expr.type.constValue());
+                case DOUBLE -> LoadableConstant.Double((Double) expr.type.constValue());
+                case CLASS -> LoadableConstant.String((String) expr.type.constValue());
+                default -> throw new AssertionError();
+            };
+        }
+    }
     private LoadableConstant createEnumDesc(DiagnosticPosition pos, ClassSymbol enumClass, Name constant) {
         MethodSymbol classDesc = rs.resolveInternalMethod(pos, env, syms.classDescType, names.of, List.of(syms.stringType), List.nil());
         MethodSymbol enumDesc = rs.resolveInternalMethod(pos, env, syms.enumDescType, names.of, List.of(syms.classDescType, syms.stringType), List.nil());

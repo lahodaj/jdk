@@ -40,6 +40,8 @@ import java.util.Objects;
 import toolbox.JavaTask;
 import toolbox.JavacTask;
 import toolbox.Task;
+import toolbox.Task.Expect;
+import toolbox.Task.OutputKind;
 import toolbox.ToolBox;
 
 import org.junit.Test;
@@ -142,7 +144,7 @@ public class CP {
         }
 
         new JavacTask(tb)
-                .options("--enable-preview", "--source", System.getProperty("java.specification.version"))
+                .options("--enable-preview", "--release", System.getProperty("java.specification.version"))
                 .outdir(classes)
                 .files(tb.findJavaFiles(src))
                 .run()
@@ -163,4 +165,142 @@ public class CP {
         }
     }
 
+    @Test
+    public void testSourceLevelCheck() throws Exception {
+        Path base = Paths.get(".");
+        Path src = base.resolve("src");
+
+        Path classes = base.resolve("classes");
+
+        if (Files.exists(classes)) {
+            tb.cleanDirectory(classes);
+        } else {
+            Files.createDirectories(classes);
+        }
+
+        List<String> log;
+        List<String> expected;
+
+        tb.writeJavaFiles(src,
+                          """
+                          public record R(int val) {
+                              static void main() {
+                                  Object o = new R(0);
+                                  if (o instanceof R(0)) {}
+                                  if (o instanceof R(0)) {}
+                              }
+                          }
+                          """);
+
+        log =
+            new JavacTask(tb)
+                    .options("--release", "25",
+                             "-XDrawDiagnostics")
+                    .outdir(classes)
+                    .files(tb.findJavaFiles(src))
+                    .run(Expect.FAIL)
+                    .writeAll()
+                    .getOutputLines(OutputKind.DIRECT);
+
+        expected = List.of(
+                "R.java:4:28: compiler.err.preview.feature.disabled.plural: (compiler.misc.feature.constant.patterns)",
+                "1 error"
+        );
+
+        if (!Objects.equals(log, expected)) {
+            throw new AssertionError("Incorrect result, expected: " + expected +
+                                     ", got: " + log);
+        }
+
+        tb.writeJavaFiles(src,
+                          """
+                          public record R(int val) {
+                              static void main() {
+                                  Object o = new R(0);
+                                  switch (o) {
+                                      case R(1) -> {}
+                                      case R(2) -> {}
+                                  }
+                              }
+                          }
+                          """);
+
+        log =
+            new JavacTask(tb)
+                    .options("--release", "25",
+                             "-XDrawDiagnostics")
+                    .outdir(classes)
+                    .files(tb.findJavaFiles(src))
+                    .run(Expect.FAIL)
+                    .writeAll()
+                    .getOutputLines(OutputKind.DIRECT);
+
+        expected = List.of(
+                "R.java:5:20: compiler.err.preview.feature.disabled.plural: (compiler.misc.feature.constant.patterns)",
+                "1 error"
+        );
+
+        if (!Objects.equals(log, expected)) {
+            throw new AssertionError("Incorrect result, expected: " + expected +
+                                     ", got: " + log);
+        }
+    }
+
+    @Test
+    public void testConstantCast() throws Exception {
+        runTest("""
+                public record R(Number val) {
+                    static void main() {
+                        Object o = new R(1);
+                        if (o instanceof R(2)) {
+                            throw new AssertionError("0");
+                        }
+                        if (!(o instanceof R(1))) {
+                            throw new AssertionError("1");
+                        }
+                        if (o instanceof R(1L)) {
+                            throw new AssertionError("2");
+                        }
+                        System.out.println("correct");
+                    }
+                }
+                """,
+                "correct");
+    }
+
+    @Test
+    public void testConstantCastSwitch() throws Exception {
+        runTest("""
+                public record R(Number val) {
+                    static void main() {
+                        Object o = new R(1);
+                        switch (o) {
+                            case R(2) -> throw new AssertionError("0");
+                            case R(1L) -> throw new AssertionError("1");
+                            case R(1) -> System.out.println("correct");
+                            default -> throw new AssertionError("2");
+                        }
+                    }
+                }
+                """,
+                "correct");
+    }
+
+    @Test
+    public void testTopLevelConstant() throws Exception {
+        runTest("""
+                public record R(Number val) {
+                    static void main() {
+                        Object o = 1;
+                        switch (o) {
+                            case 2 -> throw new AssertionError("0");
+                            case 1L -> throw new AssertionError("1");
+                            case 1 -> System.out.println("correct");
+                            case Object _ -> throw new AssertionError("2");
+                        }
+                    }
+                }
+                """,
+                "correct");
+    }
 }

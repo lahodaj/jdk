@@ -198,6 +198,9 @@ public class JavacParser implements Parser {
         this.allowYieldStatement = Feature.SWITCH_EXPRESSION.allowedInSource(source);
         this.allowRecords = Feature.RECORDS.allowedInSource(source);
         this.allowSealedTypes = Feature.SEALED_CLASSES.allowedInSource(source);
+        this.allowConstantPatterns = preview.isPreview(Feature.CONSTANT_PATTERNS)
+                ? preview.isEnabled()
+                : Feature.CONSTANT_PATTERNS.allowedInSource(source);
         updateUnexpectedTopLevelDefinitionStartError(false);
     }
 
@@ -222,6 +225,10 @@ public class JavacParser implements Parser {
         this.allowYieldStatement = Feature.SWITCH_EXPRESSION.allowedInSource(source);
         this.allowRecords = Feature.RECORDS.allowedInSource(source);
         this.allowSealedTypes = Feature.SEALED_CLASSES.allowedInSource(source);
+        this.allowConstantPatterns = preview.isPreview(Feature.CONSTANT_PATTERNS)
+                ? preview.isEnabled()
+                : Feature.CONSTANT_PATTERNS.allowedInSource(source);
+
         updateUnexpectedTopLevelDefinitionStartError(false);
     }
 
@@ -263,6 +270,9 @@ public class JavacParser implements Parser {
     /** Switch: are sealed types allowed in this source level?
      */
     boolean allowSealedTypes;
+
+    //leads to a different ast:
+    boolean allowConstantPatterns;
 
     /** The type of the method receiver, as specified by a first "this" parameter.
      */
@@ -984,9 +994,12 @@ public class JavacParser implements Parser {
         JCPattern pattern;
         mods = mods != null ? mods : optFinal(0);
         boolean constantPattern = mods.flags == 0 && mods.annotations.isEmpty() && parsedType == null &&
+                                  token.kind != RPAREN &&
                                   analyzePattern(0) == PatternResult.EXPRESSION;
 
         if (constantPattern) {
+            checkSourceLevel(Feature.CONSTANT_PATTERNS);
+
             JCExpression expr = parseExpression();
             return toP(F.at(expr.pos()).ConstantPattern(expr));
         }
@@ -3281,7 +3294,19 @@ public class JavacParser implements Parser {
                 cases.appendList(switchBlockStatementGroup());
                 break;
             case RBRACE: case EOF:
-                return cases.toList();
+                List<JCCase> result = cases.toList();
+                boolean isEnhancedSwitch = result.stream().anyMatch(c -> c.labels.stream().anyMatch(l -> l.hasTag(PATTERNCASELABEL))); //TODO + constant null(!)
+                if (isEnhancedSwitch && allowConstantPatterns) {
+                    //XXX: should probably do this always, as we can't check the selector type here anyway(???)
+                    for (JCCase c : result) {
+                        for (List<JCCaseLabel> labels = c.labels; labels.nonEmpty(); labels = labels.tail) {
+                            if (labels.head instanceof JCConstantCaseLabel ccl && !TreeInfo.isNullCaseLabel(labels.head)) {
+                                labels.head = F.at(labels.head).PatternCaseLabel(F.at(labels.head).ConstantPattern(ccl.expr));
+                            }
+                        }
+                    }
+                }
+                return result;
             default:
                 nextToken(); // to ensure progress
                 syntaxError(pos, Errors.Expected3(CASE, DEFAULT, RBRACE));
@@ -3425,6 +3450,9 @@ public class JavacParser implements Parser {
                         }
                     } else if (typeDepth == 0 && parenDepth == 0 && (peekToken(lookahead, tk -> tk == ARROW || tk == COMMA))) {
                         return PatternResult.EXPRESSION;
+                    } else if (peekToken(lookahead - 1, LAX_IDENTIFIER) && S.token(lookahead + 1).kind == LPAREN) {
+                        //looks-like a method invocation, cannot be a constant expression, but inside can be an expression (constant pattern):
+                        return PatternResult.PATTERN;
                     }
                     break;
                 case UNDERSCORE:

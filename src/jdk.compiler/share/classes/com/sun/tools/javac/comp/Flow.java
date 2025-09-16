@@ -3504,6 +3504,8 @@ public class Flow {
             return new RecordPattern(record.type, componentTypes, nestedDescriptions);
         } else if (pattern instanceof JCAnyPattern) {
             return new BindingPattern(selectorType);
+        } else if (pattern instanceof JCConstantPattern) {
+            return new NoopPattern();
         } else {
             throw Assert.error();
         }
@@ -3561,5 +3563,8 @@ public class Flow {
                     .map(pd -> pd.toString())
                     .collect(Collectors.joining(", ")) + ")";
         }
+    }
+
+    record NoopPattern() implements PatternDescription {
     }
 }

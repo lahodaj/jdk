@@ -4792,8 +4792,25 @@ public class Check {
                         currentNested = currentNested.tail;
                     }
                     return true;
-                } else {
+                } else { //TODO: constant pattern
                     Assert.error("Unknown pattern: " + existingPattern.getTag());
+                }
+            } else if (currentPattern instanceof JCConstantPattern currentConstant) {
+                if (existingPattern instanceof JCBindingPattern ||
+                    existingPattern instanceof JCAnyPattern) {
+                    return true;
+                } else if (existingPattern instanceof JCConstantPattern existingConstant) {
+                    if (existingConstant.expr.type.isPrimitive() || existingConstant.expr.type.tsym == syms.stringType.tsym) {
+                        return Objects.equals(currentConstant.expr.type.constValue(), existingConstant.expr.type.constValue());
+                    } else {
+                        //TODO: enum constants(!)
+                        return false;
+                    }
+                } else if (existingPattern instanceof JCRecordPattern) {
+                    //cannot happen(?), error recovery
+                    return false;
+                } else {
+                    Assert.error("Unknown pattern: " + currentPattern.getTag());
                 }
             } else {
                 Assert.error("Unknown pattern: " + currentPattern.getTag());

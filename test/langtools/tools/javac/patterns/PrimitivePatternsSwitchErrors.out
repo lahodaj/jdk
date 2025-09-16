@@ -6,7 +6,7 @@ PrimitivePatternsSwitchErrors.java:78:18: compiler.err.pattern.dominated
 PrimitivePatternsSwitchErrors.java:84:18: compiler.err.prob.found.req: (compiler.misc.possible.loss.of.precision: long, byte)
 PrimitivePatternsSwitchErrors.java:90:18: compiler.err.constant.label.not.compatible: int, float
 PrimitivePatternsSwitchErrors.java:92:18: compiler.err.constant.label.not.compatible: int, float
-PrimitivePatternsSwitchErrors.java:103:13: compiler.err.duplicate.case.label
+PrimitivePatternsSwitchErrors.java:103:18: compiler.err.pattern.dominated
 PrimitivePatternsSwitchErrors.java:114:13: compiler.err.default.and.both.boolean.values
 PrimitivePatternsSwitchErrors.java:122:13: compiler.err.default.and.both.boolean.values
 PrimitivePatternsSwitchErrors.java:130:18: compiler.err.unconditional.pattern.and.both.boolean.values

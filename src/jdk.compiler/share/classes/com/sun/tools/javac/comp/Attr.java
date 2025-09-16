@@ -1855,7 +1855,10 @@ public class Attr extends JCTree.Visitor {
                                 log.error(guard.pos(), Errors.GuardHasConstantExpressionFalse);
                             }
                         }
-                        boolean unguarded = TreeInfo.unguardedCase(c) && !pat.hasTag(RECORDPATTERN);
+                        if (guard == null && pat instanceof JCConstantPattern cp) {
+                            constants.add(cp.expr.type.constValue());
+                        }
+                        boolean unguarded = TreeInfo.unguardedCase(c) && !pat.hasTag(RECORDPATTERN) && !pat.hasTag(CONSTANTPATTERN);
                         boolean unconditional =
                                 unguarded &&
                                 !patternType.isErroneous() &&

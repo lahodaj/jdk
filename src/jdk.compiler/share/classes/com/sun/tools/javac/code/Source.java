@@ -277,6 +277,7 @@ public enum Source {
         JAVA_BASE_TRANSITIVE(JDK25, Fragments.FeatureJavaBaseTransitive, DiagKind.PLURAL),
         PRIVATE_MEMBERS_IN_PERMITS_CLAUSE(JDK19),
         ERASE_POLY_SIG_RETURN_TYPE(JDK24),
+        CONSTANT_PATTERNS(JDK26, Fragments.FeatureConstantPatterns, DiagKind.PLURAL), //TODO: will not be JDK 26, but there's no newer usable constant(!!!)
         ;
 
         enum DiagKind {
