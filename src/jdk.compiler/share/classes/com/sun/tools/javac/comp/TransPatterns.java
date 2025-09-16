@@ -75,7 +75,9 @@ import java.util.LinkedHashMap;
 import java.util.Set;
 
 import com.sun.tools.javac.code.Symbol.MethodSymbol;
+import com.sun.tools.javac.code.Symbol.OperatorSymbol;
 import com.sun.tools.javac.code.Symbol.RecordComponent;
+import com.sun.tools.javac.code.Symbol.TypeSymbol;
 import com.sun.tools.javac.code.Type;
 import static com.sun.tools.javac.code.TypeTag.BOT;
 import static com.sun.tools.javac.code.TypeTag.VOID;
@@ -311,7 +313,20 @@ public class TransPatterns extends TreeTranslator {
 
     @Override
     public void visitConstantPattern(JCConstantPattern tree) {
-        //TODO: fully-featured check. Should there be a runtime support? I assume yes??
+        if (tree.type.isPrimitive()) {
+            OperatorSymbol eq = operators.resolveBinary(tree.pos(), Tag.EQ, currentValue.type, tree.type);
+            TypeSymbol param = eq.type.getParameterTypes().get(0).tsym;
+
+            if (param != syms.floatType.tsym && param != syms.doubleType.tsym) {
+                JCBinary equals = make.Binary(Tag.EQ, make.Ident(currentValue), tree.expr);
+                equals.operator = eq;
+                equals.type = syms.booleanType;
+
+                result = equals.setType(syms.booleanType);
+                return ;
+            }
+        }
+
         MethodSymbol equalsMethod = rs.resolveInternalMethod(tree.pos(), env, syms.objectsType, names.equals, List.of(syms.objectType, syms.objectType), List.nil());
         JCMethodInvocation equals = make.Apply(List.nil(), make.QualIdent(equalsMethod), List.of(make.Ident(currentValue), tree.expr));
         result = equals.setType(syms.booleanType);

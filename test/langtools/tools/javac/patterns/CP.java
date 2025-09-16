@@ -53,24 +53,85 @@ public class CP {
 
     @Test
     public void testPatternsInJava() throws Exception {
-        Path base = Paths.get("."); //XXX: should(?) use @TempDir, but it didn't work for me
+        runTest("""
+                public record R(int val) {
+                    static void main() {
+                        Object o = new R(1);
+                        if (!(o instanceof R(1))) {
+                            throw new AssertionError("1");
+                        }
+                        if (o instanceof R(0)) {
+                            throw new AssertionError("2");
+                        }
+                        System.out.println("correct");
+                    }
+                }
+                """,
+                "correct");
+    }
+
+    @Test
+    public void testString() throws Exception {
+        runTest("""
+                public record R(String val) {
+                    static void main() {
+                        Object o = new R("a");
+                        if (!(o instanceof R("a"))) {
+                            throw new AssertionError("1");
+                        }
+                        if (o instanceof R("")) {
+                            throw new AssertionError("2");
+                        }
+                        System.out.println("correct");
+                    }
+                }
+                """,
+                "correct");
+    }
+
+    @Test
+    public void testFloat() throws Exception {
+        runTest("""
+                public record R(float val) {
+                    static void main() {
+                        Object o = new R(Float.NaN);
+                        if (!(o instanceof R(Float.NaN))) {
+                            throw new AssertionError("1");
+                        }
+                        if (o instanceof R(0)) {
+                            throw new AssertionError("2");
+                        }
+                        System.out.println("correct");
+                    }
+                }
+                """,
+                "correct");
+    }
+
+    @Test
+    public void testDouble() throws Exception {
+        runTest("""
+                public record R(double val) {
+                    static void main() {
+                        Object o = new R(Double.NaN);
+                        if (!(o instanceof R(Double.NaN))) {
+                            throw new AssertionError("1");
+                        }
+                        if (o instanceof R(0)) {
+                            throw new AssertionError("2");
+                        }
+                        System.out.println("correct");
+                    }
+                }
+                """,
+                "correct");
+    }
+
+    private void runTest(String code, String... expected) throws Exception {
+        Path base = Paths.get(".");
         Path src = base.resolve("src");
 
-        tb.writeJavaFiles(src,
-                          """
-                          public record R(int val) {
-                              static void main() {
-                                  Object o = new R(1);
-                                  if (!(o instanceof R(1))) {
-                                      throw new AssertionError("1");
-                                  }
-                                  if (o instanceof R(0)) {
-                                      throw new AssertionError("2");
-                                  }
-                                  System.out.println("correct");
-                              }
-                          }
-                          """);
+        tb.writeJavaFiles(src, code);
 
         Path classes = base.resolve("classes");
 
@@ -94,10 +155,10 @@ public class CP {
                             .run()
                             .writeAll()
                             .getOutputLines(Task.OutputKind.STDOUT);
-        List<String> expected = List.of("correct");
+        List<String> expectedAsList = List.of(expected);
 
-        if (!Objects.equals(log, expected)) {
-            throw new AssertionError("Incorrect result, expected: " + expected +
+        if (!Objects.equals(log, expectedAsList)) {
+            throw new AssertionError("Incorrect result, expected: " + expectedAsList +
                                      ", got: " + log);
         }
     }
