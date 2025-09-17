@@ -303,4 +303,24 @@ public class CP {
                 """,
                 "correct");
     }
+
+    @Test
+    public void testEnumConstant1() throws Exception {
+        runTest("""
+                public record R(Object o) {
+                    static void main() {
+                        Object o = new R(E.A);
+                        switch (o) {
+                            case R(E.B) -> throw new AssertionError("0");
+                            case R(E.A) -> System.out.println("correct");
+                            case Object _ -> throw new AssertionError("2");
+                        }
+                    }
+                }
+                enum E {
+                    A, B, C;
+                }
+                """,
+                "correct");
+    }
 }

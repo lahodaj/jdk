@@ -1630,7 +1630,7 @@ public class Exhaustiveness extends TestRunner {
         doTest(base,
                new String[0],
                code,
-               true);
+               List.of("-XDshould-stop.ifNoError=FLOW"));
     }
 
     @Test
@@ -2128,6 +2128,7 @@ public class Exhaustiveness extends TestRunner {
                }
                """);
     }
+
     @Test //JDK-8327368
     public void testExpandForTypeVariables(Path base) throws Exception {
         doTest(base,
@@ -2182,11 +2183,33 @@ public class Exhaustiveness extends TestRunner {
                """);
     }
 
-    private void doTest(Path base, String[] libraryCode, String testCode, String... expectedErrors) throws IOException {
-        doTest(base, libraryCode, testCode, false, expectedErrors);
+    @Test
+    public void testConstantPatternsEnum(Path base) throws Exception {
+        doTest(base,
+               new String[0],
+               """
+               public class Test {
+                   sealed interface Marker {}
+                   enum E implements Marker {A, B, C }
+                   record R(Marker data) { }
+
+                   static int r(R r) {
+                       return switch (r) {
+                           case R(E.A) -> 1;
+                           case R(E.B) -> 2;
+                           case R(E.C) -> 3;
+                       };
+                   }
+               }
+               """,
+               List.of("--enable-preview", "--release", System.getProperty("java.specification.version")));
     }
 
-    private void doTest(Path base, String[] libraryCode, String testCode, boolean stopAtFlow, String... expectedErrors) throws IOException {
+    private void doTest(Path base, String[] libraryCode, String testCode, String... expectedErrors) throws IOException {
+        doTest(base, libraryCode, testCode, List.of(), expectedErrors);
+    }
+
+    private void doTest(Path base, String[] libraryCode, String testCode, List<String> extraOptions, String... expectedErrors) throws IOException {
         Path current = base.resolve(".");
         Path libClasses = current.resolve("libClasses");
 
@@ -2212,14 +2235,17 @@ public class Exhaustiveness extends TestRunner {
 
         Files.createDirectories(libClasses);
 
+        List<String> allOptions = new ArrayList<>();
+
+        allOptions.add("-XDrawDiagnostics");
+        allOptions.add("-Xlint:-preview");
+        allOptions.add("--class-path");  allOptions.add(libClasses.toString());
+        allOptions.add("-XDshould-stop.at=FLOW");
+        allOptions.addAll(extraOptions);
+
         var log =
                 new JavacTask(tb)
-                    .options("-XDrawDiagnostics",
-                             "-Xlint:-preview",
-                             "--class-path", libClasses.toString(),
-                             "-XDshould-stop.at=FLOW",
-                             stopAtFlow ? "-XDshould-stop.ifNoError=FLOW"
-                                        : "-XDnoop")
+                    .options(allOptions.toArray(String[]::new))
                     .outdir(classes)
                     .files(tb.findJavaFiles(src))
                     .run(expectedErrors.length > 0 ? Task.Expect.FAIL : Task.Expect.SUCCESS)

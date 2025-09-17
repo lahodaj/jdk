@@ -65,6 +65,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.groupingBy;
+import java.util.stream.StreamSupport;
 
 /** This pass implements dataflow analysis for Java programs though
  *  different AST visitor steps. Liveness analysis (see AliveAnalyzer) checks that
@@ -760,7 +761,6 @@ public class Flow {
 
         private boolean exhausts(JCExpression selector, List<JCCase> cases) {
             Set<PatternDescription> patternSet = new HashSet<>();
-            Map<Symbol, Set<Symbol>> enum2Constants = new HashMap<>();
             Set<Object> booleanLiterals = new HashSet<>(Set.of(0, 1));
             for (JCCase c : cases) {
                 if (!TreeInfo.unguardedCase(c))
@@ -777,14 +777,8 @@ public class Flow {
                             booleanLiterals.remove(value);
                         } else {
                             Symbol s = TreeInfo.symbol(constantLabel.expr);
-                            if (s != null && s.isEnum()) {
-                                enum2Constants.computeIfAbsent(s.owner, x -> {
-                                    Set<Symbol> result = new HashSet<>();
-                                    s.owner.members()
-                                            .getSymbols(sym -> sym.kind == Kind.VAR && sym.isEnum())
-                                            .forEach(result::add);
-                                    return result;
-                                }).remove(s);
+                            if (s != null && s.isEnum() && s.kind == Kind.VAR) {
+                                patternSet.add(new EnumConstantPattern((ClassSymbol) s.owner, s.name));
                             }
                         }
                     }
@@ -795,18 +789,14 @@ public class Flow {
                 return true;
             }
 
-            for (Entry<Symbol, Set<Symbol>> e : enum2Constants.entrySet()) {
-                if (e.getValue().isEmpty()) {
-                    patternSet.add(new BindingPattern(e.getKey().type));
-                }
-            }
             Set<PatternDescription> patterns = patternSet;
             boolean useHashes = true;
             try {
                 boolean repeat = true;
                 while (repeat) {
                     Set<PatternDescription> updatedPatterns;
-                    updatedPatterns = reduceBindingPatterns(selector.type, patterns);
+                    updatedPatterns = reduceConstantPatterns(patterns);
+                    updatedPatterns = reduceBindingPatterns(selector.type, updatedPatterns);
                     updatedPatterns = reduceNestedPatterns(updatedPatterns, useHashes);
                     updatedPatterns = reduceRecordPatterns(updatedPatterns);
                     updatedPatterns = removeCoveredRecordPatterns(updatedPatterns);
@@ -1081,6 +1071,7 @@ public class Flow {
                             var nestedPatterns = join.stream().map(rp -> rp.nested[mismatchingCandidateFin]).collect(Collectors.toSet());
                             var updatedPatterns = reduceNestedPatterns(nestedPatterns, useHashes);
 
+                            updatedPatterns = reduceConstantPatterns(updatedPatterns);
                             updatedPatterns = reduceRecordPatterns(updatedPatterns);
                             updatedPatterns = removeCoveredRecordPatterns(updatedPatterns);
                             updatedPatterns = reduceBindingPatterns(rpOne.fullComponentTypes()[mismatchingCandidateFin], updatedPatterns);
@@ -1179,6 +1170,51 @@ public class Flow {
             }
 
             return result;
+        }
+
+        private Set<PatternDescription> reduceConstantPatterns(Set<PatternDescription> patterns) {
+            Map<ClassSymbol, Set<EnumConstantPattern>> enum2PatternDescriptions = new HashMap<>();
+
+            for (PatternDescription pd : patterns) {
+                if (pd instanceof EnumConstantPattern ecp) {
+                    enum2PatternDescriptions.computeIfAbsent(ecp.enumType(), _ -> new HashSet<>())
+                                            .add(ecp);
+                }
+            }
+
+            Set<PatternDescription> result = null;
+
+            for (Entry<ClassSymbol, Set<EnumConstantPattern>> e : enum2PatternDescriptions.entrySet()) {
+                Set<Name> pendingConstants = new HashSet<>();
+
+                e.getKey()
+                 .members()
+                 .getSymbols(sym -> sym.kind == Kind.VAR && sym.isEnum())
+                 .forEach(sym -> pendingConstants.add(sym.name));
+
+                pendingConstants.removeAll(e.getValue().stream().map(EnumConstantPattern::enumValue).toList());
+
+                if (pendingConstants.isEmpty()) {
+                    //e.getKey() is covered:
+                    if (result == null) {
+                        result = new HashSet<>(patterns);
+                    }
+
+                    result.removeAll(e.getValue());
+                    result.add(new BindingPattern(e.getKey().type));
+                }
+            }
+
+            return result != null ? result : patterns;
+        }
+
+        private Set<Name> enumConstantsFor(ClassSymbol enumClass) {
+            return StreamSupport.stream(enumClass.members()
+                                                 .getSymbols(s -> s.isEnum())
+                                                 .spliterator(),
+                                        false)
+                                .map(Symbol::getSimpleName)
+                                .collect(Collectors.toSet());
         }
 
         public void visitTry(JCTry tree) {
@@ -3504,7 +3540,11 @@ public class Flow {
             return new RecordPattern(record.type, componentTypes, nestedDescriptions);
         } else if (pattern instanceof JCAnyPattern) {
             return new BindingPattern(selectorType);
-        } else if (pattern instanceof JCConstantPattern) {
+        } else if (pattern instanceof JCConstantPattern cp) {
+            Symbol sym = TreeInfo.symbol(cp.expr);
+            if (sym != null && sym.isEnum() && sym instanceof VarSymbol enumSymbol) {
+                return new EnumConstantPattern((ClassSymbol) enumSymbol.owner, enumSymbol.name);
+            }
             return new NoopPattern();
         } else {
             throw Assert.error();
@@ -3567,4 +3607,6 @@ public class Flow {
 
     record NoopPattern() implements PatternDescription {
     }
+
+    record EnumConstantPattern(ClassSymbol enumType, Name enumValue) implements PatternDescription {}
 }
