@@ -50,18 +50,7 @@ public class JShellCompletionProvider  {
         int offset = Utils.position2Offset(content, position);
         JShell jshell = JShell.create();
         SourceCodeAnalysis analysis = jshell.sourceCodeAnalysis();
-        String input = content.substring(0, offset);
-        boolean cont = true;
-        while (cont) {
-            cont = false;
-            SourceCodeAnalysis.CompletionInfo completeness = analysis.analyzeCompletion(input);
-            if (completeness.completeness().isComplete() && !completeness.remaining().isBlank()) {
-                input = completeness.remaining();
-                cont = true;
-            }
-        }
-
-        return analysis.completionSuggestions(input, input.length(), (state, suggestions) -> suggestions.stream().map(s -> convert(content, state, s, offset)).toList());
+        return analysis.completionSuggestions(content, offset, (state, suggestions) -> suggestions.stream().map(s -> convert(content, state, s, offset)).toList());
     }
  
     private static CompletionItem convert(String content, CompletionState state, ElementSuggestion suggestion, int cursor) {
