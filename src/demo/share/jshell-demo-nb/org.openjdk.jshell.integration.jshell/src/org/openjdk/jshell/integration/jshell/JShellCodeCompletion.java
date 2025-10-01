@@ -21,6 +21,7 @@ package org.openjdk.jshell.integration.jshell;
 import java.io.CharConversionException;
 import java.net.URL;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -100,6 +101,7 @@ public class JShellCodeCompletion extends AsyncCompletionQuery {
                                       .startOffset(suggestion.anchor())
                                       .endOffset(cursor)
                                       .insertText(suggestion.keyword())
+                                      .iconResource(JAVA_KEYWORD)
                                       .leftHtmlText(suggestion.keyword())
                                       .build();
         } else {
@@ -121,9 +123,11 @@ public class JShellCodeCompletion extends AsyncCompletionQuery {
                         String sep = "";
                         for (int i = 0; i < params.size(); i++) {
                             result.append(sep)
-                                  .append(simpleName(mt.getParameterTypes().get(i)))
-                                  .append(" ")
-                                  .append(params.get(i).getSimpleName());
+                                  .append(escape(simpleName(mt.getParameterTypes().get(i))))
+                                  .append(" <font color='#E0A041'>")
+                                  .append(escape(params.get(i).getSimpleName()))
+                                  .append("</font>");
+                            sep = ", ";
                         }
                         result.append(")");
                         yield result.toString();
@@ -162,12 +166,20 @@ public class JShellCodeCompletion extends AsyncCompletionQuery {
             }
 
             String insertFin = insert;
+            String iconResource;
+
+            if (state.completionContext().contains(CompletionContext.ANNOTATION_ATTRIBUTE)) {
+                iconResource = ATTRIBUTE;
+            } else {
+                iconResource = KIND_TO_PATHS.getOrDefault(el.getKind(), JAVA_KEYWORD);
+            }
 
             return CompletionUtilities.newCompletionItemBuilder(insert)
                                       .startOffset(suggestion.anchor())
                                       .endOffset(cursor)
                                       .insertText(insert)
-                                      .leftHtmlText(escape(leftText))
+                                      .iconResource(iconResource)
+                                      .leftHtmlText(leftText)
                                       .rightHtmlText(escape(rightText))
                                       .onSelect(onSelect -> CodeTemplateManager.get(comp.getDocument()).createTemporary(insertFin).insert(comp))
                                       .documentationTask(() -> {
@@ -257,13 +269,30 @@ public class JShellCodeCompletion extends AsyncCompletionQuery {
         };
     }
 
-    private static String escape(String text) {
+    private static String escape(CharSequence text) {
         try {
-            return XMLUtil.toAttributeValue(text);
+            return XMLUtil.toAttributeValue(text.toString());
         } catch (CharConversionException ex) {
-            return text;
+            return text.toString();
         }
     }
+
+    private static final String JAVA_KEYWORD = "org/netbeans/modules/java/editor/resources/javakw_16.png"; //NOI18N
+    private static final String ATTRIBUTE = "org/netbeans/modules/java/editor/resources/attribute_16.png"; //NOI18N
+
+    //could also include modifiers, access flags
+    private static final Map<ElementKind, String> KIND_TO_PATHS = Map.of(
+            ElementKind.MODULE, "org/netbeans/modules/java/editor/resources/module.png", // NOI18N
+            ElementKind.CLASS, "org/netbeans/modules/editor/resources/completion/class_16.png", //NOI18N
+            ElementKind.INTERFACE, "org/netbeans/modules/editor/resources/completion/interface.png", // NOI18N
+            ElementKind.ENUM, "org/netbeans/modules/editor/resources/completion/enum.png", // NOI18N
+            ElementKind.RECORD, "org/netbeans/modules/editor/resources/completion/record.png", // NOI18N
+            ElementKind.ANNOTATION_TYPE, "org/netbeans/modules/editor/resources/completion/annotation_type.png", // NOI18N
+            ElementKind.FIELD, "org/netbeans/modules/editor/resources/completion/field_16.png", //NOI18N
+            ElementKind.ENUM_CONSTANT, "org/netbeans/modules/editor/resources/completion/field_16.png", //NOI18N
+            ElementKind.METHOD, "org/netbeans/modules/editor/resources/completion/method_16.png", //NOI18N
+            ElementKind.CONSTRUCTOR, "org/netbeans/modules/editor/resources/completion/constructor_16.png" //NOI18N
+    );
 
     @MimeRegistration(mimeType="text/x-jshell", service=CompletionProvider.class)
     public static final class CompletionProviderImpl implements CompletionProvider {
