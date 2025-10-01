@@ -42,6 +42,9 @@ $ npm run compile
 
 ![a screenshot showing the code completion in action](demo-jshell-cc.png)
 
+The main conversion is done here:
+[server/src/main/java/org/openjdk/jshell/integration/server/JShellCompletionProvider.java](server/src/main/java/org/openjdk/jshell/integration/server/JShellCompletionProvider.java)
+
 # History
 
 Based on original NetBeans VS Code extension, which in turn was based on "lsp-sample" from:

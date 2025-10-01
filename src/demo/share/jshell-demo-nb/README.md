@@ -40,3 +40,5 @@ $ ant -Dnbplatform.default.netbeans.dest.dir=$NETBEANS_DIR -Dnbplatform.default.
 
 ![a screenshot showing the code completion in action](jshell-demo-better-cc-nb.png)
 
+The main conversion is done here:
+[org.openjdk.jshell.integration.jshell/src/org/openjdk/jshell/integration/jshell/JShellCodeCompletion.java](org.openjdk.jshell.integration.jshell/src/org/openjdk/jshell/integration/jshell/JShellCodeCompletion.java)
