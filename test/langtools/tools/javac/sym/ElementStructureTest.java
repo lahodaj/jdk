@@ -33,7 +33,7 @@
  *          jdk.compiler/com.sun.tools.javac.util
  *          jdk.jdeps/com.sun.tools.javap
  * @build toolbox.ToolBox ElementStructureTest
- * @run main ElementStructureTest
+ * @run main ElementStructureTest print-ctsym-classes /tmp/ctsym.content.original
  */
 
 import java.io.BufferedReader;
@@ -68,6 +68,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import javax.lang.model.element.AnnotationMirror;
@@ -77,12 +78,15 @@ import javax.lang.model.element.ElementVisitor;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.ModuleElement;
+import javax.lang.model.element.ModuleElement.ExportsDirective;
 import javax.lang.model.element.NestingKind;
 import javax.lang.model.element.PackageElement;
+import javax.lang.model.element.RecordComponentElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.TypeParameterElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.ElementFilter;
 import javax.tools.FileObject;
 import javax.tools.JavaCompiler;
 import javax.tools.JavaFileManager;
@@ -95,6 +99,7 @@ import com.sun.source.util.JavacTask;
 import java.lang.classfile.ClassFile;
 import com.sun.tools.javac.api.JavacTaskImpl;
 import com.sun.tools.javac.code.Symbol.CompletionFailure;
+import com.sun.tools.javac.platform.JDKPlatformProvider;
 import com.sun.tools.javac.platform.PlatformProvider;
 
 import toolbox.ToolBox;
@@ -158,6 +163,9 @@ public class ElementStructureTest {
             case "generate-output":
                 new ElementStructureTest().generateOutput(args);
                 break;
+            case "print-ctsym-classes":
+                new ElementStructureTest().printCTSymClasses(args);
+                break;
             default:
                 throw new IllegalStateException("Unrecognized request: " + args[0]);
         }
@@ -197,6 +205,19 @@ public class ElementStructureTest {
                  Writer expected = Files.newBufferedWriter(Paths.get(args[i + 3]))) {
                 run(actual, args[i + 1]);
                 realClasses(args[i], ignoreList, expected, args[i + 1]);
+            }
+        }
+    }
+
+    void printCTSymClasses(String... args) throws Exception {
+        String targetDir = args[1];
+        JDKPlatformProvider pp = new JDKPlatformProvider();
+
+        Files.createDirectory(Paths.get(targetDir));
+
+        for (String version : pp.getSupportedPlatformNames()) {
+            try (Writer actual = Files.newBufferedWriter(Paths.get(targetDir, version))) {
+                run(actual, version);
             }
         }
     }
@@ -257,14 +278,33 @@ public class ElementStructureTest {
 
         task.analyze();
 
-        JavaFileManager fm = task.getContext().get(JavaFileManager.class);
+        if ("8".equals(version)) {
+            JavaFileManager fm = task.getContext().get(JavaFileManager.class);
 
-        for (String pack : packages(fm)) {
-            PackageElement packEl = task.getElements().getPackageElement(pack);
-            if (packEl == null) {
-                throw new AssertionError("Cannot find package: " + pack);
+            for (String pack : packages(fm)) {
+                PackageElement packEl = task.getElements().getPackageElement(pack);
+                if (packEl == null) {
+                    throw new AssertionError("Cannot find package: " + pack);
+                }
+                new ExhaustiveElementScanner(task, output, p -> true).visit(packEl);
             }
-            new ExhaustiveElementScanner(task, output, p -> true).visit(packEl);
+        } else {
+            List<ModuleElement> modules = new ArrayList<>(task.getElements().getAllModuleElements());
+
+            Collections.sort(modules, (e1, e2) -> e1.getSimpleName().toString().compareTo(e2.getSimpleName().toString()));
+
+            for (ModuleElement me : modules) {
+                List<PackageElement> packs = new ArrayList<>();
+                for (ExportsDirective exportsDirective : ElementFilter.exportsIn(me.getDirectives())) {
+                    if (exportsDirective.getTargetModules() == null) {
+                        packs.add(exportsDirective.getPackage());
+                    }
+                }
+                Collections.sort(packs, (e1, e2) -> e1.getSimpleName().toString().compareTo(e2.getSimpleName().toString()));
+                for (PackageElement pe : packs) {
+                    new ExhaustiveElementScanner(task, output, p -> true).visit(pe);
+                }
+            }
         }
     }
 
@@ -380,10 +420,19 @@ public class ElementStructureTest {
 
         void analyzeElement(Element e) {
             try {
+                out.write(e.getKind().name().toString());
+                out.write(":");
                 write(e.asType());
+                out.write(":");
                 writeAnnotations(e.getAnnotationMirrors());
-                out.write(e.getKind().toString());
-                out.write(e.getModifiers().toString());
+                out.write(":");
+                Set<Modifier> modifiers = new TreeSet<>(e.getModifiers());
+                modifiers.remove(Modifier.NATIVE);
+                modifiers.remove(Modifier.SYNCHRONIZED);
+                out.write(modifiers.stream()
+                                   .map(String::valueOf)
+                                   .collect(Collectors.joining(" ")));
+                out.write(":");
                 out.write(e.getSimpleName().toString());
             } catch (IOException ex) {
                 ex.printStackTrace();
@@ -492,6 +541,17 @@ public class ElementStructureTest {
             try {
                 analyzeElement(e);
                 out.write(e.getBounds().toString());
+                out.write("\n");
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+            return null;
+        }
+
+        @Override
+        public Void visitRecordComponent(RecordComponentElement e, Void p) {
+            try {
+                analyzeElement(e);
                 out.write("\n");
             } catch (IOException ex) {
                 ex.printStackTrace();
