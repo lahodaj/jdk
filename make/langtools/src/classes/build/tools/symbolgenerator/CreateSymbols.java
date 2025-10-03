@@ -90,6 +90,7 @@ import java.util.Set;
 import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -1126,7 +1127,7 @@ public class CreateSymbols {
         for (VersionDescription desc : versions) {
             Iterable<byte[]> classFileData = loadClassData(desc.classes);
 
-            loadVersionClasses(classes, modules, classFileData, excludesIncludes, desc.version, null);
+            loadVersionClasses(classes, modules, classFileData, excludesIncludes, desc.version, desc.version, null);
         }
 
         List<PlatformInput> platforms =
@@ -1196,6 +1197,7 @@ public class CreateSymbols {
                                     Iterable<byte[]> classData,
                                     ExcludeIncludeList excludesIncludes,
                                     String version,
+                                    String targetVersion,
                                     String baseline) {
         Map<String, ModuleDescription> currentVersionModules =
                 new HashMap<>();
@@ -1281,7 +1283,7 @@ public class CreateSymbols {
             throw new AssertionError("Cannot derive some owning modules: " + extraModulesPackagesToDerive);
         }
 
-        finishClassLoading(classes, modules, currentVersionModules, currentVersionClasses, currentEIList, version, baseline);
+        finishClassLoading(classes, modules, currentVersionModules, currentVersionClasses, currentEIList, version, targetVersion, baseline);
     }
 
     private boolean containsPackage(ModuleHeaderDescription module, String pack) {
@@ -1384,7 +1386,7 @@ public class CreateSymbols {
             throw new IllegalArgumentException(ex);
         }
 
-        finishClassLoading(classes, modules, currentVersionModules, currentVersionClasses, currentEIList, version, baseline);
+        finishClassLoading(classes, modules, currentVersionModules, currentVersionClasses, currentEIList, version, version, baseline);
     }
 
     private void loadFromDirectoryHandleClassFile(Path path, ClassList currentVersionClasses,
@@ -1403,6 +1405,7 @@ public class CreateSymbols {
     }
 
     private void finishClassLoading(ClassList classes, Map<String, ModuleDescription> modules, Map<String, ModuleDescription> currentVersionModules, ClassList currentVersionClasses, ExcludeIncludeList currentEIList, String version,
+                                    String targetVersion,
                                     String baseline) {
         ModuleDescription unsupported =
                 currentVersionModules.get("jdk.unsupported");
@@ -1525,12 +1528,12 @@ public class CreateSymbols {
             ClassDescription existing = classes.find(clazz.name, true);
 
             if (existing != null) {
-                addClassHeader(existing, header, version, baseline);
+                addClassHeader(existing, header, version, targetVersion, baseline);
                 for (MethodDescription currentMethod : clazz.methods) {
-                    addMethod(existing, currentMethod, version, baseline);
+                    addMethod(existing, currentMethod, version, targetVersion, baseline);
                 }
                 for (FieldDescription currentField : clazz.fields) {
-                    addField(existing, currentField, version, baseline);
+                    addField(existing, currentField, version, targetVersion, baseline);
                 }
             } else {
                 classes.add(clazz);
@@ -1584,7 +1587,7 @@ public class CreateSymbols {
             ModuleDescription existing = modules.get(module.name);
 
             if (existing != null) {
-                addModuleHeader(existing, header, version);
+                addModuleHeader(existing, header, version, targetVersion);
             } else {
                 modules.put(module.name, module);
             }
@@ -1773,7 +1776,7 @@ public class CreateSymbols {
 
         String computedBaseline = baseline.apply(data);
 
-        loadVersionClasses(classes, modules, classBytes, excludeList, "$", computedBaseline);
+        loadVersionClasses(classes, modules, classBytes, excludeList, "$", version, computedBaseline);
 
         removeVersion(data, version);
 
@@ -1955,7 +1958,7 @@ public class CreateSymbols {
             classes.add(clazzDesc);
         }
 
-        addClassHeader(clazzDesc, headerDesc, version, null);
+        addClassHeader(clazzDesc, headerDesc, version, version, null);
 
         for (var m : cm.methods()) {
             if (!include(m.flags().flagsMask()))
@@ -1967,7 +1970,7 @@ public class CreateSymbols {
             for (var attr : m.attributes()) {
                 readAttribute(methDesc, attr);
             }
-            addMethod(clazzDesc, methDesc, version, null);
+            addMethod(clazzDesc, methDesc, version, version, null);
         }
         for (var f : cm.fields()) {
             if (!include(f.flags().flagsMask()))
@@ -1979,7 +1982,7 @@ public class CreateSymbols {
             for (var attr : f.attributes()) {
                 readAttribute(fieldDesc, attr);
             }
-            addField(clazzDesc, fieldDesc, version, null);
+            addField(clazzDesc, fieldDesc, version, version, null);
         }
     }
 
@@ -2012,7 +2015,7 @@ public class CreateSymbols {
             modules.put(moduleDesc.name, moduleDesc);
         }
 
-        addModuleHeader(moduleDesc, headerDesc, version);
+        addModuleHeader(moduleDesc, headerDesc, version, version);
 
         return moduleDesc;
     }
@@ -2066,119 +2069,100 @@ public class CreateSymbols {
 
     private void addModuleHeader(ModuleDescription moduleDesc,
                                  ModuleHeaderDescription headerDesc,
-                                 String version) {
-        //normalize:
-        boolean existed = false;
-        for (ModuleHeaderDescription existing : moduleDesc.header) {
-            if (existing.equals(headerDesc)) {
-                headerDesc = existing;
-                existed = true;
-            }
-        }
-
-        if (!headerDesc.versions.contains(version)) {
-            headerDesc.versions += version;
-        }
-
-        if (!existed) {
-            moduleDesc.header.add(headerDesc);
-        }
+                                 String version,
+                                 String targetVersion) {
+        addFeature(moduleDesc.header, hd -> moduleDesc.header.add(hd), ModuleHeaderDescription::equals, headerDesc, version, targetVersion, null);
     }
 
     private boolean include(int accessFlags) {
         return (accessFlags & (ACC_PUBLIC | ACC_PROTECTED)) != 0;
     }
 
-    private void addClassHeader(ClassDescription clazzDesc, ClassHeaderDescription headerDesc, String version, String baseline) {
-        //normalize:
-        Iterable<? extends ClassHeaderDescription> headers = sortedHeaders(clazzDesc.header, baseline);
+    private void addClassHeader(ClassDescription clazzDesc, ClassHeaderDescription headerDesc, String version, String targetVersion, String baseline) {
+        addFeature(clazzDesc.header, hd -> clazzDesc.header.add(hd), this::classHeaderEquals, headerDesc, version, targetVersion, baseline);
+    }
+
+    private void addMethod(ClassDescription clazzDesc, MethodDescription methDesc, String version, String targetVersion, String baseline) {
+        addFeature(clazzDesc.methods, md -> clazzDesc.methods.add(md), MethodDescription::equals, methDesc, version, targetVersion, baseline);
+    }
+
+    private void addField(ClassDescription clazzDesc, FieldDescription fieldDesc, String version, String targetVersion, String baseline) {
+        addFeature(clazzDesc.fields, fd -> clazzDesc.fields.add(fd), FieldDescription::equals, fieldDesc, version, targetVersion, baseline);
+    }
+
+    private boolean classHeaderEquals(ClassHeaderDescription existing, ClassHeaderDescription headerDesc) {
+        if (existing.equals(headerDesc)) {
+            return true;
+        }
+
+        List<AnnotationDescription> annots = existing.classAnnotations;
+
+        if (annots != null) {
+            for (AnnotationDescription ad : annots) {
+                if (PROFILE_ANNOTATION.equals(ad.annotationType)) {
+                    existing.classAnnotations = new ArrayList<>(annots);
+                    existing.classAnnotations.remove(ad);
+                    boolean matches = existing.equals(headerDesc);
+                    existing.classAnnotations = annots;
+                    return matches;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private <T extends FeatureDescription> Iterable<? extends T> sortedHeaders(List<? extends T> headers, String version, String baseline) {
+        if (baseline == null) {
+            baseline = version;
+        }
+
+        List<T> currentVersionFeatures = new ArrayList<>();
+        List<T> baselineVersionFeatures = new ArrayList<>();
+        List<T> rest = new ArrayList<>();
+
+        for (T t : headers) {
+            if (t.versions.contains(version)) {
+                currentVersionFeatures.add(t);
+            } else if (t.versions.contains(baseline)) {
+                baselineVersionFeatures.add(t);
+            } else {
+                rest.add(t);
+            }
+        }
+
+        List<T> result = new ArrayList<>();
+
+        result.addAll(currentVersionFeatures);
+        result.addAll(baselineVersionFeatures);
+        result.addAll(rest);
+
+        return result;
+    }
+
+    private <T extends FeatureDescription> void addFeature(
+            List<? extends T> features,
+            Consumer<T> featureAdder,
+            BiPredicate<T, T> equals,
+            T featureDesc,
+            String version, String targetVersion, String baseline) {
+        Iterable<? extends T> headers =
+                sortedHeaders(features, targetVersion, baseline);
         boolean existed = false;
-        for (ClassHeaderDescription existing : headers) {
-            if (existing.equals(headerDesc)) {
-                headerDesc = existing;
+
+        for (T existing : headers) {
+            if (equals.test(existing, featureDesc)) {
+                featureDesc = existing;
                 existed = true;
                 break;
             }
         }
 
+        if (!featureDesc.versions.contains(version)) {
+            featureDesc.versions += version;
+        }
         if (!existed) {
-            //check if the only difference between the 7 and 8 version is the Profile annotation
-            //if so, copy it to the pre-8 version, so save space
-            for (ClassHeaderDescription existing : headers) {
-                List<AnnotationDescription> annots = existing.classAnnotations;
-
-                if (annots != null) {
-                    for (AnnotationDescription ad : annots) {
-                        if (PROFILE_ANNOTATION.equals(ad.annotationType)) {
-                            existing.classAnnotations = new ArrayList<>(annots);
-                            existing.classAnnotations.remove(ad);
-                            if (existing.equals(headerDesc)) {
-                                headerDesc = existing;
-                                existed = true;
-                            }
-                            existing.classAnnotations = annots;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        if (!headerDesc.versions.contains(version)) {
-            headerDesc.versions += version;
-        }
-
-        if (!existed) {
-            clazzDesc.header.add(headerDesc);
-        }
-    }
-
-    private <T extends FeatureDescription> Iterable<? extends T> sortedHeaders(List<? extends T> headers, String baseline) {
-        if (baseline == null) {
-            return headers;
-        }
-
-        //move the description whose version contains baseline to the front:
-        List<T> result = new ArrayList<>(headers);
-
-        for (Iterator<T> it = result.iterator(); it.hasNext();) {
-            T fd = it.next();
-            if (fd.versions.contains(baseline)) {
-                it.remove();
-                result.add(0, fd);
-                break;
-            }
-        }
-
-        return result;
-    }
-
-    private void addMethod(ClassDescription clazzDesc, MethodDescription methDesc, String version, String baseline) {
-        //normalize:
-        boolean methodExisted = false;
-        for (MethodDescription existing : clazzDesc.methods) {
-            if (existing.equals(methDesc) && (!methodExisted || (baseline != null && existing.versions.contains(baseline)))) {
-                methodExisted = true;
-                methDesc = existing;
-            }
-        }
-        methDesc.versions += version;
-        if (!methodExisted) {
-            clazzDesc.methods.add(methDesc);
-        }
-    }
-
-    private void addField(ClassDescription clazzDesc, FieldDescription fieldDesc, String version, String baseline) {
-        boolean fieldExisted = false;
-        for (FieldDescription existing : clazzDesc.fields) {
-            if (existing.equals(fieldDesc) && (!fieldExisted || (baseline != null && existing.versions.contains(baseline)))) {
-                fieldExisted = true;
-                fieldDesc = existing;
-            }
-        }
-        fieldDesc.versions += version;
-        if (!fieldExisted) {
-            clazzDesc.fields.add(fieldDesc);
+            featureAdder.accept(featureDesc);
         }
     }
 
