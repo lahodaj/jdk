@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2018, 2025, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -83,7 +83,7 @@ field name NAME descriptor Ljava/lang/String; constantValue enabled flags 19
 method name value descriptor ()Z annotationDefaultValue Ztrue flags 401
 
 class name jdk/jfr/Event
-header extends java/lang/Object flags 421 runtimeAnnotations @Ljdk/jfr/Enabled;(value=Ztrue)@Ljdk/jfr/StackTrace;(value=Ztrue)@Ljdk/jfr/Registered;(value=Ztrue)
+header extends jdk/internal/event/Event flags 421 runtimeAnnotations @Ljdk/jfr/Enabled;(value=Ztrue)@Ljdk/jfr/StackTrace;(value=Ztrue)@Ljdk/jfr/Registered;(value=Ztrue)
 method name <init> descriptor ()V flags 4
 method name begin descriptor ()V flags 11
 method name end descriptor ()V flags 11

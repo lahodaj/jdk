@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2018, 2025, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -38,6 +38,7 @@ header extends java/lang/Object flags 601 deprecated true runtimeAnnotations @Lj
 class name jdk/security/jarsigner/JarSigner
 header extends java/lang/Object nestMembers jdk/security/jarsigner/JarSigner$Builder flags 31
 innerclass innerClass jdk/security/jarsigner/JarSigner$Builder outerClass jdk/security/jarsigner/JarSigner innerClassName Builder flags 9
+innerclass innerClass java/util/Map$Entry outerClass java/util/Map innerClassName Entry flags 609
 innerclass innerClass java/util/jar/Attributes$Name outerClass java/util/jar/Attributes innerClassName Name flags 9
 innerclass innerClass java/util/Base64$Encoder outerClass java/util/Base64 innerClassName Encoder flags 9
 

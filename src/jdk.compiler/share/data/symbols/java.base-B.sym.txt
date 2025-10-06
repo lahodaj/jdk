@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2018, 2025, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -27,7 +27,7 @@
 # ##########################################################
 #
 module name java.base
-header exports java/io,java/lang,java/lang/annotation,java/lang/invoke,java/lang/module,java/lang/ref,java/lang/reflect,java/math,java/net,java/net/spi,java/nio,java/nio/channels,java/nio/channels/spi,java/nio/charset,java/nio/charset/spi,java/nio/file,java/nio/file/attribute,java/nio/file/spi,java/security,java/security/acl,java/security/cert,java/security/interfaces,java/security/spec,java/text,java/text/spi,java/time,java/time/chrono,java/time/format,java/time/temporal,java/time/zone,java/util,java/util/concurrent,java/util/concurrent/atomic,java/util/concurrent/locks,java/util/function,java/util/jar,java/util/regex,java/util/spi,java/util/stream,java/util/zip,javax/crypto,javax/crypto/interfaces,javax/crypto/spec,javax/net,javax/net/ssl,javax/security/auth,javax/security/auth/callback,javax/security/auth/login,javax/security/auth/spi,javax/security/auth/x500,javax/security/cert uses java/lang/System$LoggerFinder,java/net/ContentHandlerFactory,java/net/spi/URLStreamHandlerProvider,java/nio/channels/spi/AsynchronousChannelProvider,java/nio/channels/spi/SelectorProvider,java/nio/charset/spi/CharsetProvider,java/nio/file/spi/FileSystemProvider,java/nio/file/spi/FileTypeDetector,java/security/Provider,java/text/spi/BreakIteratorProvider,java/text/spi/CollatorProvider,java/text/spi/DateFormatProvider,java/text/spi/DateFormatSymbolsProvider,java/text/spi/DecimalFormatSymbolsProvider,java/text/spi/NumberFormatProvider,java/time/chrono/AbstractChronology,java/time/chrono/Chronology,java/time/zone/ZoneRulesProvider,java/util/spi/CalendarDataProvider,java/util/spi/CalendarNameProvider,java/util/spi/CurrencyNameProvider,java/util/spi/LocaleNameProvider,java/util/spi/ResourceBundleControlProvider,java/util/spi/ResourceBundleProvider,java/util/spi/TimeZoneNameProvider,java/util/spi/ToolProvider,javax/security/auth/spi/LoginModule,jdk/internal/logger/DefaultLoggerFinder,sun/text/spi/JavaTimeDateTimePatternProvider,sun/util/locale/provider/LocaleDataMetaInfo,sun/util/resources/LocaleData$CommonResourceBundleProvider,sun/util/resources/LocaleData$SupplementaryResourceBundleProvider,sun/util/spi/CalendarProvider provides interface\u0020;java/nio/file/spi/FileSystemProvider\u0020;impls\u0020;jdk/internal/jrtfs/JrtFileSystemProvider target linux-amd64 flags 8000
+header exports java/io,java/lang,java/lang/annotation,java/lang/invoke,java/lang/module,java/lang/ref,java/lang/reflect,java/math,java/net,java/net/spi,java/nio,java/nio/channels,java/nio/channels/spi,java/nio/charset,java/nio/charset/spi,java/nio/file,java/nio/file/attribute,java/nio/file/spi,java/security,java/security/acl,java/security/cert,java/security/interfaces,java/security/spec,java/text,java/text/spi,java/time,java/time/chrono,java/time/format,java/time/temporal,java/time/zone,java/util,java/util/concurrent,java/util/concurrent/atomic,java/util/concurrent/locks,java/util/function,java/util/jar,java/util/regex,java/util/spi,java/util/stream,java/util/zip,javax/crypto,javax/crypto/interfaces,javax/crypto/spec,javax/net,javax/net/ssl,javax/security/auth,javax/security/auth/callback,javax/security/auth/login,javax/security/auth/spi,javax/security/auth/x500,javax/security/cert,jdk/internal/event[jdk.jfr] uses java/lang/System$LoggerFinder,java/net/ContentHandlerFactory,java/net/spi/URLStreamHandlerProvider,java/nio/channels/spi/AsynchronousChannelProvider,java/nio/channels/spi/SelectorProvider,java/nio/charset/spi/CharsetProvider,java/nio/file/spi/FileSystemProvider,java/nio/file/spi/FileTypeDetector,java/security/Provider,java/text/spi/BreakIteratorProvider,java/text/spi/CollatorProvider,java/text/spi/DateFormatProvider,java/text/spi/DateFormatSymbolsProvider,java/text/spi/DecimalFormatSymbolsProvider,java/text/spi/NumberFormatProvider,java/time/chrono/AbstractChronology,java/time/chrono/Chronology,java/time/zone/ZoneRulesProvider,java/util/spi/CalendarDataProvider,java/util/spi/CalendarNameProvider,java/util/spi/CurrencyNameProvider,java/util/spi/LocaleNameProvider,java/util/spi/ResourceBundleControlProvider,java/util/spi/ResourceBundleProvider,java/util/spi/TimeZoneNameProvider,java/util/spi/ToolProvider,javax/security/auth/spi/LoginModule,jdk/internal/logger/DefaultLoggerFinder,sun/text/spi/JavaTimeDateTimePatternProvider,sun/util/locale/provider/LocaleDataMetaInfo,sun/util/resources/LocaleData$CommonResourceBundleProvider,sun/util/resources/LocaleData$SupplementaryResourceBundleProvider,sun/util/spi/CalendarProvider provides interface\u0020;java/nio/file/spi/FileSystemProvider\u0020;impls\u0020;jdk/internal/jrtfs/JrtFileSystemProvider target linux-amd64 flags 8000
 
 class name java/io/BufferedInputStream
 header extends java/io/FilterInputStream flags 21
@@ -768,6 +768,10 @@ class name java/lang/invoke/MethodHandleInfo
 header extends java/lang/Object flags 601
 innerclass innerClass java/lang/invoke/MethodHandles$Lookup outerClass java/lang/invoke/MethodHandles innerClassName Lookup flags 19
 
+class name java/lang/invoke/MethodHandleProxies
+header extends java/lang/Object flags 21
+innerclass innerClass java/lang/invoke/MethodHandles$Lookup outerClass java/lang/invoke/MethodHandles innerClassName Lookup flags 19
+
 class name java/lang/invoke/MethodHandles
 header extends java/lang/Object nestMembers java/lang/invoke/MethodHandles$Lookup flags 21
 innerclass innerClass java/lang/invoke/MethodHandles$Lookup outerClass java/lang/invoke/MethodHandles innerClassName Lookup flags 19
@@ -821,7 +825,6 @@ innerclass innerClass java/lang/module/ModuleDescriptor$Opens outerClass java/la
 innerclass innerClass java/lang/module/ModuleDescriptor$Exports outerClass java/lang/module/ModuleDescriptor innerClassName Exports flags 19
 innerclass innerClass java/lang/module/ModuleDescriptor$Requires outerClass java/lang/module/ModuleDescriptor innerClassName Requires flags 19
 innerclass innerClass java/lang/module/ModuleDescriptor$Modifier outerClass java/lang/module/ModuleDescriptor innerClassName Modifier flags 4019
-innerclass innerClass java/util/Map$Entry outerClass java/util/Map innerClassName Entry flags 609
 innerclass innerClass java/lang/module/ModuleDescriptor$Opens$Modifier outerClass java/lang/module/ModuleDescriptor$Opens innerClassName Modifier flags 4019
 innerclass innerClass java/lang/module/ModuleDescriptor$Exports$Modifier outerClass java/lang/module/ModuleDescriptor$Exports innerClassName Modifier flags 4019
 innerclass innerClass java/lang/module/ModuleDescriptor$Requires$Modifier outerClass java/lang/module/ModuleDescriptor$Requires innerClassName Modifier flags 4019
@@ -1008,6 +1011,10 @@ header extends java/lang/RuntimeException flags 21
 
 class name java/lang/reflect/WildcardType
 header extends java/lang/Object implements java/lang/reflect/Type flags 601
+
+class name java/math/BigDecimal
+header extends java/lang/Number implements java/lang/Comparable flags 21 signature Ljava/lang/Number;Ljava/lang/Comparable<Ljava/math/BigDecimal;>;
+innerclass innerClass java/io/ObjectInputStream$GetField outerClass java/io/ObjectInputStream innerClassName GetField flags 409
 
 class name java/math/MathContext
 header extends java/lang/Object implements java/io/Serializable flags 31
@@ -2273,6 +2280,7 @@ header extends java/security/spec/EncodedKeySpec flags 21
 class name java/security/spec/PSSParameterSpec
 header extends java/lang/Object implements java/security/spec/AlgorithmParameterSpec flags 21
 field name TRAILER_FIELD_BC descriptor I constantValue 1 flags 19
+method name toString descriptor ()Ljava/lang/String; flags 1
 
 class name java/security/spec/RSAKeyGenParameterSpec
 header extends java/lang/Object implements java/security/spec/AlgorithmParameterSpec flags 21
@@ -2375,6 +2383,7 @@ innerclass innerClass java/text/AttributedCharacterIterator$Attribute outerClass
 class name java/text/MessageFormat
 header extends java/text/Format nestMembers java/text/MessageFormat$Field flags 21
 innerclass innerClass java/text/MessageFormat$Field outerClass java/text/MessageFormat innerClassName Field flags 9
+innerclass innerClass java/io/ObjectInputStream$GetField outerClass java/io/ObjectInputStream innerClassName GetField flags 409
 innerclass innerClass java/util/Locale$Category outerClass java/util/Locale innerClassName Category flags 4019
 innerclass innerClass java/text/AttributedCharacterIterator$Attribute outerClass java/text/AttributedCharacterIterator innerClassName Attribute flags 9
 innerclass innerClass java/text/Format$Field outerClass java/text/Format innerClassName Field flags 9
@@ -2684,9 +2693,25 @@ class name java/util/GregorianCalendar
 header extends java/util/Calendar flags 21
 innerclass innerClass java/util/Locale$Category outerClass java/util/Locale innerClassName Category flags 4019
 
+class name java/util/HashMap
+header extends java/util/AbstractMap implements java/util/Map,java/lang/Cloneable,java/io/Serializable flags 21 signature <K:Ljava/lang/Object;V:Ljava/lang/Object;>Ljava/util/AbstractMap<TK;TV;>;Ljava/util/Map<TK;TV;>;Ljava/lang/Cloneable;Ljava/io/Serializable;
+innerclass innerClass java/util/Map$Entry outerClass java/util/Map innerClassName Entry flags 609
+innerclass innerClass java/io/ObjectInputStream$GetField outerClass java/io/ObjectInputStream innerClassName GetField flags 409
+
 class name java/util/HashSet
 header extends java/util/AbstractSet implements java/util/Set,java/lang/Cloneable,java/io/Serializable flags 21 signature <E:Ljava/lang/Object;>Ljava/util/AbstractSet<TE;>;Ljava/util/Set<TE;>;Ljava/lang/Cloneable;Ljava/io/Serializable;
 innerclass innerClass java/util/Map$Entry outerClass java/util/Map innerClassName Entry flags 609
+innerclass innerClass java/io/ObjectInputStream$GetField outerClass java/io/ObjectInputStream innerClassName GetField flags 409
+
+class name java/util/Hashtable
+header extends java/util/Dictionary implements java/util/Map,java/lang/Cloneable,java/io/Serializable flags 21 signature <K:Ljava/lang/Object;V:Ljava/lang/Object;>Ljava/util/Dictionary<TK;TV;>;Ljava/util/Map<TK;TV;>;Ljava/lang/Cloneable;Ljava/io/Serializable;
+innerclass innerClass java/util/Map$Entry outerClass java/util/Map innerClassName Entry flags 609
+innerclass innerClass java/io/ObjectInputStream$GetField outerClass java/io/ObjectInputStream innerClassName GetField flags 409
+
+class name java/util/IdentityHashMap
+header extends java/util/AbstractMap implements java/util/Map,java/io/Serializable,java/lang/Cloneable flags 21 signature <K:Ljava/lang/Object;V:Ljava/lang/Object;>Ljava/util/AbstractMap<TK;TV;>;Ljava/util/Map<TK;TV;>;Ljava/io/Serializable;Ljava/lang/Cloneable;
+innerclass innerClass java/util/Map$Entry outerClass java/util/Map innerClassName Entry flags 609
+innerclass innerClass java/io/ObjectInputStream$GetField outerClass java/io/ObjectInputStream innerClassName GetField flags 409
 
 class name java/util/IllegalFormatCodePointException
 header extends java/util/IllegalFormatException flags 21
@@ -3168,6 +3193,7 @@ innerclass innerClass java/util/concurrent/ThreadPoolExecutor$DiscardOldestPolic
 innerclass innerClass java/util/concurrent/ThreadPoolExecutor$DiscardPolicy outerClass java/util/concurrent/ThreadPoolExecutor innerClassName DiscardPolicy flags 9
 innerclass innerClass java/util/concurrent/ThreadPoolExecutor$AbortPolicy outerClass java/util/concurrent/ThreadPoolExecutor innerClassName AbortPolicy flags 9
 innerclass innerClass java/util/concurrent/ThreadPoolExecutor$CallerRunsPolicy outerClass java/util/concurrent/ThreadPoolExecutor innerClassName CallerRunsPolicy flags 9
+innerclass innerClass java/lang/Thread$State outerClass java/lang/Thread innerClassName State flags 4019
 
 class name java/util/concurrent/ThreadPoolExecutor$AbortPolicy
 header extends java/lang/Object implements java/util/concurrent/RejectedExecutionHandler nestHost java/util/concurrent/ThreadPoolExecutor flags 21
@@ -3428,6 +3454,12 @@ header extends java/util/zip/ZipEntry flags 21
 
 class name java/util/jar/JarException
 header extends java/util/zip/ZipException flags 21
+
+class name java/util/jar/JarFile
+header extends java/util/zip/ZipFile flags 21
+innerclass innerClass java/lang/Runtime$Version outerClass java/lang/Runtime innerClassName Version flags 19
+innerclass innerClass java/util/jar/Attributes$Name outerClass java/util/jar/Attributes innerClassName Name flags 9
+innerclass innerClass java/lang/invoke/MethodHandles$Lookup outerClass java/lang/invoke/MethodHandles innerClassName Lookup flags 19
 
 class name java/util/jar/JarInputStream
 header extends java/util/zip/ZipInputStream flags 21
@@ -3916,6 +3948,8 @@ header extends java/lang/Object implements javax/security/auth/callback/Callback
 
 class name javax/security/auth/callback/PasswordCallback
 header extends java/lang/Object implements javax/security/auth/callback/Callback,java/io/Serializable flags 21
+innerclass innerClass java/lang/ref/Cleaner$Cleanable outerClass java/lang/ref/Cleaner innerClassName Cleanable flags 609
+innerclass innerClass java/lang/invoke/MethodHandles$Lookup outerClass java/lang/invoke/MethodHandles innerClassName Lookup flags 19
 
 class name javax/security/auth/callback/TextInputCallback
 header extends java/lang/Object implements javax/security/auth/callback/Callback,java/io/Serializable flags 21
@@ -3969,6 +4003,12 @@ header extends javax/security/auth/login/CredentialException flags 21
 class name javax/security/auth/login/FailedLoginException
 header extends javax/security/auth/login/LoginException flags 21
 
+class name javax/security/auth/login/LoginContext
+header extends java/lang/Object flags 21
+innerclass innerClass java/util/ServiceLoader$Provider outerClass java/util/ServiceLoader innerClassName Provider flags 609
+innerclass innerClass javax/security/auth/login/AppConfigurationEntry$LoginModuleControlFlag outerClass javax/security/auth/login/AppConfigurationEntry innerClassName LoginModuleControlFlag flags 9
+innerclass innerClass java/lang/invoke/MethodHandles$Lookup outerClass java/lang/invoke/MethodHandles innerClassName Lookup flags 19
+
 class name javax/security/auth/login/LoginException
 header extends java/security/GeneralSecurityException flags 21
 
@@ -3998,4 +4038,14 @@ header extends javax/security/cert/CertificateException flags 21 deprecated true
 
 class name javax/security/cert/CertificateParsingException
 header extends javax/security/cert/CertificateException flags 21 deprecated true runtimeAnnotations @Ljava/lang/Deprecated;(since="9")
+
+class name jdk/internal/event/Event
+header extends java/lang/Object flags 421
+method name <init> descriptor ()V flags 4
+method name begin descriptor ()V flags 1
+method name end descriptor ()V flags 1
+method name commit descriptor ()V flags 1
+method name isEnabled descriptor ()Z flags 1
+method name shouldCommit descriptor ()Z flags 1
+method name set descriptor (ILjava/lang/Object;)V flags 1
 

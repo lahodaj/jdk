@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2018, 2025, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -39,7 +39,6 @@ innerclass innerClass java/lang/invoke/MethodHandles$Lookup outerClass java/lang
 
 class name javax/security/auth/kerberos/KerberosCredMessage
 header extends java/lang/Object implements javax/security/auth/Destroyable flags 31
-innerclass innerClass java/util/Base64$Encoder outerClass java/util/Base64 innerClassName Encoder flags 9
 innerclass innerClass java/lang/invoke/MethodHandles$Lookup outerClass java/lang/invoke/MethodHandles innerClassName Lookup flags 19
 
 class name javax/security/auth/kerberos/KerberosKey

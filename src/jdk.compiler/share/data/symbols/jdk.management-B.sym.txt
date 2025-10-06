@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2018, 2025, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -49,6 +49,7 @@ header extends java/lang/Object implements java/lang/management/OperatingSystemM
 
 class name com/sun/management/ThreadMXBean
 header extends java/lang/Object implements java/lang/management/ThreadMXBean flags 601
+method name getCurrentThreadAllocatedBytes descriptor ()J flags 1
 
 class name com/sun/management/UnixOperatingSystemMXBean
 header extends java/lang/Object implements com/sun/management/OperatingSystemMXBean flags 601
