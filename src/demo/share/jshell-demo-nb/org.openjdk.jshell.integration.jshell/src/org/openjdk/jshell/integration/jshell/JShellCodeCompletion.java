@@ -20,6 +20,8 @@ package org.openjdk.jshell.integration.jshell;
 
 import java.io.CharConversionException;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -47,6 +49,8 @@ import javax.lang.model.type.TypeKind;
 import static javax.lang.model.type.TypeKind.DECLARED;
 import javax.lang.model.type.TypeMirror;
 import javax.swing.Action;
+import javax.swing.JLabel;
+import javax.swing.JToolTip;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
@@ -54,6 +58,7 @@ import jdk.jshell.JShell;
 import jdk.jshell.SourceCodeAnalysis;
 import jdk.jshell.SourceCodeAnalysis.CompletionContext;
 import jdk.jshell.SourceCodeAnalysis.CompletionState;
+import jdk.jshell.SourceCodeAnalysis.Documentation;
 import jdk.jshell.SourceCodeAnalysis.ElementSuggestion;
 import org.netbeans.api.editor.mimelookup.MimeRegistration;
 import org.netbeans.lib.editor.codetemplates.api.CodeTemplateManager;
@@ -70,9 +75,11 @@ import org.openide.xml.XMLUtil;
 
 public class JShellCodeCompletion extends AsyncCompletionQuery {
 
+    private final int completionType;
     private final JTextComponent comp;
 
-    public JShellCodeCompletion(JTextComponent comp) {
+    public JShellCodeCompletion(int completionType, JTextComponent comp) {
+        this.completionType = completionType;
         this.comp = comp;
     }
 
@@ -80,7 +87,41 @@ public class JShellCodeCompletion extends AsyncCompletionQuery {
     protected void query(CompletionResultSet crs, Document dcmnt, int cursor) {
         try {
             String content = dcmnt.getText(0, cursor);
-            computeCodeCompletion(content, cursor).forEach(crs::addItem);
+            if (completionType == CompletionProvider.COMPLETION_QUERY_TYPE) { //TODO: all
+                computeCodeCompletion(content, cursor).forEach(crs::addItem);
+            } else if (completionType == CompletionProvider.TOOLTIP_QUERY_TYPE) {
+                JShell jshell = JShell.create();
+                SourceCodeAnalysis analysis = jshell.sourceCodeAnalysis();
+                List<Documentation> sigs = analysis.documentation(content, cursor, false);
+                StringBuilder tooltip = new StringBuilder();
+                String sep = "";
+
+                for (Documentation doc : sigs) {
+                    String signature = doc.signature();
+                    int lparen = signature.indexOf('(');
+
+                    if (lparen != (-1)) {
+                        int rparen = signature.indexOf(')', lparen);
+                        List<String> params =
+                                new ArrayList<>(
+                                    Arrays.stream(signature.substring(lparen + 1, rparen).split(","))
+                                          .map(String::trim)
+                                          .toList());
+                        if (doc.parameterIndex() != (-1)) {
+                            params.set(doc.parameterIndex(), "<b>" + params.get(doc.parameterIndex()) + "</b>");
+                        }
+
+                        tooltip.append(sep);
+                        tooltip.append(params.stream().collect(Collectors.joining(", ")));
+
+                        sep = "<br>";
+                    }
+                }
+
+                JToolTip tp = new JToolTip();
+                tp.setTipText("<html>" + tooltip.toString());
+                crs.setToolTip(tp);
+            }
         } catch (BadLocationException ex) {
             Exceptions.printStackTrace(ex);
         } finally {
@@ -221,6 +262,23 @@ public class JShellCodeCompletion extends AsyncCompletionQuery {
                                               }
                                           };
                                       })
+                                      .tooltipTask(() -> {
+                                          return new CompletionTask() {
+                                              @Override
+                                              public void query(CompletionResultSet crs) {
+                                                  System.err.println("Foo");
+                                                  crs.finish();
+                                              }
+
+                                              @Override
+                                              public void refresh(CompletionResultSet crs) {
+                                              }
+
+                                              @Override
+                                              public void cancel() {
+                                              }
+                                          };
+                                      })
                                       .build();
         }
     }
@@ -298,8 +356,8 @@ public class JShellCodeCompletion extends AsyncCompletionQuery {
     public static final class CompletionProviderImpl implements CompletionProvider {
 
         @Override
-        public CompletionTask createTask(int i, JTextComponent jtc) {
-            return new AsyncCompletionTask(new JShellCodeCompletion(jtc), jtc);
+        public CompletionTask createTask(int type, JTextComponent jtc) {
+            return new AsyncCompletionTask(new JShellCodeCompletion(type, jtc), jtc);
         }
 
         @Override
