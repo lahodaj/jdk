@@ -976,6 +976,15 @@ public class Pretty extends JCTree.Visitor {
         }
     }
 
+    @Override
+    public void visitConstantPattern(JCConstantPattern tree) {
+        try {
+            printExpr(tree.expr);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     public void visitSynchronized(JCSynchronized tree) {
         try {
             print("synchronized ");

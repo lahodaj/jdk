@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,6 +23,7 @@
 
 /*
  * @test
+ * @enablePreview
  * @bug 8262891 8290709
  * @summary Check the pattern domination error are reported correctly.
  * @compile/fail/ref=Domination.out -XDrawDiagnostics Domination.java
@@ -216,6 +217,50 @@ public class Domination {
         switch (x) {
             case Integer i: return i;
             case null : return -1;
+        }
+    }
+
+    int testConstantPatternDominatedPrimitive() {
+        record R(int a) {}
+        R r = null;
+        switch (r) {
+            case R(int a) -> {}
+            case R(0) -> {}
+        }
+    }
+
+    int testConstantPatternDominatedEnum() {
+        enum E {A, B, C}
+        record R(Object o) {}
+        R r = null;
+        switch (r) {
+            case R(Object o) -> {}
+            case R(E.A) -> {}
+        }
+        switch (r) {
+            case R(E e) -> {}
+            case R(E.A) -> {}
+        }
+        switch (r) {
+            case R(E.A) -> {}
+            case R(E.A) -> {}
+        }
+    }
+
+    int testConstantPatternDominatedClass() {
+        record R(Object o) {}
+        R r = null;
+        switch (r) {
+            case R(Object o) -> {}
+            case R(String.class) -> {}
+        }
+        switch (r) {
+            case R(Class<?> c) -> {}
+            case R(String.class) -> {}
+        }
+        switch (r) {
+            case R(String.class) -> {}
+            case R(String.class) -> {}
         }
     }
 }

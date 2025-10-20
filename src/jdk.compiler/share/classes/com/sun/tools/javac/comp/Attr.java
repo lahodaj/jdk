@@ -4242,7 +4242,22 @@ public class Attr extends JCTree.Visitor {
 
     @Override
     public void visitConstantPattern(JCConstantPattern tree) {
-        attribExpr(tree.expr, env, resultInfo.pt);
+        if (tree.expr instanceof JCIdent ident && env.tree instanceof GeneralizedSwitch swtch && resultInfo.pt.tsym.isEnum()) {
+            //legacy simple name in enum switch:
+            VarSymbol enumConstant = (VarSymbol) resultInfo.pt.tsym.members().getSymbolsByName(ident.name, s -> s.isEnum()).iterator().next();
+            ident.sym = enumConstant;
+            ident.type = enumConstant.type;
+        } else {
+            attribExpr(tree.expr, env, resultInfo.pt);
+            if (tree.expr instanceof JCFieldAccess access && access.name == names._class) {
+                //TODO: what is the correct type for String.class??? Class<String> won't pass the cast test(?)
+                tree.expr.type = new ClassType(Type.noType,
+                                               List.of(new WildcardType(syms.objectType,
+                                                                        BoundKind.UNBOUND,
+                                                                        syms.boundClass)),
+                                               syms.classType.tsym);
+            }
+        }
         tree.type = tree.expr.type;
         //TODO: check the value is constant!
     }

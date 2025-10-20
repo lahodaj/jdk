@@ -4802,8 +4802,13 @@ public class Check {
                 } else if (existingPattern instanceof JCConstantPattern existingConstant) {
                     if (existingConstant.expr.type.isPrimitive() || existingConstant.expr.type.tsym == syms.stringType.tsym) {
                         return Objects.equals(currentConstant.expr.type.constValue(), existingConstant.expr.type.constValue());
+                    } else if (existingConstant.expr instanceof JCFieldAccess existingAccess && existingAccess.name == names._class &&
+                               currentConstant.expr instanceof JCFieldAccess currentAccess && currentAccess.name == names._class) {
+                        return Objects.equals(TreeInfo.symbol(existingAccess.selected), TreeInfo.symbol(currentAccess.selected));
+                    } else if (existingConstant.type.tsym.isEnum()) {
+                        return Objects.equals(TreeInfo.symbol(existingConstant), TreeInfo.symbol(currentConstant));
                     } else {
-                        //TODO: enum constants(!)
+                        //should not happen, error recovery(?)
                         return false;
                     }
                 } else if (existingPattern instanceof JCRecordPattern) {

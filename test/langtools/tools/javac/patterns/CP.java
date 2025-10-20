@@ -323,4 +323,21 @@ public class CP {
                 """,
                 "correct");
     }
+
+    @Test
+    public void testClassConstant() throws Exception {
+        runTest("""
+                public record R(Object o) {
+                    static void main() {
+                        Object o = new R(String.class);
+                        switch (o) {
+                            case R(Integer.class) -> throw new AssertionError("0");
+                            case R(String.class) -> System.out.println("correct");
+                            case Object _ -> throw new AssertionError("2");
+                        }
+                    }
+                }
+                """,
+                "correct");
+    }
 }

@@ -1327,7 +1327,7 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
     /**
      * A "switch ( ) { }" construction.
      */
-    public static class JCSwitch extends JCStatement implements SwitchTree {
+    public static class JCSwitch extends JCStatement implements GeneralizedSwitch, SwitchTree {
         public JCExpression selector;
         public List<JCCase> cases;
         /** Position of closing brace, optional. */
@@ -1427,7 +1427,7 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
     /**
      * A "switch ( ) { }" construction.
      */
-    public static class JCSwitchExpression extends JCPolyExpression implements SwitchExpressionTree {
+    public static class JCSwitchExpression extends JCPolyExpression implements GeneralizedSwitch, SwitchExpressionTree {
         public JCExpression selector;
         public List<JCCase> cases;
         /** Position of closing brace, optional. */
@@ -1457,6 +1457,11 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
         public Tag getTag() {
             return SWITCH_EXPRESSION;
         }
+    }
+
+    public interface GeneralizedSwitch {
+        public JCExpression getExpression();
+        public List<JCCase> getCases();
     }
 
     /**
