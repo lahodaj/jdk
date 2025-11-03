@@ -4806,7 +4806,7 @@ public class Check {
                                currentConstant.expr instanceof JCFieldAccess currentAccess && currentAccess.name == names._class) {
                         return Objects.equals(TreeInfo.symbol(existingAccess.selected), TreeInfo.symbol(currentAccess.selected));
                     } else if (existingConstant.type.tsym.isEnum()) {
-                        return Objects.equals(TreeInfo.symbol(existingConstant), TreeInfo.symbol(currentConstant));
+                        return Objects.equals(TreeInfo.symbol(existingConstant.expr), TreeInfo.symbol(currentConstant.expr));
                     } else {
                         //should not happen, error recovery(?)
                         return false;
