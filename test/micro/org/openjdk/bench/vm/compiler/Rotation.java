@@ -62,7 +62,7 @@ public class Rotation {
         int x = s.xi;
         int y = s.yi;
         for (int i = 0; i < COUNT; i++) {
-            y = x ^ ((y >>> 5) | (y << -5));
+            y = x ^ ((y >>> 5) | (y << (-5 & 0xFF)));
         }
         blackhole.consume(y);
     }
@@ -73,7 +73,7 @@ public class Rotation {
         int x = s.xi;
         int y = s.yi;
         for (int i = 0; i < COUNT; i++) {
-            y = x & (-1 ^ ((y >>> 5) | (y << -5)));
+            y = x & (-1 ^ ((y >>> 5) | (y << (-5 & 0xFF))));
         }
         blackhole.consume(y);
     }
@@ -84,7 +84,7 @@ public class Rotation {
         int x = s.xi;
         int y = s.yi;
         for (int i = 0; i < COUNT; i++) {
-            y = x ^ (-1 ^ ((y >>> 5) | (y << -5)));
+            y = x ^ (-1 ^ ((y >>> 5) | (y << (-5 & 0xFF))));
         }
         blackhole.consume(y);
     }
@@ -95,7 +95,7 @@ public class Rotation {
         int x = s.xi;
         int y = s.yi;
         for (int i = 0; i < COUNT; i++) {
-            y = x | (-1 ^ ((y >>> 5) | (y << -5)));
+            y = x | (-1 ^ ((y >>> 5) | (y << (-5 & 0xFF))));
         }
         blackhole.consume(y);
     }
@@ -106,7 +106,7 @@ public class Rotation {
         int x = s.xi;
         int y = s.yi;
         for (int i = 0; i < COUNT; i++) {
-            y = x & ((y >>> 5) | (y << -5));
+            y = x & ((y >>> 5) | (y << (-5 & 0xFF)));
         }
         blackhole.consume(y);
     }
