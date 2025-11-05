@@ -4066,6 +4066,9 @@ public class Check {
             long specifiedShift = shiftAmount.longValue();
             int actualShift = (int)specifiedShift & (maximumShift - 1);
             if (specifiedShift != actualShift) {
+                if (specifiedShift < 0) {
+                    log.error(pos, Errors.NegativeShift(specifiedShift));
+                }
                 log.warning(pos, LintWarnings.BitShiftOutOfRange(targetType, specifiedShift, actualShift));
             }
         }
