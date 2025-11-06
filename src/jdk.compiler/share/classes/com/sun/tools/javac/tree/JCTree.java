@@ -430,6 +430,7 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
     /* The (encoded) position in the source file. @see util.Position.
      */
     public int pos;
+    public int endpos = Position.NOPOS;
 
     /* The type of this node.
      */
@@ -514,8 +515,8 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
     }
 
     // for default DiagnosticPosition
-    public int getEndPosition(EndPosTable endPosTable) {
-        return TreeInfo.getEndPos(this, endPosTable);
+    public int getEndPosition() {
+        return TreeInfo.getEndPos(this);
     }
 
     /**
@@ -545,9 +546,6 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
         /** A table that stores all documentation comments indexed by the tree
          * nodes they refer to. defined only if option -s is set. */
         public DocCommentTable docComments = null;
-        /* An object encapsulating ending positions of source ranges indexed by
-         * the tree nodes they belong to. Defined only if option -Xjcov is set. */
-        public EndPosTable endPositions = null;
         protected JCCompilationUnit(List<JCTree> defs) {
             this.defs = defs;
         }
