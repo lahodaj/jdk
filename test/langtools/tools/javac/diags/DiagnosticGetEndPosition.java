@@ -1,0 +1,128 @@
+/*
+ * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
+
+/**
+ * @test
+ * @bug 8371309
+ * @summary Verify that Diagnostic.getEndPosition works reasonably
+ * @library /tools/lib
+ * @modules jdk.compiler/com.sun.tools.javac.api
+ *          jdk.compiler/com.sun.tools.javac.main
+ * @run junit DiagnosticGetEndPosition
+ */
+import java.net.URI;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
+import javax.tools.JavaCompiler;
+import javax.tools.JavaFileObject;
+import javax.tools.SimpleJavaFileObject;
+import javax.tools.ToolProvider;
+import org.junit.jupiter.api.Test;
+
+import toolbox.ToolBox;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+public class DiagnosticGetEndPosition {
+    final JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    final ToolBox tb = new ToolBox();
+
+    @Test
+    public void testGetEndPositionDuringParsing() {
+        JavaFileObject testFile =
+                SimpleJavaFileObject.forSource(URI.create("mem:///Test.java"),
+                                               """
+                                               public class Test extends {}
+                                               """);
+        compiler.getTask(
+            null,
+            null,
+            diagnostic -> assertEquals(26, diagnostic.getEndPosition()),
+            null,
+            null,
+            List.of(testFile)
+        ).call();
+    }
+
+    @Test
+    public void testNoErrorsFromInternalParses() throws Exception {
+        Path base = Paths.get(".");
+        Path src = base.resolve("src");
+        tb.writeJavaFiles(src,
+                          """
+                          module m {
+                             exports test;
+                          }
+                          """,
+                          """
+                          package test;
+                          public class Test extends {}
+                          """);
+
+        try (var fm = compiler.getStandardFileManager(null, null, null)) {
+            compiler.getTask(
+                null,
+                null,
+                d -> fail(d.toString()),
+                List.of("-sourcepath", src.toString()),
+                null,
+                fm.getJavaFileObjects(src.resolve("module-info.java"))
+            ).call();
+        }
+    }
+
+    @Test
+    public void testGetEndPositionWorkForImplicitParse() throws Exception {
+        Path base = Paths.get(".");
+        Path src = base.resolve("src");
+        String implCode = """
+                          package test;
+                          public class Impl {
+                              public static final int C = 1 / 0;
+                          }
+                          """;
+        tb.writeJavaFiles(src,
+                          implCode,
+                          """
+                          package test;
+                          public class Test {
+                              Impl i; //force parsing of Impl
+                          }
+                          """);
+
+        try (var fm = compiler.getStandardFileManager(null, null, null)) {
+            compiler.getTask(
+                null,
+                null,
+                d -> assertEquals("0",
+                                  implCode.substring((int) d.getStartPosition(),
+                                                     (int) d.getEndPosition())),
+                List.of("-sourcepath", src.toString(), "-Xlint:divzero"),
+                null,
+                fm.getJavaFileObjects(src.resolve("test").resolve("Test.java"))
+            ).call();
+        }
+    }
+
+}

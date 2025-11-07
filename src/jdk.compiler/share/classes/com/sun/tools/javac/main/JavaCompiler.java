@@ -641,9 +641,9 @@ public class JavaCompiler {
     /** Parse contents of input stream.
      *  @param filename     The name of the file from which input stream comes.
      *  @param content      The characters to be parsed.
-     *  @param silent       true if TaskListeners should not be notified
+     *  @param privateParse if this parse is private, and its results should not be published
      */
-    private JCCompilationUnit parse(JavaFileObject filename, CharSequence content, boolean silent) {
+    private JCCompilationUnit parse(JavaFileObject filename, CharSequence content, boolean privateParse) {
         long msec = now();
         JCCompilationUnit tree = make.TopLevel(List.nil());
         lintMapper.startParsingFile(filename);
@@ -651,15 +651,26 @@ public class JavaCompiler {
             if (verbose) {
                 log.printVerbose("parsing.started", filename);
             }
-            if (!taskListener.isEmpty() && !silent) {
+            if (!taskListener.isEmpty() && !privateParse) {
                 TaskEvent e = new TaskEvent(TaskEvent.Kind.PARSE, filename);
                 taskListener.started(e);
                 keepComments = true;
                 genEndPos = true;
             }
-            Parser parser = parserFactory.newParser(content, keepComments(), genEndPos,
-                                lineDebugInfo, filename.isNameCompatible("module-info", Kind.SOURCE));
-            tree = parser.parseCompilationUnit();
+            Log.DeferredDiagnosticHandler deferredParseErrors = log.new DeferredDiagnosticHandler();
+            try {
+                JavacParser parser = parserFactory.newParser(content, keepComments(), genEndPos,
+                                    lineDebugInfo, filename.isNameCompatible("module-info", Kind.SOURCE));
+                tree = parser.parseCompilationUnit();
+                if (!privateParse) {
+                    log.setEndPosTable(filename, tree.endPositions);
+                }
+            } finally {
+                if (!privateParse) {
+                    deferredParseErrors.reportDeferredDiagnostics();
+                }
+                log.popDiagnosticHandler(deferredParseErrors);
+            }
             if (verbose) {
                 log.printVerbose("parsing.done", Long.toString(elapsed(msec)));
             }
@@ -668,7 +679,7 @@ public class JavaCompiler {
         tree.sourcefile = filename;
         lintMapper.finishParsingFile(tree);
 
-        if (content != null && !taskListener.isEmpty() && !silent) {
+        if (content != null && !taskListener.isEmpty() && !privateParse) {
             TaskEvent e = new TaskEvent(TaskEvent.Kind.PARSE, tree);
             taskListener.finished(e);
         }
@@ -698,8 +709,6 @@ public class JavaCompiler {
         JavaFileObject prev = log.useSource(filename);
         try {
             JCTree.JCCompilationUnit t = parse(filename, readSource(filename));
-            if (t.endPositions != null)
-                log.setEndPosTable(filename, t.endPositions);
             return t;
         } finally {
             log.useSource(prev);
@@ -1897,7 +1906,6 @@ public class JavaCompiler {
 
     private Name parseAndGetName(JavaFileObject fo,
                                  Function<JCTree.JCCompilationUnit, Name> tree2Name) {
-        DiagnosticHandler dh = log.new DiscardDiagnosticHandler();
         JavaFileObject prevSource = log.useSource(fo);
         try {
             JCTree.JCCompilationUnit t = parse(fo, fo.getCharContent(false), true);
@@ -1905,7 +1913,6 @@ public class JavaCompiler {
         } catch (IOException e) {
             return null;
         } finally {
-            log.popDiagnosticHandler(dh);
             log.useSource(prevSource);
         }
     }
