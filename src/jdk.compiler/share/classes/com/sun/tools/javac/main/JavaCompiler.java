@@ -851,6 +851,11 @@ public class JavaCompiler {
         JavaFileObject prev = log.useSource(filename);
 
         if (tree == null) {
+            if (log.currentSource().getEndPosTable() != null) {
+                checkClassExists(c);
+                throw Assert.error();
+            }
+
             try {
                 tree = parse(filename, filename.getCharContent(false));
             } catch (IOException e) {
@@ -883,21 +888,27 @@ public class JavaCompiler {
             taskListener.finished(e);
         }
 
+        checkClassExists(c);
+        implicitSourceFilesRead = true;
+    }
+
+    private void checkClassExists(ClassSymbol c) {
         if (enter.getEnv(c) == null) {
+            JavaFileObject filename = c.classfile;
             boolean isPkgInfo =
-                tree.sourcefile.isNameCompatible("package-info",
-                                                 JavaFileObject.Kind.SOURCE);
+                filename.isNameCompatible("package-info",
+                                          JavaFileObject.Kind.SOURCE);
             boolean isModuleInfo =
-                tree.sourcefile.isNameCompatible("module-info",
-                                                 JavaFileObject.Kind.SOURCE);
+                filename.isNameCompatible("module-info",
+                                          JavaFileObject.Kind.SOURCE);
             if (isModuleInfo) {
-                if (enter.getEnv(tree.modle) == null) {
+                if (enter.getEnv(c.packge().modle) == null) {
                     JCDiagnostic diag =
                         diagFactory.fragment(Fragments.FileDoesNotContainModule);
                     throw new ClassFinder.BadClassFile(c, filename, diag, diagFactory, dcfh);
                 }
             } else if (isPkgInfo) {
-                if (enter.getEnv(tree.packge) == null) {
+                if (enter.getEnv(c.packge()) == null) {
                     JCDiagnostic diag =
                         diagFactory.fragment(Fragments.FileDoesNotContainPackage(c.location()));
                     throw new ClassFinder.BadClassFile(c, filename, diag, diagFactory, dcfh);
@@ -908,8 +919,6 @@ public class JavaCompiler {
                 throw new ClassFinder.BadClassFile(c, filename, diag, diagFactory, dcfh);
             }
         }
-
-        implicitSourceFilesRead = true;
     }
 
     /** Track when the JavaCompiler has been used to compile something. */

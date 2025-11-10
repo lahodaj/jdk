@@ -125,4 +125,33 @@ public class DiagnosticGetEndPosition {
         }
     }
 
+    @Test
+    public void testWronglyNamedClass() throws Exception {
+        Path base = Paths.get(".");
+        Path src = base.resolve("src");
+        tb.writeFile(src.resolve("test").resolve("WronglyNamed.java"),
+                     """
+                     package test;
+                     class SomeOtherName {}
+                     """);
+        tb.writeJavaFiles(src,
+                          """
+                          package test;
+                          public class Test {
+                              WronglyNamed l; //parse WronglyNamed.java
+                          }
+                          """);
+
+        try (var fm = compiler.getStandardFileManager(null, null, null)) {
+            compiler.getTask(
+                null,
+                null,
+                null,
+                List.of("-sourcepath", src.toString()),
+                null,
+                fm.getJavaFileObjects(tb.findJavaFiles(src))
+            ).call();
+        }
+    }
+
 }
