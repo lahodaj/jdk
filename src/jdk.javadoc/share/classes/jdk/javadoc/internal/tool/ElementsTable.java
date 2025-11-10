@@ -389,10 +389,9 @@ public class ElementsTable {
             JavaFileObject jfo = fm.getJavaFileForInput(location,
                     "module-info", JavaFileObject.Kind.SOURCE);
             if (jfo != null) {
-                JCCompilationUnit jcu = compiler.parse(jfo);
-                JCModuleDecl module = jcu.getModule();
-                if (module != null) {
-                    return module.getName().toString();
+                Name moduleName = compiler.readModuleName(jfo);
+                if (moduleName != null) {
+                    return moduleName.toString();
                 }
             }
         } catch (IOException ioe) {

@@ -610,6 +610,12 @@ public class JavaCompiler {
         return shouldStop(cs) ? List.nil() : list;
     }
 
+    protected final List<JCCompilationUnit> stopIfErrorKeepModuleInfos(CompileState cs, List<JCCompilationUnit> list) {
+        //keeping AST for module-infos, so that the module system can be built properly
+        return shouldStop(cs) ? list.stream().filter(cu -> cu.getModuleDecl() != null).collect(List.collector())
+                              : list;
+    }
+
     /** The number of warnings reported so far.
      */
     public int warningCount() {
@@ -961,7 +967,7 @@ public class JavaCompiler {
             processAnnotations(
                 enterTrees(
                         stopIfError(CompileState.ENTER,
-                                initModules(stopIfError(CompileState.ENTER, parseFiles(sourceFileObjects))))
+                                initModules(stopIfErrorKeepModuleInfos(CompileState.ENTER, parseFiles(sourceFileObjects))))
                 ),
                 classnames
             );
@@ -1891,7 +1897,7 @@ public class JavaCompiler {
         return enterDone;
     }
 
-    private Name readModuleName(JavaFileObject fo) {
+    public Name readModuleName(JavaFileObject fo) {
         return parseAndGetName(fo, t -> {
             JCModuleDecl md = t.getModuleDecl();
 
