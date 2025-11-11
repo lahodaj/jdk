@@ -902,7 +902,7 @@ public class JavaCompiler {
                 filename.isNameCompatible("module-info",
                                           JavaFileObject.Kind.SOURCE);
             if (isModuleInfo) {
-                if (enter.getEnv(c.packge().modle) == null) {
+                if (enter.getEnv((Symbol.TypeSymbol) c.owner) == null) { //XXX: we assume the owner is a module
                     JCDiagnostic diag =
                         diagFactory.fragment(Fragments.FileDoesNotContainModule);
                     throw new ClassFinder.BadClassFile(c, filename, diag, diagFactory, dcfh);
