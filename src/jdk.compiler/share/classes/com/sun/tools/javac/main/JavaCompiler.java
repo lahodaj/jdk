@@ -105,6 +105,7 @@ import com.sun.tools.javac.tree.JCTree.JCModuleDecl;
 import com.sun.tools.javac.tree.JCTree.JCRecordPattern;
 import com.sun.tools.javac.tree.JCTree.JCSwitch;
 import com.sun.tools.javac.tree.JCTree.JCSwitchExpression;
+import com.sun.tools.javac.util.JCDiagnostic.DiagnosticFlag;
 
 /** This class could be the main entry point for GJC when GJC is used as a
  *  component in a larger software system. It provides operations to
@@ -430,7 +431,7 @@ public class JavaCompiler {
 
         finder.sourceCompleter = sourceCompleter;
         modules.findPackageInFile = this::findPackageInFile;
-        moduleFinder.moduleNameFromSourceReader = this::readModuleName;
+        moduleFinder.moduleNameFromSourceReader = file -> readModuleName(file, false);
 
         options = Options.instance(context);
 
@@ -853,7 +854,7 @@ public class JavaCompiler {
         if (tree == null) {
             if (log.currentSource().getEndPosTable() != null) {
                 checkClassExists(c);
-                throw Assert.error();
+                return ;
             }
 
             try {
@@ -907,13 +908,7 @@ public class JavaCompiler {
                         diagFactory.fragment(Fragments.FileDoesNotContainModule);
                     throw new ClassFinder.BadClassFile(c, filename, diag, diagFactory, dcfh);
                 }
-            } else if (isPkgInfo) {
-                if (enter.getEnv(c.packge()) == null) {
-                    JCDiagnostic diag =
-                        diagFactory.fragment(Fragments.FileDoesNotContainPackage(c.location()));
-                    throw new ClassFinder.BadClassFile(c, filename, diag, diagFactory, dcfh);
-                }
-            } else {
+            } else if (!isPkgInfo) {
                 JCDiagnostic diag =
                         diagFactory.fragment(Fragments.FileDoesntContainClass(c.getQualifiedName()));
                 throw new ClassFinder.BadClassFile(c, filename, diag, diagFactory, dcfh);
@@ -1906,9 +1901,13 @@ public class JavaCompiler {
         return enterDone;
     }
 
-    public Name readModuleName(JavaFileObject fo) {
+    public Name readModuleName(JavaFileObject fo, boolean checkSourceLevel) {
         return parseAndGetName(fo, t -> {
             JCModuleDecl md = t.getModuleDecl();
+
+            if (checkSourceLevel && md != null && !Feature.MODULES.allowedInSource(source)) {
+                log.error(DiagnosticFlag.SOURCE_LEVEL, md.pos(), Feature.MODULES.error(source.name));
+            }
 
             return md != null ? TreeInfo.fullName(md.getName()) : null;
         });

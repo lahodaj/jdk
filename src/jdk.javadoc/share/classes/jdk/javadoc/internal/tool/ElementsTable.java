@@ -75,6 +75,7 @@ import jdk.javadoc.doclet.DocletEnvironment.ModuleMode;
 import jdk.javadoc.internal.doclets.toolkit.WorkArounds;
 
 import static com.sun.tools.javac.code.Scope.LookupKind.NON_RECURSIVE;
+import com.sun.tools.javac.util.JCDiagnostic;
 
 import static javax.lang.model.util.Elements.Origin.*;
 import static javax.tools.JavaFileObject.Kind.*;
@@ -195,6 +196,7 @@ public class ElementsTable {
     private final AccessLevel expandRequires;
 
     final boolean xclasses;
+    final boolean allowModules;
 
     /**
      * Creates the table to manage included and excluded elements.
@@ -222,7 +224,8 @@ public class ElementsTable {
             else
                 locs.add(StandardLocation.CLASS_PATH);
         }
-        if (Feature.MODULES.allowedInSource(source) && toolEnv.fileManager.hasLocation(StandardLocation.PATCH_MODULE_PATH))
+        allowModules = Feature.MODULES.allowedInSource(source);
+        if (allowModules && toolEnv.fileManager.hasLocation(StandardLocation.PATCH_MODULE_PATH))
             locs.add(StandardLocation.PATCH_MODULE_PATH);
         this.locations = Collections.unmodifiableList(locs);
 
@@ -389,7 +392,7 @@ public class ElementsTable {
             JavaFileObject jfo = fm.getJavaFileForInput(location,
                     "module-info", JavaFileObject.Kind.SOURCE);
             if (jfo != null) {
-                Name moduleName = compiler.readModuleName(jfo);
+                Name moduleName = compiler.readModuleName(jfo, true);
                 if (moduleName != null) {
                     return moduleName.toString();
                 }

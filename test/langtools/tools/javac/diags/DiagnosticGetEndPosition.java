@@ -38,6 +38,9 @@ import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
 import javax.tools.SimpleJavaFileObject;
 import javax.tools.ToolProvider;
+
+import com.sun.source.util.JavacTask;
+
 import org.junit.jupiter.api.Test;
 
 import toolbox.ToolBox;
@@ -151,6 +154,35 @@ public class DiagnosticGetEndPosition {
                 null,
                 fm.getJavaFileObjects(tb.findJavaFiles(src))
             ).call();
+        }
+    }
+
+    @Test
+    public void testWronglyNamedPackageInfo() throws Exception {
+        Path base = Paths.get(".");
+        Path src = base.resolve("src");
+        tb.writeFile(src.resolve("test").resolve("package-info.java"),
+                     """
+                     package wrongpackage;
+                     """);
+        tb.writeJavaFiles(src,
+                          """
+                          package test;
+                          public class Test {
+                          }
+                          """);
+
+        try (var fm = compiler.getStandardFileManager(null, null, null)) {
+            JavacTask task = (JavacTask) compiler.getTask(
+                null,
+                null,
+                null,
+                List.of("-sourcepath", src.toString()),
+                null,
+                fm.getJavaFileObjects(src.resolve("test").resolve("Test.java"))
+            );
+            task.analyze();
+            task.getElements().getPackageElement("test").getAnnotationMirrors();
         }
     }
 
