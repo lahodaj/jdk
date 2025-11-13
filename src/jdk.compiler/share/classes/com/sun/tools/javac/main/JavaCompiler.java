@@ -86,6 +86,7 @@ import com.sun.tools.javac.util.Log.DiscardDiagnosticHandler;
 import com.sun.tools.javac.util.Log.WriterKind;
 
 import static com.sun.tools.javac.code.Kinds.Kind.*;
+import com.sun.tools.javac.code.Symbol.TypeSymbol;
 
 import com.sun.tools.javac.resources.CompilerProperties.Errors;
 import com.sun.tools.javac.resources.CompilerProperties.Fragments;
@@ -903,7 +904,7 @@ public class JavaCompiler {
                 filename.isNameCompatible("module-info",
                                           JavaFileObject.Kind.SOURCE);
             if (isModuleInfo) {
-                if (enter.getEnv((Symbol.TypeSymbol) c.owner) == null) { //XXX: we assume the owner is a module
+                if (enter.getEnv((TypeSymbol) c.owner) == null) {
                     JCDiagnostic diag =
                         diagFactory.fragment(Fragments.FileDoesNotContainModule);
                     throw new ClassFinder.BadClassFile(c, filename, diag, diagFactory, dcfh);
