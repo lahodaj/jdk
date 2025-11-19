@@ -424,13 +424,14 @@ public class JavacTrees extends DocTrees {
                 // If no module name is given we check if qualifierExpression identifies a type.
                 // If that fails or we have a module name, use that to resolve qualifierExpression to
                 // a package or type.
-                Env<AttrContext> qualifierEnv;
-                if (ref.moduleName != null) {
+                Type t = ref.moduleName == null ? attr.attribType(ref.qualifierExpression, env) : null;
+
+                if (t == null || t.isErroneous()) {
                     JCCompilationUnit toplevel =
                         treeMaker.TopLevel(List.nil());
                     toplevel.modle = mdlsym;
                     toplevel.packge = mdlsym.unnamedPackage;
-                    qualifierEnv = enter.topLevelEnv(toplevel);
+                    Env<AttrContext> qualifierEnv = enter.topLevelEnv(toplevel);
                     ClassSymbol fakeClass = new ClassSymbol(0, names.empty, toplevel.packge);
                     qualifierEnv.enclClass = treeMaker.ClassDef(treeMaker.Modifiers(0),
                                                        fakeClass.name,
@@ -438,11 +439,8 @@ public class JavacTrees extends DocTrees {
                     qualifierEnv.enclClass.sym = fakeClass;
                     //ensure the implicit java.lang import is reflected:
                     typeEnter.ensureImportsChecked(List.of(toplevel));
-                } else {
-                    qualifierEnv = env;
+                    t = attr.attribType(ref.qualifierExpression, qualifierEnv);
                 }
-
-                Type t = attr.attribType(ref.qualifierExpression, qualifierEnv);
 
                 if (t.isErroneous()) {
                     PackageSymbol packageCandidate = syms.lookupPackage(mdlsym, names.fromString(ref.qualifierExpression.toString()));
