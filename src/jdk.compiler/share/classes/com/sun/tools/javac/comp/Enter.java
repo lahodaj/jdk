@@ -216,7 +216,7 @@ public class Enter extends JCTree.Visitor {
     /** Create a fresh environment for toplevels.
      *  @param tree     The toplevel tree.
      */
-    Env<AttrContext> topLevelEnv(JCCompilationUnit tree) {
+    public Env<AttrContext> topLevelEnv(JCCompilationUnit tree) {
         Env<AttrContext> localEnv = new Env<>(tree, new AttrContext());
         localEnv.toplevel = tree;
         localEnv.enclClass = predefClassDef;

@@ -151,7 +151,7 @@ public class TypeEnter implements Completer {
 
     /* Verify Imports:
      */
-    protected void ensureImportsChecked(List<JCCompilationUnit> trees) {
+    public void ensureImportsChecked(List<JCCompilationUnit> trees) {
         // if there remain any unimported toplevels (these must have
         // no classes at all), process their import statements as well.
         for (JCCompilationUnit tree : trees) {

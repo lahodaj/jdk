@@ -349,51 +349,6 @@ public class Attr extends JCTree.Visitor {
         return sym != null && sym.kind == TYP;
     }
 
-    /** Attribute a parsed identifier.
-     * @param tree Parsed identifier name
-     * @param topLevel The toplevel to use
-     */
-    public Symbol attribIdent(JCTree tree, JCCompilationUnit topLevel) {
-        Env<AttrContext> localEnv = enter.topLevelEnv(topLevel);
-        localEnv.enclClass = make.ClassDef(make.Modifiers(0),
-                                           syms.errSymbol.name,
-                                           null, null, null, null);
-        localEnv.enclClass.sym = syms.errSymbol;
-        return attribIdent(tree, localEnv);
-    }
-
-    /** Attribute a parsed identifier.
-     * @param tree Parsed identifier name
-     * @param env The env to use
-     */
-    public Symbol attribIdent(JCTree tree, Env<AttrContext> env) {
-        return tree.accept(identAttributer, env);
-    }
-    // where
-        private TreeVisitor<Symbol,Env<AttrContext>> identAttributer = new IdentAttributer();
-        private class IdentAttributer extends SimpleTreeVisitor<Symbol,Env<AttrContext>> {
-            @Override @DefinedBy(Api.COMPILER_TREE)
-            public Symbol visitMemberSelect(MemberSelectTree node, Env<AttrContext> env) {
-                Symbol site = visit(node.getExpression(), env);
-                if (site == null || site.kind == ERR || site.kind == ABSENT_TYP || site.kind == HIDDEN)
-                    return site;
-                Name name = (Name)node.getIdentifier();
-                if (site.kind == PCK) {
-                    env.toplevel.packge = (PackageSymbol)site;
-                    return rs.findIdentInPackage(null, env, (TypeSymbol)site, name,
-                            KindSelector.TYP_PCK);
-                } else {
-                    env.enclClass.sym = (ClassSymbol)site;
-                    return rs.findMemberType(env, site.asType(), name, (TypeSymbol)site);
-                }
-            }
-
-            @Override @DefinedBy(Api.COMPILER_TREE)
-            public Symbol visitIdentifier(IdentifierTree node, Env<AttrContext> env) {
-                return rs.findIdent(null, env, (Name)node.getName(), KindSelector.TYP_PCK);
-            }
-        }
-
     public Type coerce(Type etype, Type ttype) {
         return cfolder.coerce(etype, ttype);
     }

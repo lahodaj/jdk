@@ -73,6 +73,7 @@ import com.sun.source.util.DocTrees;
 import com.sun.source.util.JavacTask;
 import com.sun.source.util.TreePath;
 import com.sun.tools.javac.code.Flags;
+import com.sun.tools.javac.code.Kinds;
 import com.sun.tools.javac.code.Scope.NamedImportScope;
 import com.sun.tools.javac.code.Scope.StarImportScope;
 import com.sun.tools.javac.code.Scope.WriteableScope;
@@ -145,6 +146,7 @@ import com.sun.tools.javac.util.Pair;
 import com.sun.tools.javac.util.Position;
 
 import static com.sun.tools.javac.code.Kinds.Kind.*;
+import com.sun.tools.javac.comp.TypeEnter;
 
 /**
  * Provides an implementation of Trees.
@@ -160,6 +162,7 @@ public class JavacTrees extends DocTrees {
     private final Modules modules;
     private final Resolve resolve;
     private final Enter enter;
+    private final TypeEnter typeEnter;
     private final Log log;
     private final MemberEnter memberEnter;
     private final Attr attr;
@@ -210,6 +213,7 @@ public class JavacTrees extends DocTrees {
         attr = Attr.instance(context);
         chk = Check.instance(context);
         enter = Enter.instance(context);
+        typeEnter = TypeEnter.instance(context);
         elements = JavacElements.instance(context);
         log = Log.instance(context);
         resolve = Resolve.instance(context);
@@ -420,25 +424,33 @@ public class JavacTrees extends DocTrees {
                 // If no module name is given we check if qualifierExpression identifies a type.
                 // If that fails or we have a module name, use that to resolve qualifierExpression to
                 // a package or type.
-                Type t = ref.moduleName == null ? attr.attribType(ref.qualifierExpression, env) : null;
-
-                if (t == null || t.isErroneous()) {
+                Env<AttrContext> qualifierEnv;
+                if (ref.moduleName != null) {
                     JCCompilationUnit toplevel =
                         treeMaker.TopLevel(List.nil());
                     toplevel.modle = mdlsym;
                     toplevel.packge = mdlsym.unnamedPackage;
-                    Symbol sym = attr.attribIdent(ref.qualifierExpression, toplevel);
+                    qualifierEnv = enter.topLevelEnv(toplevel);
+                    ClassSymbol fakeClass = new ClassSymbol(0, names.empty, toplevel.packge);
+                    qualifierEnv.enclClass = treeMaker.ClassDef(treeMaker.Modifiers(0),
+                                                       fakeClass.name,
+                                                       null, null, null, null);
+                    qualifierEnv.enclClass.sym = fakeClass;
+                    //ensure the implicit java.lang import is reflected:
+                    typeEnter.ensureImportsChecked(List.of(toplevel));
+                } else {
+                    qualifierEnv = env;
+                }
 
-                    if (sym == null) {
-                        return null;
-                    }
+                Type t = attr.attribType(ref.qualifierExpression, qualifierEnv);
 
-                    sym.complete();
-
-                    if ((sym.kind == PCK || sym.kind == TYP) && sym.exists()) {
-                        tsym = (TypeSymbol) sym;
+                if (t.isErroneous()) {
+                    PackageSymbol packageCandidate = syms.lookupPackage(mdlsym, names.fromString(ref.qualifierExpression.toString()));
+                    packageCandidate.complete();
+                    if (packageCandidate.exists()) {
+                        tsym = packageCandidate;
                         memberName = (Name) ref.memberName;
-                        if (sym.kind == PCK && memberName != null) {
+                        if (memberName != null) {
                             //cannot refer to a package "member"
                             return null;
                         }
@@ -461,6 +473,10 @@ public class JavacTrees extends DocTrees {
                         }
                     }
                 } else {
+                    if (t.isPrimitive() && ref.moduleName != null) {
+                        return null;
+                    }
+
                     Type e = t;
                     // If this is an array type convert to element type
                     while (e instanceof ArrayType arrayType)
