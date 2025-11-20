@@ -66,6 +66,7 @@ import com.sun.tools.javac.util.Assert;
 import com.sun.tools.javac.util.Context;
 import com.sun.tools.javac.util.Log;
 import com.sun.tools.javac.util.StringUtils;
+import javax.tools.StandardJavaFileManager;
 
 /** PlatformProvider for JDK N.
  *
@@ -161,7 +162,7 @@ public class JDKPlatformProvider implements PlatformProvider {
         }
 
         @Override
-        public JavaFileManager getFileManager() {
+        public StandardJavaFileManager getFileManager() {
             Context context = new Context();
             PrintWriter pw = new PrintWriter(System.err, true);
             context.put(Log.errKey, pw);

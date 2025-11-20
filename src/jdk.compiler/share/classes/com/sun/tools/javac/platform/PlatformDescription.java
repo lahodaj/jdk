@@ -34,6 +34,7 @@ import javax.annotation.processing.Processor;
 import javax.tools.JavaFileManager;
 
 import com.sun.source.util.Plugin;
+import javax.tools.StandardJavaFileManager;
 
 /**A description of settings needed for a particular {@code --release name} option.
  *
@@ -44,7 +45,7 @@ import com.sun.source.util.Plugin;
  */
 public interface PlatformDescription extends Closeable {
 
-    JavaFileManager getFileManager();
+    StandardJavaFileManager getFileManager();
 
     /**Returns the source version that should be selected.
      * Equivalent to {@code -source N} on the command line.

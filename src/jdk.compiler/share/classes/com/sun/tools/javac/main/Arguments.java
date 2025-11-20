@@ -75,6 +75,7 @@ import com.sun.tools.javac.util.Log.PrefixKind;
 import com.sun.tools.javac.util.Log.WriterKind;
 import com.sun.tools.javac.util.Options;
 import com.sun.tools.javac.util.PropagatedException;
+import java.io.UncheckedIOException;
 
 /**
  * Shared option and argument handling for command line and API usage of javac.
@@ -333,10 +334,25 @@ public class Arguments {
             if (!additionalOptions.test(platformDescription.getAdditionalOptions()))
                 return false;
 
-            JavaFileManager platformFM = platformDescription.getFileManager();
+            StandardJavaFileManager platformFM = platformDescription.getFileManager();
+            String addModules = options.get(Option.ADD_MODULES);
+            JavaFileManager baseFM = getFileManager();
+            if (addModules != null) {
+                JavacFileManager baseFMHack = (JavacFileManager) baseFM;
+                for (String addedModule : addModules.split(",")) {
+                    try {
+                        Location locationForModule = baseFMHack.getLocationForModule(StandardLocation.SYSTEM_MODULES, addedModule);
+                        if (locationForModule != null) {
+                            platformFM.setLocationForModule(StandardLocation.SYSTEM_MODULES, addedModule, baseFMHack.getLocationAsPaths(locationForModule));
+                        }
+                    } catch (IOException ex) {
+                        throw new UncheckedIOException(ex);
+                    }
+                }
+            }
             DelegatingJavaFileManager.installReleaseFileManager(context,
                                                                 platformFM,
-                                                                getFileManager());
+                                                                baseFM);
         }
 
         return true;
