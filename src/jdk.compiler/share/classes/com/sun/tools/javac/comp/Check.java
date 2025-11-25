@@ -4823,6 +4823,28 @@ public class Check {
             return false;
         }
 
+    void checkConstantPatternStructure(Env<AttrContext> env, JCConstantPattern tree) {
+        JCExpression expr = tree.expr;
+        boolean simpleConstant = true;
+
+        while (simpleConstant && expr != null) {
+            switch (expr.getTag()) {
+                case LITERAL, IDENT -> expr = null;
+                case NEG, POS -> expr = ((JCUnary) expr).arg;
+                case SELECT -> expr = ((JCFieldAccess) expr).selected;
+                default -> simpleConstant = false;
+            }
+        }
+
+        if (!simpleConstant) {
+            if (env.tree.hasTag(Tag.SWITCH) || env.tree.hasTag(Tag.SWITCH_EXPRESSION)) {
+                log.warning(tree.pos(), LintWarnings.ConstantPatternSimpleExpressionOnly);
+            } else {
+                log.error(tree.pos(), Errors.ConstantPatternSimpleExpressionOnly);
+            }
+        }
+    }
+
     /** check if a type is a subtype of Externalizable, if that is available. */
     boolean isExternalizable(Type t) {
         try {

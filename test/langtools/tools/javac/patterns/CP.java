@@ -165,6 +165,39 @@ public class CP {
         }
     }
 
+    private void compileTest(String code, String... expected) throws Exception {
+        Path base = Paths.get(".");
+        Path src = base.resolve("src");
+
+        tb.writeJavaFiles(src, code);
+
+        Path classes = base.resolve("classes");
+
+        if (Files.exists(classes)) {
+            tb.cleanDirectory(classes);
+        } else {
+            Files.createDirectories(classes);
+        }
+
+        List<String> expectedAsList = List.of(expected);
+        List<String> log =
+            new JavacTask(tb)
+                    .options("--enable-preview", "--release", System.getProperty("java.specification.version"),
+                             "-Xlint:constants",
+                             "-XDrawDiagnostics")
+                    .outdir(classes)
+                    .files(tb.findJavaFiles(src))
+                    .run(expectedAsList.stream().anyMatch(l -> l.contains("error")) ? Expect.FAIL
+                                                                                    : Expect.SUCCESS)
+                    .writeAll()
+                    .getOutputLines(OutputKind.DIRECT);
+
+        if (!Objects.equals(log, expectedAsList)) {
+            throw new AssertionError("Incorrect result, expected: " + expectedAsList +
+                                     ", got: " + log);
+        }
+    }
+
     @Test
     public void testSourceLevelCheck() throws Exception {
         Path base = Paths.get(".");
@@ -339,5 +372,75 @@ public class CP {
                 }
                 """,
                 "correct");
+    }
+
+    @Test
+    public void testInvalidConstantNested() throws Exception {
+        compileTest("""
+                    public record R(int i) {
+                        static void main() {
+                            Object o = new R(0);
+                            switch (o) {
+                                case R(0 + 0) -> {}
+                                case R(true ? 1 : 0) -> {}
+                                case R((int) 2) -> {}
+                                case Object _ -> {}
+                            }
+                        }
+                    }
+                    """,
+                    "R.java:5:20: compiler.err.constant.pattern.simple.expression.only",
+                    "R.java:6:20: compiler.err.constant.pattern.simple.expression.only",
+                    "R.java:7:20: compiler.err.constant.pattern.simple.expression.only",
+                    "- compiler.note.preview.filename: R.java, DEFAULT",
+                    "- compiler.note.preview.recompile",
+                    "3 errors");
+        compileTest("""
+                    public record R(int i) {
+                        static void main() {
+                            int i = 0;
+                            switch ((Integer) i) {
+                                case 0 + 0 -> {}
+                                case true ? 1 : 0 -> {}
+                                case (int) 2 -> {}
+                                case Integer _ -> {}
+                            }
+                        }
+                    }
+                    """,
+                    "R.java:5:18: compiler.warn.constant.pattern.simple.expression.only",
+                    "R.java:6:18: compiler.warn.constant.pattern.simple.expression.only",
+                    "R.java:7:18: compiler.warn.constant.pattern.simple.expression.only",
+                    "- compiler.note.preview.filename: R.java, DEFAULT",
+                    "- compiler.note.preview.recompile",
+                    "3 warnings");
+    }
+
+    @Test
+    public void testConstantsTopLevel() throws Exception {
+        runTest("""
+                public record R(int i) {
+                    static void main() {
+                        for (int i = 0; i < 4; i++) {
+                            int r;
+                            switch ((Object) i) {
+                                case 0 + 0 -> r = 0;
+                                case true ? 1 : 0 -> r = 1;
+                                case (int) 2 -> r = 2;
+                                case Object _ -> r = 3;
+                            }
+                            System.out.println(r);
+                            r = switch ((Integer) i) {
+                                case 0 + 0 -> 0;
+                                case true ? 1 : 0 -> 1;
+                                case (int) 2 -> 2;
+                                case Integer _ -> 3;
+                            };
+                            System.out.println(r);
+                        }
+                    }
+                }
+                """,
+                "0", "0", "1", "1", "2", "2", "3", "3");
     }
 }

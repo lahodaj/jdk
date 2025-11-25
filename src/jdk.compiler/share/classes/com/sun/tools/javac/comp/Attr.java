@@ -4250,6 +4250,7 @@ public class Attr extends JCTree.Visitor {
                                                                         syms.boundClass)),
                                                syms.classType.tsym);
             }
+            chk.checkConstantPatternStructure(env, tree);
         }
         tree.type = tree.expr.type;
         //TODO: check the value is constant!

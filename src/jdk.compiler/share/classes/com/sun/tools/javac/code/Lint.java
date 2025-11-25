@@ -385,7 +385,13 @@ public class Lint {
         /**
          * Warn about use of restricted methods.
          */
-        RESTRICTED("restricted");
+        RESTRICTED("restricted"),
+
+        /**
+         * Warn about problems with constants.
+         */
+        CONSTANTS("constants"),
+        ;
 
         LintCategory(String option) {
             this(option, true, false);
