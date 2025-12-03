@@ -156,10 +156,23 @@ public class DeferredCompletionFailureHandler {
         return c instanceof DeferredCompleter;
     }
 
-    public DiagnosticPosition pos;
+    public CompletionFailureDelegate delegate;
 
     void handleCompletionFailure(CompletionFailure cf) {
-        chk.completionErrorX(pos, cf);
+        delegate.handleCompletionFailure(cf);
+    }
+
+    public CompletionFailureDelegate completionErrorHandler(DiagnosticPosition pos) {
+        return new CompletionFailureDelegate() {
+            @Override
+            public void handleCompletionFailure(CompletionFailure cf) {
+                chk.completionErrorX(pos, cf);
+            }
+        };
+    }
+
+    public interface CompletionFailureDelegate {
+        public void handleCompletionFailure(CompletionFailure cf);
     }
 
     public interface Handler {

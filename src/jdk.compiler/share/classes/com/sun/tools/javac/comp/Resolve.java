@@ -106,6 +106,7 @@ public class Resolve {
     ModuleFinder moduleFinder;
     Types types;
     JCDiagnostic.Factory diags;
+    DeferredCompletionFailureHandler dcfh;
     public final boolean allowModules;
     public final boolean allowRecords;
     private final boolean compactMethodDiags;
@@ -139,6 +140,7 @@ public class Resolve {
         moduleFinder = ModuleFinder.instance(context);
         types = Types.instance(context);
         diags = JCDiagnostic.Factory.instance(context);
+        dcfh = DeferredCompletionFailureHandler.instance(context);
         preview = Preview.instance(context);
         Source source = Source.instance(context);
         Options options = Options.instance(context);
@@ -2127,10 +2129,14 @@ public class Resolve {
                                                                                     .iterator()),
                                          (ms, n) -> {
                 for (Name candidate : candidates) {
+                    DeferredCompletionFailureHandler.CompletionFailureDelegate prevDelegate = dcfh.delegate;
                     try {
+                        dcfh.delegate = _ -> {};
                         return finder.loadClass(ms, candidate);
                     } catch (CompletionFailure cf) {
                         //ignore
+                    } finally {
+                        dcfh.delegate = prevDelegate;
                     }
                 }
                 return null;
@@ -2163,12 +2169,16 @@ public class Resolve {
                                                     sym -> sym.kind == TYP && sym.flatName() == name);
 
             if (existing != null) {
+                DeferredCompletionFailureHandler.CompletionFailureDelegate prevDelegate = dcfh.delegate;
                 try {
+                    dcfh.delegate = _ -> {};
                     existing = finder.loadClass(existing.packge().modle, name);
 
                     return new InvisibleSymbolError(env, true, existing);
                 } catch (CompletionFailure cf) {
                     //ignore
+                } finally {
+                    dcfh.delegate = prevDelegate;
                 }
             }
 

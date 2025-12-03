@@ -161,11 +161,11 @@ public class BadClassFileDuringImport {
                "1 error");
         doTest("import m.B.*;",
                "I i;",
-               "Test.java:2:35: compiler.err.cant.resolve.location: kindname.class, I, , , (compiler.misc.location: kindname.class, Test, null)",
+               "Test.java:2:35: compiler.err.cant.access: m.B.I, (compiler.misc.class.file.not.found: m.B$I)",
                "1 error");
         doTest("import m.B.*;",
                "I i;",
-               "Test.java:2:35: compiler.err.cant.resolve.location: kindname.class, I, , , (compiler.misc.location: kindname.class, Test, null)",
+               "Test.java:2:35: compiler.err.cant.access: m.B.I, (compiler.misc.class.file.not.found: m.B$I)",
                "1 error");
         doTest("import p.B.*;",
                "void test() { I i; }",
@@ -173,7 +173,7 @@ public class BadClassFileDuringImport {
                "1 error");
         doTest("import m.B.*;",
                "void test() { I i; }",
-               "Test.java:2:49: compiler.err.cant.resolve.location: kindname.class, I, , , (compiler.misc.location: kindname.class, Test, null)",
+               "Test.java:2:49: compiler.err.cant.access: m.B.I, (compiler.misc.class.file.not.found: m.B$I)",
                "1 error");
 
         doTest("import static p.B.I;",

@@ -545,15 +545,16 @@ public class Annotate {
     private Attribute attributeAnnotationValue(Type expectedElementType, JCExpression tree,
             Env<AttrContext> env)
     {
-        //first, try completing the symbol for the annotation value - if a completion
-        //error is thrown, we should recover gracefully, and display an
+        //first, try completing the symbol for the annotation value to
+        //recover gracefully if the element type is not present, displaying an
         //ordinary resolution diagnostic.
-//        try {
-            expectedElementType.tsym.complete();
-//        } catch(CompletionFailure e) {
-//            log.error(tree.pos(), Errors.CantResolve(Kinds.kindName(e.sym), e.sym.getQualifiedName(), null, null));
-//            expectedElementType = syms.errType;
-//        }
+        //XXX: avoid the use of doComplete() here:
+        try {
+            expectedElementType.tsym.doComplete();
+        } catch(CompletionFailure e) {
+            log.error(tree.pos(), Errors.CantResolve(Kinds.kindName(e.sym), e.sym.getQualifiedName(), null, null));
+            expectedElementType = syms.errType;
+        }
 
         if (expectedElementType.hasTag(ARRAY)) {
             return getAnnotationArrayValue(expectedElementType, tree, env);

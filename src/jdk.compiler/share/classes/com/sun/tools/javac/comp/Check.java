@@ -41,6 +41,7 @@ import javax.tools.JavaFileManager;
 import com.sun.source.tree.CaseTree;
 import com.sun.tools.javac.code.*;
 import com.sun.tools.javac.code.Attribute.Compound;
+import com.sun.tools.javac.code.DeferredCompletionFailureHandler.CompletionFailureDelegate;
 import com.sun.tools.javac.code.Directive.ExportsDirective;
 import com.sun.tools.javac.code.Directive.RequiresDirective;
 import com.sun.tools.javac.code.Source.Feature;
@@ -5780,9 +5781,9 @@ public class Check {
                annoType.flatName() == syms.requiresIdentityInternalType.tsym.flatName();
     }
     public Rollback recordCompletionFailurePos(DiagnosticPosition pos) {
-        DiagnosticPosition prevPos = dcfh.pos;
-        Rollback rollback = () -> dcfh.pos = prevPos;
-        dcfh.pos = pos;
+        CompletionFailureDelegate prevDelegate = dcfh.delegate;
+        Rollback rollback = () -> dcfh.delegate = prevDelegate;
+        dcfh.delegate = dcfh.completionErrorHandler(pos);
         return rollback;
     }
     public interface Rollback extends AutoCloseable {
