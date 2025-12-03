@@ -266,7 +266,7 @@ public class Modules extends JCTree.Visitor {
         int startErrors = log.nerrors;
 
         depth++;
-        try {
+        try (var _ =  chk.recordCompletionFailurePos(null)) {
             // scan trees for module defs
             Set<ModuleSymbol> roots = enterModules(trees, c);
 
@@ -280,8 +280,6 @@ public class Modules extends JCTree.Visitor {
                     msym.complete();
                 }
             }
-        } catch (CompletionFailure ex) {
-            chk.completionError(null, ex);
         } finally {
             depth--;
         }
@@ -464,11 +462,8 @@ public class Modules extends JCTree.Visitor {
                 String moduleOverride = singleModuleOverride(trees);
                 switch (rootModules.size()) {
                     case 0:
-                        try {
+                        try (var _ =  chk.recordCompletionFailurePos(null)) {
                             defaultModule = moduleFinder.findSingleModule();
-                        } catch (CompletionFailure cf) {
-                            chk.completionError(null, cf);
-                            defaultModule = syms.unnamedModule;
                         }
                         if (defaultModule == syms.unnamedModule) {
                             if (moduleOverride != null) {
@@ -637,7 +632,7 @@ public class Modules extends JCTree.Visitor {
 
     private final Completer mainCompleter = new Completer() {
         @Override
-        public void complete(Symbol sym) throws CompletionFailure {
+        public void complete(Symbol sym) {
             ModuleSymbol msym = moduleFinder.findModule((ModuleSymbol) sym);
 
             if (msym.kind == ERR) {
@@ -647,13 +642,14 @@ public class Modules extends JCTree.Visitor {
                 setupAutomaticModule(msym);
             } else {
                 try {
-                    msym.module_info.complete();
+                    msym.module_info.doComplete();
                 } catch (CompletionFailure cf) {
                     msym.kind = ERR;
                     //make sure the module is initialized:
                     initErrModule(msym);
                     completeModule(msym);
-                    throw cf;
+                    warnedMissing.add(msym);
+                    cf.dcfh.handleAPICompletionFailure(cf);
                 }
             }
 
@@ -683,7 +679,7 @@ public class Modules extends JCTree.Visitor {
         }
     };
 
-    private void setupAutomaticModule(ModuleSymbol msym) throws CompletionFailure {
+    private void setupAutomaticModule(ModuleSymbol msym) {
         try {
             ListBuffer<Directive> directives = new ListBuffer<>();
             ListBuffer<ExportsDirective> exports = new ListBuffer<>();
@@ -710,7 +706,7 @@ public class Modules extends JCTree.Visitor {
         }
     }
 
-    private void completeAutomaticModule(ModuleSymbol msym) throws CompletionFailure {
+    private void completeAutomaticModule(ModuleSymbol msym) {
         ListBuffer<Directive> directives = new ListBuffer<>();
 
         directives.addAll(msym.directives);
@@ -738,7 +734,7 @@ public class Modules extends JCTree.Visitor {
     private Completer getSourceCompleter(JCCompilationUnit tree) {
         return new Completer() {
             @Override
-            public void complete(Symbol sym) throws CompletionFailure {
+            public void complete(Symbol sym) {
                 ModuleSymbol msym = (ModuleSymbol) sym;
                 msym.flags_field |= UNATTRIBUTED;
                 ModuleVisitor v = new ModuleVisitor();
@@ -1296,12 +1292,10 @@ public class Modules extends JCTree.Visitor {
             };
 
             for (ModuleSymbol sym : new HashSet<>(syms.getAllModules())) {
-                try {
+                try (var _ =  chk.recordCompletionFailurePos(null)) {
                     if (systemModulePred.test(sym) && observablePred.test(sym) && jdkModulePred.test(sym) && noIncubatorPred.test(sym)) {
                         enabledRoot.add(sym);
                     }
-                } catch (CompletionFailure ex) {
-                    chk.completionError(null, ex);
                 }
             }
         }
@@ -1410,7 +1404,7 @@ public class Modules extends JCTree.Visitor {
         result.add(syms.java_base);
 
         while (primaryTodo.nonEmpty() || secondaryTodo.nonEmpty()) {
-            try {
+            try (var  _ =  chk.recordCompletionFailurePos(null)) {
                 ModuleSymbol current;
                 boolean isPrimaryTodo;
                 if (primaryTodo.nonEmpty()) {
@@ -1438,8 +1432,6 @@ public class Modules extends JCTree.Visitor {
                         secondaryTodo = secondaryTodo.prepend(rd.module);
                     }
                 }
-            } catch (CompletionFailure ex) {
-                chk.completionError(null, ex);
             }
         }
 
@@ -1460,7 +1452,7 @@ public class Modules extends JCTree.Visitor {
         moduleFinder.findAllModules();
         return new Symbol.Completer() {
             @Override
-            public void complete(Symbol sym) throws CompletionFailure {
+            public void complete(Symbol sym) {
                 if (inInitModules) {
                     sym.completer = this;
                     return ;

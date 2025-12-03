@@ -163,11 +163,9 @@ public class MemberEnter extends JCTree.Visitor {
      */
     protected void memberEnter(JCTree tree, Env<AttrContext> env) {
         Env<AttrContext> prevEnv = this.env;
-        try {
+        try (var  _ =  chk.recordCompletionFailurePos(tree.pos())) {
             this.env = env;
             tree.accept(this);
-        }  catch (CompletionFailure ex) {
-            chk.completionError(tree.pos(), ex);
         } finally {
             this.env = prevEnv;
         }

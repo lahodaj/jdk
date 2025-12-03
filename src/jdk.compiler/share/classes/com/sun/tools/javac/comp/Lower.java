@@ -2430,12 +2430,7 @@ public class Lower extends TreeTranslator {
         // where
         private MethodSymbol systemArraycopyMethod;
         private boolean useClone() {
-            try {
-                return syms.objectType.tsym.members().findFirst(names.clone) != null;
-            }
-            catch (CompletionFailure e) {
-                return false;
-            }
+            return syms.objectType.tsym.members().findFirst(names.clone) != null;
         }
 
         private Name syntheticName(JCClassDecl tree, String baseName) {

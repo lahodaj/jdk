@@ -339,15 +339,11 @@ public class ElementStructureTest {
         }
 
         private void write(TypeMirror type) throws IOException {
-            try {
-                out.write(type.toString()
-                              .replace("java.lang.invoke.MethodHandle$PolymorphicSignature", "java.lang.invoke.MethodHandle.PolymorphicSignature")
-                              .replace("javax.swing.JRootPane$DefaultAction", "javax.swing.JRootPane.DefaultAction")
-                              .replace("javax.swing.plaf.metal.MetalFileChooserUI$DirectoryComboBoxRenderer", "javax.swing.plaf.metal.MetalFileChooserUI.DirectoryComboBoxRenderer")
-                         );
-            } catch (CompletionFailure cf) {
-                out.write("cf");
-            }
+            out.write(type.toString()
+                          .replace("java.lang.invoke.MethodHandle$PolymorphicSignature", "java.lang.invoke.MethodHandle.PolymorphicSignature")
+                          .replace("javax.swing.JRootPane$DefaultAction", "javax.swing.JRootPane.DefaultAction")
+                          .replace("javax.swing.plaf.metal.MetalFileChooserUI$DirectoryComboBoxRenderer", "javax.swing.plaf.metal.MetalFileChooserUI.DirectoryComboBoxRenderer")
+                     );
         }
 
         private void writeTypes(Iterable<? extends TypeMirror> types) throws IOException {

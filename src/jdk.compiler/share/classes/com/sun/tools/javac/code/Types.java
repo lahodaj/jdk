@@ -3139,11 +3139,8 @@ public class Types {
     /** Return first abstract member of class `sym'.
      */
     public MethodSymbol firstUnimplementedAbstract(ClassSymbol sym) {
-        try {
+        try (var _ =  chk.recordCompletionFailurePos(enter.getEnv(sym).tree.pos())) {
             return firstUnimplementedAbstractImpl(sym, sym);
-        } catch (CompletionFailure ex) {
-            chk.completionError(enter.getEnv(sym).tree.pos(), ex);
-            return null;
         }
     }
         //where:

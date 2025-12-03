@@ -97,7 +97,7 @@ public class JavadocTool extends com.sun.tools.javac.main.JavaCompiler {
      */
     public static JavadocTool make0(Context context) {
         JavadocLog log = null;
-        try {
+//        try {
             // force the use of Javadoc's class finder
             JavadocClassFinder.preRegister(context);
 
@@ -114,11 +114,11 @@ public class JavadocTool extends com.sun.tools.javac.main.JavaCompiler {
             log = JavadocLog.instance0(context);
 
             return new JavadocTool(context);
-        } catch (CompletionFailure ex) {
-            assert log != null;
-            log.error(Position.NOPOS, ex.getMessage());
-            return null;
-        }
+//        } catch (CompletionFailure ex) {
+//            assert log != null;
+//            log.error(Position.NOPOS, ex.getMessage());
+//            return null;
+//        }
     }
 
     public DocletEnvironment getEnvironment(ToolOptions toolOptions,
@@ -224,8 +224,8 @@ public class JavadocTool extends com.sun.tools.javac.main.JavaCompiler {
                 }
             }
 
-        } catch (CompletionFailure cf) {
-            throw new ToolException(ABNORMAL, cf.getMessage(), cf);
+//        } catch (CompletionFailure cf) {
+//            throw new ToolException(ABNORMAL, cf.getMessage(), cf);
         } catch (Abort abort) {
             if (log.hasErrors()) {
                 // presumably a message has been emitted, keep silent

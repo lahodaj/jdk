@@ -35,9 +35,12 @@
  * @run main BadConstantValue
  */
 
+import com.sun.tools.javac.api.ClientCodeWrapper;
+import com.sun.tools.javac.api.ClientCodeWrapper.DiagnosticSourceUnwrapper;
 import java.lang.classfile.*;
 import com.sun.tools.javac.api.JavacTaskImpl;
 import com.sun.tools.javac.code.ClassFinder.BadClassFile;
+import com.sun.tools.javac.code.DeferredCompletionFailureHandler;
 import com.sun.tools.javac.code.Symtab;
 import com.sun.tools.javac.jvm.Target;
 import com.sun.tools.javac.util.Assert;
@@ -47,7 +50,11 @@ import java.io.*;
 import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Objects;
+import javax.tools.Diagnostic;
+import javax.tools.DiagnosticCollector;
+import javax.tools.DiagnosticListener;
 import javax.tools.JavaCompiler;
+import javax.tools.JavaFileObject;
 import javax.tools.ToolProvider;
 
 public class BadConstantValue {
@@ -94,11 +101,11 @@ public class BadConstantValue {
      */
     private static void testInvalidConstRange(String type, int value) throws Exception {
         createConstantWithValue(type, value);
-        BadClassFile badClassFile = loadBadClass("Lib");
+        Diagnostic<?> badClassFile = loadBadClass("Lib");
         if (badClassFile == null) {
             throw new AssertionError("did not see expected error");
         }
-        JCDiagnostic diagnostic = (JCDiagnostic) badClassFile.getDiagnostic().getArgs()[1];
+        JCDiagnostic diagnostic = (JCDiagnostic) ((JCDiagnostic) badClassFile).getArgs()[1];
         assertEquals("compiler.misc.bad.constant.range", diagnostic.getCode());
         assertEquals(3, diagnostic.getArgs().length);
         assertEquals(value, diagnostic.getArgs()[0]);
@@ -112,9 +119,9 @@ public class BadConstantValue {
      */
     private static void testValidConstRange(String type, int value) throws Exception {
         createConstantWithValue(type, value);
-        BadClassFile badClassFile = loadBadClass("Lib");
+        Diagnostic<?> badClassFile = loadBadClass("Lib");
         if (badClassFile != null) {
-          throw new AssertionError("saw unexpected error", badClassFile);
+          throw new AssertionError("saw unexpected error: " + badClassFile);
         }
     }
 
@@ -149,9 +156,9 @@ public class BadConstantValue {
         File libClass = new File(classesdir, "Lib.class");
         swapConstantValues(libClass);
 
-        BadClassFile badClassFile = loadBadClass("Lib");
+        JCDiagnostic badClassFile = loadBadClass("Lib");
 
-        JCDiagnostic diagnostic = (JCDiagnostic) badClassFile.getDiagnostic().getArgs()[1];
+        JCDiagnostic diagnostic = (JCDiagnostic) badClassFile.getArgs()[1];
         assertEquals("compiler.misc.bad.constant.value", diagnostic.getCode());
         assertEquals(3, diagnostic.getArgs().length);
         assertEquals("hello", diagnostic.getArgs()[0]);
@@ -159,20 +166,34 @@ public class BadConstantValue {
         assertEquals("Integer", diagnostic.getArgs()[2]);
     }
 
-    private static BadClassFile loadBadClass(String className) {
+    private static JCDiagnostic loadBadClass(String className) {
         // load the class, and save the thrown BadClassFile exception
         JavaCompiler c = ToolProvider.getSystemJavaCompiler();
-        JavacTaskImpl task = (JavacTaskImpl) c.getTask(null, null, null,
+        DiagnosticCollector<JavaFileObject> dc = new DiagnosticCollector<>();
+        JavacTaskImpl task = (JavacTaskImpl) c.getTask(null, null, dc,
                 Arrays.asList("-classpath", classesdir.getPath()), null, null);
         Names names = Names.instance(task.getContext());
         Symtab syms = Symtab.instance(task.getContext());
+        DeferredCompletionFailureHandler dcfh = DeferredCompletionFailureHandler.instance(task.getContext());
         task.ensureEntered();
+        DeferredCompletionFailureHandler.Handler prevHandler = dcfh.setHandler(dcfh.javacCodeHandler);
         try {
             syms.enterClass(syms.unnamedModule, names.fromString(className)).complete();
-        } catch (BadClassFile e) {
-            return e;
+        } finally {
+            dcfh.setHandler(prevHandler);
         }
-        return null;
+        switch (dc.getDiagnostics().size()) {
+            case 0 -> { return null; }
+            case 1 -> {
+                if (!(dc.getDiagnostics().get(0) instanceof DiagnosticSourceUnwrapper wrapped)) {
+                    throw Assert.error(dc.getDiagnostics().get(0).toString());
+                }
+                JCDiagnostic d = wrapped.d;
+                //TODO: check correct code?
+                return (JCDiagnostic) d.getArgs()[1];
+            }
+            default -> throw Assert.error(dc.getDiagnostics().toString());
+        }
     }
 
     /**

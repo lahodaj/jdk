@@ -25,6 +25,8 @@
 
 package com.sun.tools.javac.jvm;
 
+import com.sun.tools.javac.code.ClassFinder;
+import com.sun.tools.javac.code.ClassFinder.BadClassFile;
 import com.sun.tools.javac.code.Source;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import com.sun.tools.javac.code.Symbol.ModuleSymbol;
@@ -117,32 +119,32 @@ public class PoolReader {
     /**
      * Get a class symbol from the pool at given index.
      */
-    ClassSymbol getClass(int index) {
+    ClassSymbol getClass(int index) throws BadClassFile {
         return pool.readIfNeeded(index, classCP);
     }
 
     /**
      * Get class name without resolving
      */
-    <Z> Z peekClassName(int index, Utf8Mapper<Z> mapper) {
+    <Z> Z peekClassName(int index, Utf8Mapper<Z> mapper) throws BadClassFile {
         return peekItemName(index, mapper);
     }
 
     /**
      * Get package name without resolving
      */
-    <Z> Z peekPackageName(int index, Utf8Mapper<Z> mapper) {
+    <Z> Z peekPackageName(int index, Utf8Mapper<Z> mapper) throws BadClassFile {
         return peekItemName(index, mapper);
     }
 
     /**
      * Get module name without resolving
      */
-    <Z> Z peekModuleName(int index, Utf8Mapper<Z> mapper) {
+    <Z> Z peekModuleName(int index, Utf8Mapper<Z> mapper) throws BadClassFile {
         return peekItemName(index, mapper);
     }
 
-    private <Z> Z peekItemName(int index, Utf8Mapper<Z> mapper) {
+    private <Z> Z peekItemName(int index, Utf8Mapper<Z> mapper) throws ClassFinder.BadClassFile {
         try {
             index = buf.getChar(pool.offset(index));
         } catch (UnderflowException e) {
@@ -154,21 +156,21 @@ public class PoolReader {
     /**
      * Get a module symbol from the pool at given index.
      */
-    ModuleSymbol getModule(int index) {
+    ModuleSymbol getModule(int index) throws BadClassFile {
         return pool.readIfNeeded(index, moduleCP);
     }
 
     /**
      * Get a module symbol from the pool at given index.
      */
-    PackageSymbol getPackage(int index) {
+    PackageSymbol getPackage(int index) throws BadClassFile {
         return pool.readIfNeeded(index, packageCP);
     }
 
     /**
      * Peek a name from the pool at given index without resolving.
      */
-    <Z> Z peekName(int index, Utf8Mapper<Z> mapper) {
+    <Z> Z peekName(int index, Utf8Mapper<Z> mapper) throws ClassFinder.BadClassFile {
         try {
             return getUtf8(index, mapper);
         } catch (InvalidUtfException e) {
@@ -181,36 +183,36 @@ public class PoolReader {
     /**
      * Get a name from the pool at given index.
      */
-    Name getName(int index) {
+    Name getName(int index) throws BadClassFile {
         return pool.readIfNeeded(index, utf8CP);
     }
 
     /**
      * Get a type from the pool at given index.
      */
-    Type getType(int index) {
+    Type getType(int index) throws BadClassFile {
         return getName(index).map(reader::sigToType);
     }
 
     /**
      * Get a name and type pair from the pool at given index.
      */
-    NameAndType getNameAndType(int index) {
+    NameAndType getNameAndType(int index) throws BadClassFile {
         return pool.readIfNeeded(index, nameAndTypeCP);
     }
 
     /**
      * Get a class symbol from the pool at given index.
      */
-    Object getConstant(int index) {
+    Object getConstant(int index) throws BadClassFile {
         return pool.readIfNeeded(index, constantCP);
     }
 
-    boolean hasTag(int index, int tag) {
+    boolean hasTag(int index, int tag) throws BadClassFile {
         return pool.tag(index) == tag;
     }
 
-    private <Z> Z getUtf8(int index, Utf8Mapper<Z> mapper) throws InvalidUtfException, UnderflowException {
+    private <Z> Z getUtf8(int index, Utf8Mapper<Z> mapper) throws InvalidUtfException, UnderflowException, BadClassFile {
         int tag = pool.tag(index);
         int offset = pool.offset(index);
         if (tag == CONSTANT_Utf8) {
@@ -225,7 +227,7 @@ public class PoolReader {
         }
     }
 
-    private Object resolve(ByteBuffer poolbuf, int tag, int offset) throws InvalidUtfException, UnderflowException {
+    private Object resolve(ByteBuffer poolbuf, int tag, int offset) throws InvalidUtfException, UnderflowException, BadClassFile {
         switch (tag) {
             case CONSTANT_Utf8: {
                 int len = poolbuf.getChar(offset);
@@ -284,7 +286,7 @@ public class PoolReader {
      * there are cases where creating a symbol too early might result in issues (hence methods like
      * {@link PoolReader#peekClassName(int, Utf8Mapper)}.
      */
-    int readPool(ByteBuffer poolbuf, int offset) {
+    int readPool(ByteBuffer poolbuf, int offset) throws BadClassFile {
         try {
             return readPoolInternal(poolbuf, offset);
         } catch (UnderflowException e) {
@@ -292,7 +294,7 @@ public class PoolReader {
         }
     }
 
-    private int readPoolInternal(ByteBuffer poolbuf, int offset) throws UnderflowException {
+    private int readPoolInternal(ByteBuffer poolbuf, int offset) throws UnderflowException, BadClassFile {
         int poolSize = poolbuf.getChar(offset);
         int index = 1;
         offset += 2;
@@ -362,7 +364,7 @@ public class PoolReader {
             this.poolbuf = poolbuf;
         }
 
-        private int checkIndex(int index) {
+        private int checkIndex(int index) throws BadClassFile {
             if (index <= 0 || index >= offsets.length) {
                 //pool index is outside valid range.
                 throw reader.badClassFile("bad.const.pool.index", reader.currentClassFile,
@@ -372,12 +374,12 @@ public class PoolReader {
             }
         }
 
-        int offset(int index) {
+        int offset(int index) throws BadClassFile {
             return offsets[checkIndex(index)];
         }
 
         @SuppressWarnings("unchecked")
-        <P> P readIfNeeded(int index, BitSet expectedTags) {
+        <P> P readIfNeeded(int index, BitSet expectedTags) throws BadClassFile {
             Object v = values[checkIndex(index)];
             if (v != null) {
                 return (P)v;
@@ -399,7 +401,7 @@ public class PoolReader {
             }
         }
 
-        int tag(int index) {
+        int tag(int index) throws BadClassFile {
             return poolbuf.elems[offset(index) - 1];
         }
     }
@@ -407,6 +409,6 @@ public class PoolReader {
 // Utf8Mapper
 
     public interface Utf8Mapper<X> {
-        X map(byte[] bytes, int offset, int len) throws InvalidUtfException;
+        X map(byte[] bytes, int offset, int len) throws InvalidUtfException, BadClassFile;
     }
 }

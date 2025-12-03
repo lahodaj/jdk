@@ -170,7 +170,7 @@ public class TypeEnter implements Completer {
      *  @param sym         The symbol of the class to be completed.
      */
     @Override
-    public void complete(Symbol sym) throws CompletionFailure {
+    public void complete(Symbol sym) {
         // Suppress some (recursive) MemberEnter invocations
         if (!completionEnabled) {
             // Re-install same completer for next time around and return.
@@ -208,7 +208,7 @@ public class TypeEnter implements Completer {
 
     void finishImports(JCCompilationUnit toplevel, Runnable resolve) {
         JavaFileObject prev = log.useSource(toplevel.sourcefile);
-        try {
+        try (var _ =  chk.recordCompletionFailurePos(toplevel.pos())) {
             resolve.run();
             chk.checkImportsUnique(toplevel);
             chk.checkImportsResolvable(toplevel);
@@ -216,8 +216,6 @@ public class TypeEnter implements Completer {
             toplevel.namedImportScope.finalizeScope();
             toplevel.starImportScope.finalizeScope();
             toplevel.moduleImportScope.finalizeScope();
-        } catch (CompletionFailure cf) {
-            chk.completionError(toplevel.pos(), cf);
         } finally {
             log.useSource(prev);
         }
@@ -269,11 +267,9 @@ public class TypeEnter implements Completer {
                 queue.add(env);
 
                 JavaFileObject prev = log.useSource(env.toplevel.sourcefile);
-                try {
+                try (var _ =  chk.recordCompletionFailurePos(tree.pos())) {
                     dependencies.push(env.enclClass.sym, phaseName);
                     runPhase(env);
-                } catch (CompletionFailure ex) {
-                    chk.completionError(tree.pos(), ex);
                 } finally {
                     dependencies.pop();
                     log.useSource(prev);
@@ -298,8 +294,8 @@ public class TypeEnter implements Completer {
         Env<AttrContext> env;
         ImportFilter staticImportFilter;
         ImportFilter typeImportFilter;
-        BiConsumer<JCImport, CompletionFailure> cfHandler =
-                (imp, cf) -> chk.completionError(imp.pos(), cf);
+//        BiConsumer<JCImport, CompletionFailure> cfHandler =
+//                (imp, cf) -> chk.completionErrorX(imp.pos(), cf); //XXX
 
         @Override
         protected void runPhase(Env<AttrContext> env) {
@@ -522,7 +518,7 @@ public class TypeEnter implements Completer {
                     fromModuleImport ? env.toplevel.moduleImportScope
                                      : env.toplevel.starImportScope;
 
-            targetScope.importAll(types, tsym.members(), typeImportFilter, imp, cfHandler);
+            targetScope.importAll(types, tsym.members(), typeImportFilter, imp/*, cfHandler*/);
         }
 
         /** Import all static members of a class or package on demand.
@@ -536,7 +532,7 @@ public class TypeEnter implements Completer {
             final StarImportScope toScope = env.toplevel.starImportScope;
             final TypeSymbol origin = tsym;
 
-            toScope.importAll(types, origin.members(), staticImportFilter, imp, cfHandler);
+            toScope.importAll(types, origin.members(), staticImportFilter, imp/*, cfHandler*/);
         }
 
         /** Import statics types of a given name.  Non-types are handled in Attr.
@@ -558,7 +554,7 @@ public class TypeEnter implements Completer {
             final NamedImportScope toScope = env.toplevel.namedImportScope;
             final Scope originMembers = tsym.members();
 
-            imp.importScope = toScope.importByName(types, originMembers, name, staticImportFilter, imp, cfHandler);
+            imp.importScope = toScope.importByName(types, originMembers, name, staticImportFilter, imp/*, cfHandler*/);
         }
 
         /** Import given class.
@@ -865,7 +861,7 @@ public class TypeEnter implements Completer {
             }
 
         @Override
-        public void complete(Symbol sym) throws CompletionFailure {
+        public void complete(Symbol sym) {
             Assert.check((topLevelPhase instanceof ImportsPhase) ||
                          (topLevelPhase == this));
 

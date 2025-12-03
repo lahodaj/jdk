@@ -39,18 +39,13 @@ import java.util.*;
 import javax.annotation.processing.*;
 import javax.lang.model.element.*;
 import javax.tools.*;
-import com.sun.tools.javac.code.Symbol.CompletionFailure;
 
 public class ClassDependingOnGenerated extends JavacTestingAbstractProcessor {
     int round = 1;
     public boolean process(Set<? extends TypeElement> annotations,
                            RoundEnvironment roundEnv) {
 
-        try {
-            processingEnv.getElementUtils().getTypeElement("SuperClass");
-        } catch (CompletionFailure cf) {
-            cf.printStackTrace();
-        }
+        processingEnv.getElementUtils().getTypeElement("SuperClass");
         if (round++ == 1) {
             try (Writer out = filer.createSourceFile("SuperClass").openWriter()) {
                 String code = "class SuperClass { public int get() { return 0; } }";

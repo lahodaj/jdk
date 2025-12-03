@@ -33,7 +33,10 @@ import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import com.sun.tools.javac.code.Symbol.Completer;
 import com.sun.tools.javac.code.Symbol.CompletionFailure;
+import com.sun.tools.javac.comp.Check;
 import com.sun.tools.javac.util.Context;
+import com.sun.tools.javac.util.JCDiagnostic;
+import com.sun.tools.javac.util.JCDiagnostic.DiagnosticPosition;
 
 /** When a CompletionFailure is thrown when user code is running, it shouldn't be
  *  thrown out to the client code, but rather skipped, and then rethrown later if javac
@@ -92,7 +95,7 @@ public class DeferredCompletionFailureHandler {
         public void install() {
         }
         public void handleAPICompletionFailure(CompletionFailure cf) {
-            throw cf;
+            handleCompletionFailure(cf);
         }
         public void classSymbolCompleteFailed(ClassSymbol sym, Completer origCompleter) {
             class2Flip.put(sym, new FlipSymbolDescription(sym, new DeferredCompleter(origCompleter)));
@@ -110,7 +113,7 @@ public class DeferredCompletionFailureHandler {
         public void install() {
         }
         public void handleAPICompletionFailure(CompletionFailure cf) {
-            throw cf;
+            handleCompletionFailure(cf);
         }
         public void classSymbolCompleteFailed(ClassSymbol sym, Completer origCompleter) {}
         public void classSymbolRemoved(ClassSymbol sym) {}
@@ -119,10 +122,12 @@ public class DeferredCompletionFailureHandler {
     };
 
     private Handler handler = javacCodeHandler;
+    private Check chk;
 
     @SuppressWarnings("this-escape")
     protected DeferredCompletionFailureHandler(Context context) {
         context.put(deferredCompletionFailureHandlerKey, this);
+        this.chk = Check.instance(context);
     }
 
     public Handler setHandler(Handler h) {
@@ -149,6 +154,12 @@ public class DeferredCompletionFailureHandler {
 
     public boolean isDeferredCompleter(Completer c) {
         return c instanceof DeferredCompleter;
+    }
+
+    public DiagnosticPosition pos;
+
+    void handleCompletionFailure(CompletionFailure cf) {
+        chk.completionErrorX(pos, cf);
     }
 
     public interface Handler {

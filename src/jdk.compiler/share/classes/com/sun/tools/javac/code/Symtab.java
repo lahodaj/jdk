@@ -331,9 +331,10 @@ public class Symtab {
         final Completer completer = type.tsym.completer;
         type.tsym.completer = new Completer() {
             @Override
-            public void complete(Symbol sym) throws CompletionFailure {
+            public void complete(Symbol sym) {
                 try {
-                    completer.complete(sym);
+                    sym.completer = completer;
+                    sym.doComplete();
                 } catch (CompletionFailure e) {
                     sym.flags_field |= (PUBLIC | INTERFACE);
                     ((ClassType) sym.type).supertype_field = objectType;
@@ -352,9 +353,10 @@ public class Symtab {
         final Completer completer = sym.completer;
         sym.completer = new Completer() {
             @Override
-            public void complete(Symbol sym) throws CompletionFailure {
+            public void complete(Symbol sym) {
                 try {
-                    completer.complete(sym);
+                    sym.completer = completer;
+                    sym.doComplete();
                 } catch (CompletionFailure e) {
                     sym.flags_field |= PUBLIC;
                     ((ClassType) sym.type).supertype_field = objectType;
@@ -409,7 +411,7 @@ public class Symtab {
      *  into symbol table.
      */
     @SuppressWarnings("this-escape")
-    protected Symtab(Context context) throws CompletionFailure {
+    protected Symtab(Context context) {
         context.put(symtabKey, this);
 
         names = Names.instance(context);

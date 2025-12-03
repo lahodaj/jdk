@@ -113,6 +113,7 @@ public class Check {
     private final Target target;
     private final Profile profile;
     private final Preview preview;
+    private final DeferredCompletionFailureHandler dcfh;
     private final boolean warnOnAnyAccessToMembers;
 
     public boolean disablePreviewCheck;
@@ -162,6 +163,7 @@ public class Check {
 
         profile = Profile.instance(context);
         preview = Preview.instance(context);
+        dcfh = DeferredCompletionFailureHandler.instance(context);
 
         allowModules = Feature.MODULES.allowedInSource(source);
         allowRecords = Feature.RECORDS.allowedInSource(source);
@@ -259,7 +261,7 @@ public class Check {
      *  @param pos        Position to be used for error reporting.
      *  @param ex         The failure to report.
      */
-    public Type completionError(DiagnosticPosition pos, CompletionFailure ex) {
+    public Type completionErrorX(DiagnosticPosition pos, CompletionFailure ex) {
         log.error(DiagnosticFlag.NON_DEFERRABLE, pos, Errors.CantAccess(ex.sym, ex.getDetailValue()));
         return syms.errType;
     }
@@ -1448,12 +1450,10 @@ public class Check {
                 this.checkRaw = checkRaw;
                 this.isOuter = isOuter;
 
-                try {
+                try (var _ =  recordCompletionFailurePos(tree.pos())) {
                     tree.accept(this);
                     if (checkRaw)
                         checkRaw(tree, env);
-                } catch (CompletionFailure ex) {
-                    completionError(tree.pos(), ex);
                 } finally {
                     this.checkRaw = prevCheckRaw;
                 }
@@ -1579,11 +1579,8 @@ public class Check {
     /** Same, but handling completion failures.
      */
     boolean isUnchecked(DiagnosticPosition pos, Type exc) {
-        try {
+        try (var _ =  recordCompletionFailurePos(pos)) {
             return isUnchecked(exc);
-        } catch (CompletionFailure ex) {
-            completionError(pos, ex);
-            return true;
         }
     }
 
@@ -4418,22 +4415,16 @@ public class Check {
 
     // is the sym accessible everywhere in packge?
     public boolean importAccessible(Symbol sym, PackageSymbol packge) {
-        try {
-            int flags = (int)(sym.flags() & AccessFlags);
-            switch (flags) {
-            default:
-            case PUBLIC:
-                return true;
-            case PRIVATE:
-                return false;
-            case 0:
-            case PROTECTED:
-                return sym.packge() == packge;
-            }
-        } catch (ClassFinder.BadClassFile err) {
-            throw err;
-        } catch (CompletionFailure ex) {
+        int flags = (int)(sym.flags() & AccessFlags);
+        switch (flags) {
+        default:
+        case PUBLIC:
+            return true;
+        case PRIVATE:
             return false;
+        case 0:
+        case PROTECTED:
+            return sym.packge() == packge;
         }
     }
 
@@ -4843,11 +4834,6 @@ public class Check {
 
     /** check if a type is a subtype of Externalizable, if that is available. */
     boolean isExternalizable(Type t) {
-        try {
-            syms.externalizableType.complete();
-        } catch (CompletionFailure e) {
-            return false;
-        }
         return types.isSubtype(t, syms.externalizableType);
     }
 
@@ -5792,5 +5778,14 @@ public class Check {
     private boolean isRequiresIdentityAnnotation(TypeSymbol annoType) {
         return annoType == syms.requiresIdentityType.tsym ||
                annoType.flatName() == syms.requiresIdentityInternalType.tsym.flatName();
+    }
+    public Rollback recordCompletionFailurePos(DiagnosticPosition pos) {
+        DiagnosticPosition prevPos = dcfh.pos;
+        Rollback rollback = () -> dcfh.pos = prevPos;
+        dcfh.pos = pos;
+        return rollback;
+    }
+    public interface Rollback extends AutoCloseable {
+        public void close();
     }
 }

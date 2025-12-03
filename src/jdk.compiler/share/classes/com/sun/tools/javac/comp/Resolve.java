@@ -2461,13 +2461,11 @@ public class Resolve {
      *                   (a subset of VAL, TYP, PCK).
      */
     Symbol findIdent(DiagnosticPosition pos, Env<AttrContext> env, Name name, KindSelector kind) {
-        try {
+        try (var _ =  chk.recordCompletionFailurePos(pos)) {
             return checkNonExistentType(checkRestrictedType(pos, findIdentInternal(pos, env, name, kind), name));
-        } catch (ClassFinder.BadClassFile err) {
-            return new BadClassFileError(err);
-        } catch (CompletionFailure cf) {
-            chk.completionError(pos, cf);
-            return typeNotFound;
+//        } catch (ClassFinder.BadClassFile err) {
+//            //TODO:...
+//            return new BadClassFileError(err);
         }
     }
 
@@ -2540,13 +2538,11 @@ public class Resolve {
     Symbol findIdentInType(DiagnosticPosition pos,
                            Env<AttrContext> env, Type site,
                            Name name, KindSelector kind) {
-        try {
+        try (var _ =  chk.recordCompletionFailurePos(pos)) {
             return checkNonExistentType(checkRestrictedType(pos, findIdentInTypeInternal(env, site, name, kind), name));
-        } catch (ClassFinder.BadClassFile err) {
-            return new BadClassFileError(err);
-        } catch (CompletionFailure cf) {
-            chk.completionError(pos, cf);
-            return typeNotFound;
+//        } catch (ClassFinder.BadClassFile err) {
+//            //TODO:
+//            return new BadClassFileError(err);
         }
     }
 
@@ -2810,11 +2806,8 @@ public class Resolve {
     Symbol resolveQualifiedMethod(DiagnosticPosition pos, Env<AttrContext> env,
                                   Symbol location, Type site, Name name, List<Type> argtypes,
                                   List<Type> typeargtypes) {
-        try {
+        try (var _ =  chk.recordCompletionFailurePos(pos)) {
             return resolveQualifiedMethod(new MethodResolutionContext(), pos, env, location, site, name, argtypes, typeargtypes);
-        } catch (CompletionFailure cf) {
-            chk.completionError(pos, cf);
-            return methodNotFound.access(name, site.tsym);
         }
     }
     private Symbol resolveQualifiedMethod(MethodResolutionContext resolveContext,
@@ -4073,12 +4066,6 @@ public class Resolve {
 
     /** check if a type is a subtype of Serializable, if that is available.*/
     boolean isSerializable(Type t) {
-        try {
-            syms.serializableType.complete();
-        }
-        catch (CompletionFailure e) {
-            return false;
-        }
         return types.isSubtype(t, syms.serializableType);
     }
 

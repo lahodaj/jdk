@@ -50,6 +50,7 @@ import com.sun.tools.javac.code.Source.Feature;
 import com.sun.tools.javac.comp.Annotate;
 import com.sun.tools.javac.comp.Annotate.AnnotationTypeCompleter;
 import com.sun.tools.javac.code.*;
+import com.sun.tools.javac.code.ClassFinder.BadClassFile;
 import com.sun.tools.javac.code.Directive.*;
 import com.sun.tools.javac.code.Scope.WriteableScope;
 import com.sun.tools.javac.code.Symbol.*;
@@ -347,7 +348,7 @@ public class ClassReader {
 
     /** Read a character.
      */
-    char nextChar() {
+    char nextChar() throws BadClassFile {
         char res;
         try {
             res = buf.getChar(bp);
@@ -360,7 +361,7 @@ public class ClassReader {
 
     /** Read a byte.
      */
-    int nextByte() {
+    int nextByte() throws BadClassFile {
         try {
             return buf.getByte(bp++) & 0xFF;
         } catch (UnderflowException e) {
@@ -370,7 +371,7 @@ public class ClassReader {
 
     /** Read an integer.
      */
-    int nextInt() {
+    int nextInt() throws BadClassFile {
         int res;
         try {
             res = buf.getInt(bp);
@@ -454,7 +455,7 @@ public class ClassReader {
 
     /** Convert signature to type, where signature is a byte array segment.
      */
-    Type sigToType(byte[] sig, int offset, int len) {
+    Type sigToType(byte[] sig, int offset, int len) throws BadClassFile {
         signature = sig;
         sigp = offset;
         siglimit = offset + len;
@@ -463,7 +464,7 @@ public class ClassReader {
 
     /** Convert signature to type, where signature is implicit.
      */
-    Type sigToType() {
+    Type sigToType() throws BadClassFile {
         switch ((char) signature[sigp]) {
         case 'T':
             sigp++;
@@ -564,7 +565,7 @@ public class ClassReader {
     int sbp = 0;
     /** Convert class signature to type, where signature is implicit.
      */
-    Type classSigToType() {
+    Type classSigToType() throws BadClassFile {
         if (signature[sigp] != 'L')
             throw badClassFile("bad.class.signature", quoteBadSignature());
         sigp++;
@@ -720,7 +721,7 @@ public class ClassReader {
     /** Convert (implicit) signature to list of types
      *  until `terminator' is encountered.
      */
-    List<Type> sigToTypes(char terminator) {
+    List<Type> sigToTypes(char terminator) throws BadClassFile {
         List<Type> head = List.of(null);
         List<Type> tail = head;
         while (signature[sigp] != terminator)
@@ -732,7 +733,7 @@ public class ClassReader {
     /** Convert signature to type parameters, where signature is a byte
      *  array segment.
      */
-    List<Type> sigToTypeParams(byte[] sig, int offset, int len) {
+    List<Type> sigToTypeParams(byte[] sig, int offset, int len) throws BadClassFile {
         signature = sig;
         sigp = offset;
         siglimit = offset + len;
@@ -741,7 +742,7 @@ public class ClassReader {
 
     /** Convert signature to type parameters, where signature is implicit.
      */
-    List<Type> sigToTypeParams() {
+    List<Type> sigToTypeParams() throws BadClassFile {
         List<Type> tvars = List.nil();
         if (signature[sigp] == '<') {
             sigp++;
@@ -760,7 +761,7 @@ public class ClassReader {
 
     /** Convert (implicit) signature to type parameter.
      */
-    Type sigToTypeParam() {
+    Type sigToTypeParam() throws BadClassFile {
         int start = sigp;
         while (signature[sigp] != ':') sigp++;
         Name name = readName(signature, start, sigp - start);
@@ -789,7 +790,7 @@ public class ClassReader {
 
     /** Find type variable with given name in `typevars' scope.
      */
-    Type findTypeVar(Name name) {
+    Type findTypeVar(Name name) throws BadClassFile {
         Symbol s = typevars.findFirst(name);
         if (s != null) {
             return s.type;
@@ -814,7 +815,7 @@ public class ClassReader {
         }
     }
 
-    private Name readName(byte[] buf, int off, int len) {
+    private Name readName(byte[] buf, int off, int len) throws BadClassFile {
         try {
             return names.fromUtf(buf, off, len, utf8validation);
         } catch (InvalidUtfException e) {
@@ -858,7 +859,7 @@ public class ClassReader {
             return false;
         }
 
-        protected abstract void read(Symbol sym, int attrLen);
+        protected abstract void read(Symbol sym, int attrLen) throws BadClassFile;
 
         protected final Name name;
         protected final ClassFile.Version version;
@@ -879,7 +880,7 @@ public class ClassReader {
             // v45.3 attributes
 
             new AttributeReader(names.Code, V45_3, MEMBER_ATTRIBUTE) {
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     if (saveParameterNames)
                         ((MethodSymbol)sym).code = readCode(sym);
                     else
@@ -888,7 +889,7 @@ public class ClassReader {
             },
 
             new AttributeReader(names.ConstantValue, V45_3, MEMBER_ATTRIBUTE) {
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     Object v = poolReader.getConstant(nextChar());
                     // Ignore ConstantValue attribute if field not final.
                     if ((sym.flags() & FINAL) == 0) {
@@ -929,7 +930,7 @@ public class ClassReader {
                     var.setData(v);
                 }
 
-                void checkType(Symbol var, Class<?> clazz, Object value) {
+                void checkType(Symbol var, Class<?> clazz, Object value) throws BadClassFile {
                     if (!clazz.isInstance(value)) {
                         throw badClassFile("bad.constant.value", value, var, clazz.getSimpleName());
                     }
@@ -945,7 +946,7 @@ public class ClassReader {
             },
 
             new AttributeReader(names.Exceptions, V45_3, CLASS_OR_MEMBER_ATTRIBUTE) {
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     int nexceptions = nextChar();
                     List<Type> thrown = List.nil();
                     for (int j = 0; j < nexceptions; j++)
@@ -956,7 +957,7 @@ public class ClassReader {
             },
 
             new AttributeReader(names.InnerClasses, V45_3, CLASS_ATTRIBUTE) {
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     ClassSymbol c = (ClassSymbol) sym;
                     if (currentModule.module_info == c) {
                         //prevent entering the classes too soon:
@@ -968,7 +969,7 @@ public class ClassReader {
             },
 
             new AttributeReader(names.LocalVariableTable, V45_3, CLASS_OR_MEMBER_ATTRIBUTE) {
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     int newbp = bp + attrLen;
                     if (saveParameterNames) {
                         // Pick up parameter names from the variable table.
@@ -1004,7 +1005,7 @@ public class ClassReader {
             },
 
             new AttributeReader(names.SourceFile, V45_3, CLASS_ATTRIBUTE) {
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     ClassSymbol c = (ClassSymbol) sym;
                     Name n = poolReader.getName(nextChar());
                     c.sourcefile = new SourceFileObject(n);
@@ -1029,7 +1030,7 @@ public class ClassReader {
             // standard v49 attributes
 
             new AttributeReader(names.EnclosingMethod, V49, CLASS_ATTRIBUTE) {
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     int newbp = bp + attrLen;
                     readEnclosingMethodAttr(sym);
                     bp = newbp;
@@ -1037,15 +1038,15 @@ public class ClassReader {
             },
 
             new AttributeReader(names.Signature, V49, CLASS_OR_MEMBER_ATTRIBUTE) {
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     if (sym.kind == TYP) {
                         ClassSymbol c = (ClassSymbol) sym;
                         readingClassAttr = true;
                         try {
                             ClassType ct1 = (ClassType)c.type;
                             Assert.check(c == currentOwner);
-                            ct1.typarams_field = poolReader.getName(nextChar())
-                                    .map(ClassReader.this::sigToTypeParams);
+                            byte[] readTypesUtf = poolReader.getName(nextChar()).toUtf();
+                            ct1.typarams_field = sigToTypeParams(readTypesUtf, 0, readTypesUtf.length);
                             ct1.supertype_field = sigToType();
                             ListBuffer<Type> is = new ListBuffer<>();
                             while (sigp != siglimit) is.append(sigToType());
@@ -1067,31 +1068,31 @@ public class ClassReader {
             // v49 annotation attributes
 
             new AttributeReader(names.AnnotationDefault, V49, CLASS_OR_MEMBER_ATTRIBUTE) {
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     attachAnnotationDefault(sym);
                 }
             },
 
             new AttributeReader(names.RuntimeInvisibleAnnotations, V49, CLASS_OR_MEMBER_ATTRIBUTE) {
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     attachAnnotations(sym);
                 }
             },
 
             new AttributeReader(names.RuntimeInvisibleParameterAnnotations, V49, CLASS_OR_MEMBER_ATTRIBUTE) {
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     readParameterAnnotations(sym);
                 }
             },
 
             new AttributeReader(names.RuntimeVisibleAnnotations, V49, CLASS_OR_MEMBER_ATTRIBUTE) {
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     attachAnnotations(sym);
                 }
             },
 
             new AttributeReader(names.RuntimeVisibleParameterAnnotations, V49, CLASS_OR_MEMBER_ATTRIBUTE) {
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     readParameterAnnotations(sym);
                 }
             },
@@ -1123,13 +1124,13 @@ public class ClassReader {
             },
 
             new AttributeReader(names.RuntimeVisibleTypeAnnotations, V52, CLASS_OR_MEMBER_ATTRIBUTE) {
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     attachTypeAnnotations(sym);
                 }
             },
 
             new AttributeReader(names.RuntimeInvisibleTypeAnnotations, V52, CLASS_OR_MEMBER_ATTRIBUTE) {
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     attachTypeAnnotations(sym);
                 }
             },
@@ -1143,7 +1144,7 @@ public class ClassReader {
             // standard v52 attributes
 
             new AttributeReader(names.MethodParameters, V52, MEMBER_ATTRIBUTE) {
-                protected void read(Symbol sym, int attrlen) {
+                protected void read(Symbol sym, int attrlen) throws BadClassFile {
                     int newbp = bp + attrlen;
                     if (saveParameterNames) {
                         int numEntries = nextByte();
@@ -1175,7 +1176,7 @@ public class ClassReader {
                 protected boolean accepts(AttributeKind kind) {
                     return super.accepts(kind) && allowModules;
                 }
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     if (sym.kind == TYP && sym.owner.kind == MDL) {
                         ModuleSymbol msym = (ModuleSymbol) sym.owner;
                         ListBuffer<Directive> directives = new ListBuffer<>();
@@ -1292,7 +1293,7 @@ public class ClassReader {
                 protected boolean accepts(AttributeKind kind) {
                     return super.accepts(kind) && allowModules;
                 }
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     if (sym.kind == TYP && sym.owner.kind == MDL) {
                         ModuleSymbol msym = (ModuleSymbol) sym.owner;
                         msym.resolutionFlags.addAll(readModuleResolutionFlags(nextChar()));
@@ -1305,7 +1306,7 @@ public class ClassReader {
                 protected boolean accepts(AttributeKind kind) {
                     return super.accepts(kind) && allowRecords;
                 }
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     if (sym.kind == TYP) {
                         sym.flags_field |= RECORD;
                     }
@@ -1326,7 +1327,7 @@ public class ClassReader {
                 protected boolean accepts(AttributeKind kind) {
                     return super.accepts(kind) && allowSealedTypes;
                 }
-                protected void read(Symbol sym, int attrLen) {
+                protected void read(Symbol sym, int attrLen) throws BadClassFile {
                     if (sym.kind == TYP) {
                         ListBuffer<Symbol> subtypes = new ListBuffer<>();
                         int numberOfPermittedSubtypes = nextChar();
@@ -1343,7 +1344,7 @@ public class ClassReader {
             attributeReaders.put(r.name, r);
     }
 
-    protected void readEnclosingMethodAttr(Symbol sym) {
+    protected void readEnclosingMethodAttr(Symbol sym) throws BadClassFile {
         // sym is a nested class with an "Enclosing Method" attribute
         // remove sym from it's current owners scope and place it in
         // the scope specified by the attribute
@@ -1386,7 +1387,7 @@ public class ClassReader {
     }
 
     // See java.lang.Class
-    private Name simpleBinaryName(Name self, Name enclosing) {
+    private Name simpleBinaryName(Name self, Name enclosing) throws BadClassFile {
         if (!self.startsWith(enclosing)) {
             throw badClassFile("bad.enclosing.method", self);
         }
@@ -1456,11 +1457,11 @@ public class ClassReader {
 
     /** Read member attributes.
      */
-    void readMemberAttrs(Symbol sym) {
+    void readMemberAttrs(Symbol sym) throws BadClassFile {
         readAttrs(sym, AttributeKind.MEMBER);
     }
 
-    void readAttrs(Symbol sym, AttributeKind kind) {
+    void readAttrs(Symbol sym, AttributeKind kind) throws BadClassFile {
         char ac = nextChar();
         for (int i = 0; i < ac; i++) {
             Name attrName = poolReader.getName(nextChar());
@@ -1480,13 +1481,13 @@ public class ClassReader {
 
     /** Read class attributes.
      */
-    void readClassAttrs(ClassSymbol c) {
+    void readClassAttrs(ClassSymbol c) throws BadClassFile {
         readAttrs(c, AttributeKind.CLASS);
     }
 
     /** Read code block.
      */
-    Code readCode(Symbol owner) {
+    Code readCode(Symbol owner) throws BadClassFile {
         nextChar(); // max_stack
         nextChar(); // max_locals
         final int  code_length = nextInt();
@@ -1504,7 +1505,7 @@ public class ClassReader {
     /**
      * Save annotations.
      */
-    List<CompoundAnnotationProxy> readAnnotations() {
+    List<CompoundAnnotationProxy> readAnnotations() throws BadClassFile {
         int numAttributes = nextChar();
         ListBuffer<CompoundAnnotationProxy> annotations = new ListBuffer<>();
         for (int i = 0; i < numAttributes; i++) {
@@ -1515,7 +1516,7 @@ public class ClassReader {
 
     /** Attach annotations.
      */
-    void attachAnnotations(final Symbol sym) {
+    void attachAnnotations(final Symbol sym) throws BadClassFile {
         attachAnnotations(sym, readAnnotations());
     }
 
@@ -1590,7 +1591,7 @@ public class ClassReader {
 
     /** Read parameter annotations.
      */
-    void readParameterAnnotations(Symbol meth) {
+    void readParameterAnnotations(Symbol meth) throws BadClassFile {
         int numParameters;
         try {
             numParameters = buf.getByte(bp++) & 0xFF;
@@ -1617,7 +1618,7 @@ public class ClassReader {
         }
     }
 
-    void attachTypeAnnotations(final Symbol sym) {
+    void attachTypeAnnotations(final Symbol sym) throws BadClassFile {
         int numAttributes = nextChar();
         if (numAttributes != 0) {
             ListBuffer<TypeAnnotationProxy> proxies = new ListBuffer<>();
@@ -1629,7 +1630,7 @@ public class ClassReader {
 
     /** Attach the default value for an annotation element.
      */
-    void attachAnnotationDefault(final Symbol sym) {
+    void attachAnnotationDefault(final Symbol sym) throws BadClassFile {
         final MethodSymbol meth = (MethodSymbol)sym; // only on methods
         final Attribute value = readAttributeValue();
 
@@ -1645,10 +1646,10 @@ public class ClassReader {
         annotate.normal(new AnnotationDefaultCompleter(meth, value));
     }
 
-    Type readTypeOrClassSymbol(int i) {
+    Type readTypeOrClassSymbol(int i) throws BadClassFile {
         return readTypeToProxy(i);
     }
-    Type readTypeToProxy(int i) {
+    Type readTypeToProxy(int i) throws BadClassFile {
         if (currentModule.module_info == currentOwner) {
             return new ProxyType(i);
         } else {
@@ -1656,7 +1657,7 @@ public class ClassReader {
         }
     }
 
-    CompoundAnnotationProxy readCompoundAnnotation() {
+    CompoundAnnotationProxy readCompoundAnnotation() throws BadClassFile {
         Type t;
         if (currentModule.module_info == currentOwner) {
             int cpIndex = nextChar();
@@ -1674,14 +1675,14 @@ public class ClassReader {
         return new CompoundAnnotationProxy(t, pairs.toList());
     }
 
-    TypeAnnotationProxy readTypeAnnotation() {
+    TypeAnnotationProxy readTypeAnnotation() throws BadClassFile {
         TypeAnnotationPosition position = readPosition();
         CompoundAnnotationProxy proxy = readCompoundAnnotation();
 
         return new TypeAnnotationProxy(proxy, position);
     }
 
-    TypeAnnotationPosition readPosition() {
+    TypeAnnotationPosition readPosition() throws BadClassFile {
         int tag = nextByte(); // TargetType tag is a byte
 
         if (!TargetType.isValidTargetTypeValue(tag))
@@ -1870,7 +1871,7 @@ public class ClassReader {
         }
     }
 
-    List<TypeAnnotationPosition.TypePathEntry> readTypePath() {
+    List<TypeAnnotationPosition.TypePathEntry> readTypePath() throws BadClassFile {
         int len = nextByte();
         ListBuffer<Integer> loc = new ListBuffer<>();
         for (int i = 0; i < len * TypeAnnotationPosition.TypePathEntry.bytesPerEntry; ++i)
@@ -1885,13 +1886,17 @@ public class ClassReader {
      * InnerClasses and EnclosingMethod attributes, as well as when parsing supertype descriptor,
      * as per JVMS.
      */
-    <Z> Z optPoolEntry(int index, IntFunction<Z> poolFunc, Z defaultValue) {
+    <Z> Z optPoolEntry(int index, ThrowingIntFunction<Z> poolFunc, Z defaultValue) throws BadClassFile {
         return (index == 0) ?
                 defaultValue :
                 poolFunc.apply(index);
     }
 
-    Attribute readAttributeValue() {
+    interface ThrowingIntFunction<Z> {
+        public Z apply(int i) throws BadClassFile;
+    }
+
+    Attribute readAttributeValue() throws BadClassFile {
         char c;
         try {
             c = (char)buf.getByte(bp++);
@@ -2043,6 +2048,7 @@ public class ClassReader {
         }
 
         Attribute.Compound deproxyCompound(CompoundAnnotationProxy a) {
+            try {
             Type annotationType = resolvePossibleProxyType(a.type);
             ListBuffer<Pair<Symbol.MethodSymbol,Attribute>> buf = new ListBuffer<>();
             for (List<Pair<Name,Attribute>> l = a.values;
@@ -2052,11 +2058,16 @@ public class ClassReader {
                 buf.append(new Pair<>(meth, deproxy(meth.type.getReturnType(), l.head.snd)));
             }
             return new Attribute.Compound(annotationType, buf.toList());
+            } catch (BadClassFile bcf) {
+                //XXX: report
+                return new Attribute.Compound(syms.errType, List.nil());
+            }
         }
 
         MethodSymbol findAccessMethod(Type container, Name name) {
             CompletionFailure failure = null;
             try {
+                container.tsym.doComplete();
                 for (Symbol sym : container.tsym.members().getSymbolsByName(name)) {
                     if (sym.kind == MTH && sym.type.getParameterTypes().length() == 0)
                         return (MethodSymbol) sym;
@@ -2130,11 +2141,13 @@ public class ClassReader {
 
         public void visitEnumAttributeProxy(EnumAttributeProxy proxy) {
             // type.tsym.flatName() should == proxy.enumFlatName
+            try {
             Type enumType = resolvePossibleProxyType(proxy.enumType);
             TypeSymbol enumTypeSym = enumType.tsym;
             VarSymbol enumerator = null;
             CompletionFailure failure = null;
             try {
+                enumTypeSym.doComplete(); //XXX
                 for (Symbol sym : enumTypeSym.members().getSymbolsByName(proxy.enumerator)) {
                     if (sym.kind == VAR) {
                         enumerator = (VarSymbol)sym;
@@ -2161,12 +2174,21 @@ public class ClassReader {
             } else {
                 result = new Attribute.Enum(enumTypeSym.type, enumerator);
             }
+            } catch (BadClassFile bcf) {
+                //XXX: report
+                result = new Attribute.Error(syms.errType);
+            }
         }
 
         @Override
         public void visitClassAttributeProxy(ClassAttributeProxy proxy) {
+            try {
             Type classType = resolvePossibleProxyType(proxy.classType);
             result = new Attribute.Class(types, classType);
+            } catch (BadClassFile bcf) {
+                //XXX: report
+                result = new Attribute.Error(syms.errType);
+            }
         }
 
         public void visitArrayAttributeProxy(ArrayAttributeProxy proxy) {
@@ -2184,7 +2206,7 @@ public class ClassReader {
             result = deproxyCompound(proxy);
         }
 
-        Type resolvePossibleProxyType(Type t) {
+        Type resolvePossibleProxyType(Type t) throws BadClassFile {
             if (t instanceof ProxyType proxyType) {
                 Assert.check(requestingOwner.owner instanceof ModuleSymbol);
                 ModuleSymbol prevCurrentModule = currentModule;
@@ -2325,16 +2347,16 @@ public class ClassReader {
      * 4.7.20.2 type_path to associate the annotation with the correct contained type.
      */
     private void addTypeAnnotationsToSymbol(Symbol s, List<Attribute.TypeCompound> attributes) {
-        try {
+//        try {
             new TypeAnnotationSymbolVisitor(attributes).visit(s, null);
-        } catch (CompletionFailure ex) {
-            JavaFileObject prev = log.useSource(currentClassFile);
-            try {
-                log.error(Errors.CantAttachTypeAnnotations(attributes, s.owner, s.name, ex.getDetailValue()));
-            } finally {
-                log.useSource(prev);
-            }
-        }
+//        } catch (CompletionFailure ex) {
+//            JavaFileObject prev = log.useSource(currentClassFile);
+//            try {
+//                log.error(Errors.CantAttachTypeAnnotations(attributes, s.owner, s.name, ex.getDetailValue()));
+//            } finally {
+//                log.useSource(prev);
+//            }
+//        }
     }
 
     private static class TypeAnnotationSymbolVisitor
@@ -2622,7 +2644,7 @@ public class ClassReader {
 
     /** Read a field.
      */
-    VarSymbol readField() {
+    VarSymbol readField() throws BadClassFile {
         char rawFlags = nextChar();
         long flags = adjustFieldFlags(rawFlags);
         Name name = poolReader.getName(nextChar());
@@ -2637,7 +2659,7 @@ public class ClassReader {
 
     /** Read a method.
      */
-    MethodSymbol readMethod() {
+    MethodSymbol readMethod() throws BadClassFile {
         char rawFlags = nextChar();
         long flags = adjustMethodFlags(rawFlags);
         Name name = poolReader.getName(nextChar());
@@ -2705,7 +2727,7 @@ public class ClassReader {
         return m;
     }
 
-    void validateMethodType(Name name, Type t) {
+    void validateMethodType(Name name, Type t) throws BadClassFile {
         if ((!t.hasTag(TypeTag.METHOD) && !t.hasTag(TypeTag.FORALL)) ||
             (name == names.init && !t.getReturnType().hasTag(TypeTag.VOID))) {
             throw badClassFile("method.descriptor.invalid", name);
@@ -2763,7 +2785,7 @@ public class ClassReader {
      * method descriptor) is used to help guess the existence of
      * anonymous synthetic parameters.
      */
-    void setParameters(MethodSymbol sym, Type jvmType) {
+    void setParameters(MethodSymbol sym, Type jvmType) throws BadClassFile {
         int firstParamLvt = ((sym.flags() & STATIC) == 0) ? 1 : 0;
         // the code in readMethod may have skipped the first
         // parameter when setting up the MethodType. If so, we
@@ -2957,7 +2979,7 @@ public class ClassReader {
      * @param mpIndex the index of the parameter in the MethodParameters attribute
      * @param lvtIndex the index of the parameter in the LocalVariableTable attribute
      */
-    private VarSymbol parameter(int mpIndex, int lvtIndex, Type t, MethodSymbol owner, Set<Name> exclude) {
+    private VarSymbol parameter(int mpIndex, int lvtIndex, Type t, MethodSymbol owner, Set<Name> exclude) throws BadClassFile {
         long flags = PARAMETER;
         Name argName;
         if (parameterAccessFlags != null && mpIndex < parameterAccessFlags.length
@@ -2995,7 +3017,7 @@ public class ClassReader {
 
     /** Skip a field or method
      */
-    void skipMember() {
+    void skipMember() throws BadClassFile {
         bp = bp + 6;
         char ac = nextChar();
         for (int i = 0; i < ac; i++) {
@@ -3005,7 +3027,7 @@ public class ClassReader {
         }
     }
 
-    void skipInnerClasses() {
+    void skipInnerClasses() throws BadClassFile {
         int n = nextChar();
         for (int i = 0; i < n; i++) {
             nextChar();
@@ -3042,7 +3064,7 @@ public class ClassReader {
     /** Read contents of a given class symbol `c'. Both external and internal
      *  versions of an inner class are read.
      */
-    void readClass(ClassSymbol c) {
+    void readClass(ClassSymbol c) throws BadClassFile {
         ClassType ct = (ClassType)c.type;
 
         // allocate scope for members
@@ -3138,7 +3160,7 @@ public class ClassReader {
     /** Read inner class info. For each inner/outer pair allocate a
      *  member class.
      */
-    void readInnerClasses(ClassSymbol c) {
+    void readInnerClasses(ClassSymbol c) throws BadClassFile {
         int n = nextChar();
         for (int i = 0; i < n; i++) {
             nextChar(); // skip inner class symbol
@@ -3171,7 +3193,7 @@ public class ClassReader {
 
     /** Read a class definition from the bytes in buf.
      */
-    private void readClassBuffer(ClassSymbol c) throws IOException {
+    private void readClassBuffer(ClassSymbol c) throws IOException, BadClassFile {
         int magic = nextInt();
         if (magic != JAVA_MAGIC)
             throw badClassFile("illegal.start.of.class.file");
@@ -3215,7 +3237,7 @@ public class ClassReader {
         readClass(c);
     }
 
-    public void readClassFile(ClassSymbol c) {
+    public void readClassFile(ClassSymbol c) throws BadClassFile {
         currentOwner = c;
         currentClassFile = c.classfile;
         warnedAttrs.clear();
@@ -3440,7 +3462,7 @@ public class ClassReader {
             Attribute.Compound theTarget = null, theRepeatable = null;
             AnnotationDeproxy deproxy;
 
-            try {
+//            try {
                 if (target != null) {
                     deproxy = new AnnotationDeproxy(proxyOn);
                     theTarget = deproxy.deproxyCompound(target);
@@ -3450,11 +3472,12 @@ public class ClassReader {
                     deproxy = new AnnotationDeproxy(proxyOn);
                     theRepeatable = deproxy.deproxyCompound(repeatable);
                 }
-            } catch (Exception e) {
-                throw new CompletionFailure(sym,
-                                            () -> ClassReader.this.diagFactory.fragment(Fragments.ExceptionMessage(e.getMessage())),
-                                            dcfh);
-            }
+            //XXX:
+//            } catch (Exception e) {
+//                throw new CompletionFailure(sym,
+//                                            () -> ClassReader.this.diagFactory.fragment(Fragments.ExceptionMessage(e.getMessage())),
+//                                            dcfh);
+//            }
 
             sym.getAnnotationTypeMetadata().setTarget(theTarget);
             sym.getAnnotationTypeMetadata().setRepeatable(theRepeatable);
@@ -3465,7 +3488,7 @@ public class ClassReader {
 
         private final Name name;
 
-        public ProxyType(int index) {
+        public ProxyType(int index) throws BadClassFile {
             super(syms.noSymbol, List.nil());
             this.name = poolReader.getName(index);
         }
@@ -3475,8 +3498,9 @@ public class ClassReader {
             return TypeTag.NONE;
         }
 
-        public Type resolve() {
-            return name.map(ClassReader.this::sigToType);
+        public Type resolve() throws BadClassFile {
+            byte[] utf = name.toUtf();
+            return sigToType(utf, 0, utf.length);
         }
 
         @Override @DefinedBy(Api.LANGUAGE_MODEL)
@@ -3518,7 +3542,7 @@ public class ClassReader {
         }
 
         @Override
-        public void complete(Symbol sym) throws CompletionFailure {
+        public void complete(Symbol sym) {
             ListBuffer<Directive> directives = new ListBuffer<>();
             directives.addAll(currentModule.directives);
             ListBuffer<UsesDirective> uses = new ListBuffer<>();

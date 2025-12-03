@@ -798,8 +798,8 @@ public abstract class Scope {
             super(owner);
         }
 
-        public Scope importByName(Types types, Scope origin, Name name, ImportFilter filter, JCImport imp, BiConsumer<JCImport, CompletionFailure> cfHandler) {
-            return appendScope(new FilterImportScope(types, origin, name, filter, imp, cfHandler), name);
+        public Scope importByName(Types types, Scope origin, Name name, ImportFilter filter, JCImport imp/*, BiConsumer<JCImport, CompletionFailure> cfHandler*/) {
+            return appendScope(new FilterImportScope(types, origin, name, filter, imp/*, cfHandler*/), name);
         }
 
         public Scope importType(Scope delegate, Scope origin, Symbol sym) {
@@ -885,8 +885,8 @@ public abstract class Scope {
 
         public void importAll(Types types, Scope origin,
                               ImportFilter filter,
-                              JCImport imp,
-                              BiConsumer<JCImport, CompletionFailure> cfHandler) {
+                              JCImport imp/*,
+                              BiConsumer<JCImport, CompletionFailure> cfHandler*/) {
             for (Scope existing : subScopes) {
                 Assert.check(existing instanceof FilterImportScope);
                 FilterImportScope fis = (FilterImportScope) existing;
@@ -894,7 +894,7 @@ public abstract class Scope {
                     fis.imp.staticImport == imp.staticImport)
                     return ; //avoid entering the same scope twice
             }
-            prependSubScope(new FilterImportScope(types, origin, null, filter, imp, cfHandler));
+            prependSubScope(new FilterImportScope(types, origin, null, filter, imp/*, cfHandler*/));
         }
 
         public boolean isFilled() {
@@ -914,28 +914,28 @@ public abstract class Scope {
         private final Name  filterName;
         private final ImportFilter filter;
         private final JCImport imp;
-        private final BiConsumer<JCImport, CompletionFailure> cfHandler;
+//        private final BiConsumer<JCImport, CompletionFailure> cfHandler;
 
         public FilterImportScope(Types types,
                                  Scope origin,
                                  Name  filterName,
                                  ImportFilter filter,
-                                 JCImport imp,
-                                 BiConsumer<JCImport, CompletionFailure> cfHandler) {
+                                 JCImport imp/*,
+                                 BiConsumer<JCImport, CompletionFailure> cfHandler*/) {
             super(origin.owner);
             this.types = types;
             this.origin = origin;
             this.filterName = filterName;
             this.filter = filter;
             this.imp = imp;
-            this.cfHandler = cfHandler;
+//            this.cfHandler = cfHandler;
         }
 
         @Override
         public Iterable<Symbol> getSymbols(final Predicate<Symbol> sf, final LookupKind lookupKind) {
             if (filterName != null)
                 return getSymbolsByName(filterName, sf, lookupKind);
-            try {
+//            try {
                 SymbolImporter si = new SymbolImporter(imp.staticImport) {
                     @Override
                     Iterable<Symbol> doLookup(TypeSymbol tsym) {
@@ -947,10 +947,10 @@ public abstract class Scope {
                 return () -> createFilterIterator(createCompoundIterator(results,
                                                                          Iterable::iterator),
                                                   s -> filter.accepts(origin, s));
-            } catch (CompletionFailure cf) {
-                cfHandler.accept(imp, cf);
-                return Collections.emptyList();
-            }
+//            } catch (CompletionFailure cf) {
+//                cfHandler.accept(imp, cf);
+//                return Collections.emptyList();
+//            }
         }
 
         @Override
@@ -959,7 +959,7 @@ public abstract class Scope {
                                                  final LookupKind lookupKind) {
             if (filterName != null && filterName != name)
                 return Collections.emptyList();
-            try {
+//            try {
                 SymbolImporter si = new SymbolImporter(imp.staticImport) {
                     @Override
                     Iterable<Symbol> doLookup(TypeSymbol tsym) {
@@ -971,10 +971,10 @@ public abstract class Scope {
                 return () -> createFilterIterator(createCompoundIterator(results,
                                                                          Iterable::iterator),
                                                   s -> filter.accepts(origin, s));
-            } catch (CompletionFailure cf) {
-                cfHandler.accept(imp, cf);
-                return Collections.emptyList();
-            }
+//            } catch (CompletionFailure cf) {
+//                cfHandler.accept(imp, cf);
+//                return Collections.emptyList();
+//            }
         }
 
         @Override

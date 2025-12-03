@@ -356,7 +356,7 @@ public abstract class Dependencies {
         }
 
         @Override
-        public void complete(Symbol sym) throws CompletionFailure {
+        public void complete(Symbol sym) {
             push((ClassSymbol)sym, CompletionCause.OTHER);
             pop();
             sym.completer = this;

@@ -231,13 +231,19 @@ public class ModuleFinder {
                     JCDiagnostic diag =
                         diags.fragment(Fragments.FileDoesNotContainModule);
                     ClassSymbol errModuleInfo = syms.defineClass(names.module_info, syms.errModule);
-                    throw new ClassFinder.BadClassFile(errModuleInfo, fo, diag, diags, dcfh);
+                    JavaFileObject prevSource = log.useSource(fo);
+                    try {
+                        log.error(Errors.CantAccess(errModuleInfo, diag));
+                    } finally {
+                        log.useSource(prevSource);
+                    }
+                    name = names.error;
                 }
                 break;
             case CLASS:
                 try {
                     name = names.fromString(readModuleName(fo));
-                } catch (BadClassFile | IOException ex) {
+                } catch (BadClassFile | ClassFinder.BadClassFile | IOException ex) {
                     //fillIn will report proper errors:
                     name = names.error;
                 }
@@ -267,13 +273,17 @@ public class ModuleFinder {
             }
 
             msym.completer = Completer.NULL_COMPLETER;
-            classFinder.fillIn(msym.module_info);
+            try {
+                classFinder.fillIn(msym.module_info);
+            } catch (CompletionFailure ex) {
+                ex.dcfh.handleAPICompletionFailure(ex);
+            }
         }
 
         return msym;
     }
 
-    private String readModuleName(JavaFileObject jfo) throws IOException, ModuleNameReader.BadClassFile {
+    private String readModuleName(JavaFileObject jfo) throws IOException, ModuleNameReader.BadClassFile, ClassFinder.BadClassFile {
         if (moduleNameReader == null)
             moduleNameReader = new ModuleNameReader();
         return moduleNameReader.readModuleName(jfo);

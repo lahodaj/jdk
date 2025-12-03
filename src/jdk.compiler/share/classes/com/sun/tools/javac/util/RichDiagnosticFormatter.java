@@ -570,12 +570,7 @@ public class RichDiagnosticFormatter extends
             }
             nameSimplifier.addUsage(t.tsym);
             visit(t.getTypeArguments());
-            Type enclosingType;
-            try {
-                enclosingType = t.getEnclosingType();
-            } catch (CompletionFailure cf) {
-                return null;
-            }
+            Type enclosingType = t.getEnclosingType();
             if (enclosingType != Type.noType)
                 visit(t.getEnclosingType());
             return null;

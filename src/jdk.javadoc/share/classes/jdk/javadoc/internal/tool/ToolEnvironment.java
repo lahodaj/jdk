@@ -166,7 +166,7 @@ public class ToolEnvironment {
             ClassSymbol c = finder.loadClass(mod != null ? mod : syms.errModule, nameImpl);
             return c;
         } catch (CompletionFailure ex) {
-            chk.completionError(null, ex);
+            chk.completionErrorX(null, ex);
             return null;
         }
     }

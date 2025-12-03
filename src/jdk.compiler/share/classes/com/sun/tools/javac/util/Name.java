@@ -241,13 +241,13 @@ public abstract class Name implements javax.lang.model.element.Name, PoolConstan
     /** Maps the Modified UTF-8 encoding of a {@link Name} to something.
      */
     @FunctionalInterface
-    public interface NameMapper<X> {
-        X map(byte[] bytes, int offset, int len);
+    public interface NameMapper<X, E extends Throwable> {
+        X map(byte[] bytes, int offset, int len) throws E;
     }
 
     /** Decode this name's Modified UTF-8 encoding into something.
      */
-    public <X> X map(NameMapper<X> mapper) {
+    public <X, E extends Throwable> X map(NameMapper<X, E> mapper) throws E{
         byte[] buf = toUtf();
         return mapper.map(buf, 0, buf.length);
     }

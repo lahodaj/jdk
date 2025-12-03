@@ -585,6 +585,7 @@ public class JavapTask implements DisassemblerTool.DisassemblerTask, Messages {
         }
 
         try {
+            System.err.println("FM options: " + name);
             if (fileManager.handleOption(name, rest))
                 return;
         } catch (IllegalArgumentException e) {

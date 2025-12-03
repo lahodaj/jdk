@@ -403,14 +403,7 @@ public class JavaCompiler {
         fileManager = context.get(JavaFileManager.class);
         parserFactory = ParserFactory.instance(context);
         compileStates = CompileStates.instance(context);
-
-        try {
-            // catch completion problems with predefineds
-            syms = Symtab.instance(context);
-        } catch (CompletionFailure ex) {
-            // inlined Check.completionError as it is not initialized yet
-            log.error(Errors.CantAccess(ex.sym, ex.getDetailValue()));
-        }
+        syms = Symtab.instance(context);
         source = Source.instance(context);
         attr = Attr.instance(context);
         analyzer = Analyzer.instance(context);
@@ -776,7 +769,7 @@ public class JavaCompiler {
      *  @param cdef   The class definition from which code is generated.
      */
     JavaFileObject genCode(Env<AttrContext> env, JCClassDecl cdef) throws IOException {
-        try {
+        try (var  _ =  chk.recordCompletionFailurePos(cdef.pos())) {
             if (gen.genClass(env, cdef) && (errorCount() == 0))
                 return writer.writeClass(cdef.sym);
         } catch (ClassWriter.PoolOverflow ex) {
@@ -784,8 +777,6 @@ public class JavaCompiler {
         } catch (ClassWriter.StringOverflow ex) {
             log.error(cdef.pos(),
                       Errors.LimitStringOverflow(ex.value.substring(0, 20)));
-        } catch (CompletionFailure ex) {
-            chk.completionError(cdef.pos(), ex);
         }
         return null;
     }
@@ -1224,7 +1215,7 @@ public class JavaCompiler {
 
         Assert.checkNonNull(deferredDiagnosticHandler);
 
-        try {
+//        try {
             List<ClassSymbol> classSymbols = List.nil();
             List<PackageSymbol> pckSymbols = List.nil();
             if (!classnames.isEmpty()) {
@@ -1235,7 +1226,7 @@ public class JavaCompiler {
                     reportDeferredDiagnosticAndClearHandler();
                     return ; // TODO: Will this halt compilation?
                 } else {
-                    boolean errors = false;
+//                    boolean errors = false;
                     for (String nameStr : classnames) {
                         Symbol sym = resolveBinaryNameOrIdent(nameStr);
                         if (sym == null ||
@@ -1243,10 +1234,10 @@ public class JavaCompiler {
                             sym.kind == ABSENT_TYP) {
                             if (sym != silentFail)
                                 log.error(Errors.ProcCantFindClass(nameStr));
-                            errors = true;
+//                            errors = true;
                             continue;
                         }
-                        try {
+//                        try {
                             if (sym.kind == PCK)
                                 sym.complete();
                             if (sym.exists()) {
@@ -1259,13 +1250,13 @@ public class JavaCompiler {
                             Assert.check(sym.kind == PCK);
                             log.warning(Warnings.ProcPackageDoesNotExist(nameStr));
                             pckSymbols = pckSymbols.prepend((PackageSymbol)sym);
-                        } catch (CompletionFailure e) {
-                            log.error(Errors.ProcCantFindClass(nameStr));
-                            errors = true;
-                            continue;
-                        }
+//                        } catch (CompletionFailure e) {
+//                            log.error(Errors.ProcCantFindClass(nameStr));
+//                            errors = true;
+//                            continue;
+//                        }
                     }
-                    if (errors) {
+                    if (log.nerrors > 0) {
                         reportDeferredDiagnosticAndClearHandler();
                         return ;
                     }
@@ -1281,10 +1272,10 @@ public class JavaCompiler {
             } finally {
                 procEnvImpl.close();
             }
-        } catch (CompletionFailure ex) {
-            log.error(Errors.CantAccess(ex.sym, ex.getDetailValue()));
-            reportDeferredDiagnosticAndClearHandler();
-        }
+//        } catch (CompletionFailure ex) {
+//            log.error(Errors.CantAccess(ex.sym, ex.getDetailValue()));
+//            reportDeferredDiagnosticAndClearHandler();
+//        }
     }
 
     private boolean unrecoverableError() {

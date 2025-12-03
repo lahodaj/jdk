@@ -548,12 +548,12 @@ public class Annotate {
         //first, try completing the symbol for the annotation value - if a completion
         //error is thrown, we should recover gracefully, and display an
         //ordinary resolution diagnostic.
-        try {
+//        try {
             expectedElementType.tsym.complete();
-        } catch(CompletionFailure e) {
-            log.error(tree.pos(), Errors.CantResolve(Kinds.kindName(e.sym), e.sym.getQualifiedName(), null, null));
-            expectedElementType = syms.errType;
-        }
+//        } catch(CompletionFailure e) {
+//            log.error(tree.pos(), Errors.CantResolve(Kinds.kindName(e.sym), e.sym.getQualifiedName(), null, null));
+//            expectedElementType = syms.errType;
+//        }
 
         if (expectedElementType.hasTag(ARRAY)) {
             return getAnnotationArrayValue(expectedElementType, tree, env);
@@ -947,11 +947,8 @@ public class Annotate {
 
         // Validate that there is a (and only 1) value method
         Scope scope = null;
-        try {
+        try (var _ =  chk.recordCompletionFailurePos(pos)) {
             scope = targetContainerType.tsym.members();
-        } catch (CompletionFailure ex) {
-            chk.completionError(pos, ex);
-            return null;
         }
         int nr_value_elems = 0;
         boolean error = false;
@@ -1177,7 +1174,7 @@ public class Annotate {
 
     private AnnotationTypeCompleter theSourceCompleter = new AnnotationTypeCompleter() {
         @Override
-        public void complete(ClassSymbol sym) throws CompletionFailure {
+        public void complete(ClassSymbol sym) {
             Env<AttrContext> context = typeEnvs.get(sym);
             Annotate.this.attributeAnnotationType(context);
         }
@@ -1211,7 +1208,7 @@ public class Annotate {
     }
 
     public static interface AnnotationTypeCompleter {
-        void complete(ClassSymbol sym) throws CompletionFailure;
+        void complete(ClassSymbol sym);
     }
 
     /** Visitor to determine a prototype annotation type for a class declaring an annotation type.

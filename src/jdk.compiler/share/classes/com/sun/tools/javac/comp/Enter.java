@@ -286,13 +286,11 @@ public class Enter extends JCTree.Visitor {
      */
     Type classEnter(JCTree tree, Env<AttrContext> env) {
         Env<AttrContext> prevEnv = this.env;
-        try {
+        try (var _ =  chk.recordCompletionFailurePos(tree.pos())) {
             this.env = env;
             annotate.blockAnnotations();
             tree.accept(this);
             return result;
-        }  catch (CompletionFailure ex) {
-            return chk.completionError(tree.pos(), ex);
         } finally {
             annotate.unblockAnnotations();
             this.env = prevEnv;

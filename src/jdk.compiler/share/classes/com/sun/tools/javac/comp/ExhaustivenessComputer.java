@@ -124,7 +124,7 @@ public class ExhaustivenessComputer {
         Set<PatternDescription> patterns = patternSet;
         Set<Set<PatternDescription>> seenFallback = new HashSet<>();
         boolean useHashes = true;
-        try {
+        try (var  _ =  chk.recordCompletionFailurePos(selector.pos())) {
             boolean repeat = true;
             while (repeat) {
                 Set<PatternDescription> updatedPatterns;
@@ -154,9 +154,6 @@ public class ExhaustivenessComputer {
                 patterns = updatedPatterns;
             }
             return checkCovered(selector.type, patterns);
-        } catch (CompletionFailure cf) {
-            chk.completionError(selector.pos(), cf);
-            return true; //error recovery
         } finally {
             isSubtypeCache.clear();
         }

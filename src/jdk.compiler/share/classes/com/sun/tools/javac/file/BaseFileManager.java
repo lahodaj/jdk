@@ -282,6 +282,7 @@ public abstract class BaseFileManager implements JavaFileManager {
      * @return true if successful, and false otherwise
      */
     public boolean handleOption(Option option, String value) {
+//        System.err.println("BaseFileManager: " + option);
         switch (option) {
             case ENCODING:
                 encodingName = value;

@@ -25,6 +25,7 @@
 
 package com.sun.tools.javac.file;
 
+import com.sun.tools.javac.code.ClassFinder;
 import java.io.Closeable;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -1314,7 +1315,7 @@ public class Locations {
                                 ModulePathLocationHandler.this, name, moduleName,
                                 Collections.singletonList(path), false);
                         return Collections.singleton(l);
-                    } catch (ModuleNameReader.BadClassFile e) {
+                    } catch (ModuleNameReader.BadClassFile | ClassFinder.BadClassFile e) {
                         log.error(Errors.LocnBadModuleInfo(path));
                         return Collections.emptySet();
                     } catch (IOException e) {
@@ -1401,7 +1402,7 @@ public class Locations {
                                 }
                             }
                         }
-                    } catch (ModuleNameReader.BadClassFile e) {
+                    } catch (ModuleNameReader.BadClassFile | ClassFinder.BadClassFile e) {
                         log.error(Errors.LocnBadModuleInfo(p));
                         return null;
                     } catch (IOException e) {
@@ -1467,7 +1468,7 @@ public class Locations {
                                     fs.close();
                             }
                         }
-                    } catch (ModuleNameReader.BadClassFile e) {
+                    } catch (ModuleNameReader.BadClassFile | ClassFinder.BadClassFile e) {
                         log.error(Errors.LocnBadModuleInfo(p));
                     } catch (IOException e) {
                         log.error(Errors.LocnCantReadFile(p));
@@ -1481,7 +1482,7 @@ public class Locations {
                 return null;
             }
 
-            private String readModuleName(Path path) throws IOException, ModuleNameReader.BadClassFile {
+            private String readModuleName(Path path) throws IOException, ModuleNameReader.BadClassFile, ClassFinder.BadClassFile {
                 if (moduleNameReader == null)
                     moduleNameReader = new ModuleNameReader();
                 return moduleNameReader.readModuleName(path);

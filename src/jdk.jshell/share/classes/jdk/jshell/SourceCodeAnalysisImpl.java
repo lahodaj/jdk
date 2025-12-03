@@ -1391,15 +1391,16 @@ class SourceCodeAnalysisImpl extends SourceCodeAnalysis {
         }
         //workaround for: JDK-8024687
         while (true) {
-            try {
+            //TODO: cleanup
+//            try {
                 return packageEl.getEnclosedElements()
                                 .stream()
                                 .filter(el -> el.asType() != null)
                                 .filter(el -> el.asType().getKind() != TypeKind.ERROR)
                                 .toList();
-            } catch (CompletionFailure cf) {
-                //ignore...
-            }
+//            } catch (CompletionFailure cf) {
+//                //ignore...
+//            }
         }
     }
 
@@ -1505,23 +1506,23 @@ class SourceCodeAnalysisImpl extends SourceCodeAnalysis {
             Iterator<? extends Element> it = scope.getLocalElements().iterator();
             @Override
             public boolean hasNext() {
-                while (true) {
-                    try {
+//                while (true) {
+//                    try {
                         return it.hasNext();
-                    } catch (CompletionFailure cf) {
-                        //ignore...
-                    }
-                }
+//                    } catch (CompletionFailure cf) {
+//                        //ignore...
+//                    }
+//                }
             }
             @Override
             public Element next() {
-                while (true) {
-                    try {
+//                while (true) {
+//                    try {
                         return it.next();
-                    } catch (CompletionFailure cf) {
-                        //ignore...
-                    }
-                }
+//                    } catch (CompletionFailure cf) {
+//                        ignore...
+//                    }
+//                }
             }
         };
         Stream<Element> elements = Util.stream(elementsIt);

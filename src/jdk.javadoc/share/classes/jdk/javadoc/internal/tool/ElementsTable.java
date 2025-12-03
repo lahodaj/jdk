@@ -959,7 +959,7 @@ public class ElementsTable {
      */
     private void addAllClasses(Collection<TypeElement> list, TypeElement typeElement, boolean filtered) {
         ClassSymbol klass = (ClassSymbol)typeElement;
-        try {
+//        try {
             // eliminate needless checking, do this first.
             if (list.contains(klass)) return;
             // ignore classes with invalid Java class names
@@ -972,12 +972,12 @@ public class ElementsTable {
                     addAllClasses(list, s, filtered);
                 }
             }
-        } catch (CompletionFailure e) {
-            if (e.getMessage() != null)
-                log.printWarning(e.getMessage());
-            else
-                log.printWarningUsingKey("main.unexpected.exception", e);
-        }
+//        } catch (CompletionFailure e) {
+//            if (e.getMessage() != null)
+//                log.printWarning(e.getMessage());
+//            else
+//                log.printWarningUsingKey("main.unexpected.exception", e);
+//        }
     }
 
     /**

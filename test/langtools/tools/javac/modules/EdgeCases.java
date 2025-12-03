@@ -1041,7 +1041,8 @@ public class EdgeCases extends ModuleTestBase {
         log = new JavacTask(tb)
                 .outdir(bClasses)
                 .options("-p", classes.toString(),
-                         "-XDrawDiagnostics")
+                         "-XDrawDiagnostics",
+                         "-XDdev")
                 .files(findJavaFiles(b))
                 .run(Task.Expect.FAIL)
                 .writeAll()

@@ -24,6 +24,7 @@
  */
 package com.sun.tools.javac.jvm;
 
+import com.sun.tools.javac.code.ClassFinder;
 import com.sun.tools.javac.util.ByteBuffer;
 import com.sun.tools.javac.util.ByteBuffer.UnderflowException;
 import com.sun.tools.javac.util.Convert;
@@ -72,19 +73,19 @@ public class ModuleNameReader {
     public ModuleNameReader() {
     }
 
-    public String readModuleName(Path p) throws IOException, BadClassFile {
+    public String readModuleName(Path p) throws IOException, ClassFinder.BadClassFile, BadClassFile {
         try (InputStream in = Files.newInputStream(p)) {
             return readModuleName(in);
         }
     }
 
-    public String readModuleName(JavaFileObject jfo) throws IOException, BadClassFile {
+    public String readModuleName(JavaFileObject jfo) throws IOException, ClassFinder.BadClassFile, BadClassFile {
         try (InputStream in = jfo.openInputStream()) {
             return readModuleName(in);
         }
     }
 
-    public String readModuleName(InputStream in) throws IOException, BadClassFile {
+    public String readModuleName(InputStream in) throws IOException, ClassFinder.BadClassFile, BadClassFile {
         bp = 0;
         buf.reset();
         buf.appendStream(in);

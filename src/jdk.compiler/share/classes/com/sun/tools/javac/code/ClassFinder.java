@@ -350,7 +350,7 @@ public class ClassFinder {
     /** Fill in definition of class `c' from corresponding class or
      *  source file.
      */
-    void fillIn(ClassSymbol c) {
+    void fillIn(ClassSymbol c) throws CompletionFailure {
         if (completionFailureName == c.fullname) {
             throw new CompletionFailure(
                 c, () -> diagFactory.fragment(Fragments.UserSelectedCompletionFailure), dcfh);
@@ -443,7 +443,7 @@ public class ClassFinder {
 
         if (c.members_field == null) {
             try {
-                c.complete();
+                c.doComplete();
             } catch (CompletionFailure ex) {
                 if (absent) {
                     syms.removeClass(ps.modle, flatname);

@@ -583,11 +583,9 @@ public class Gen extends JCTree.Visitor {
      */
     public void genDef(JCTree tree, Env<GenContext> env) {
         Env<GenContext> prevEnv = this.env;
-        try {
+        try (var  _ =  chk.recordCompletionFailurePos(tree.pos())) {
             this.env = env;
             tree.accept(this);
-        } catch (CompletionFailure ex) {
-            chk.completionError(tree.pos(), ex);
         } finally {
             this.env = prevEnv;
         }
@@ -727,11 +725,8 @@ public class Gen extends JCTree.Visitor {
                 inCondSwitchExpression = true;
                 switchExpressionTrueChain = null;
                 switchExpressionFalseChain = null;
-                try {
+                try (var _ =  chk.recordCompletionFailurePos(_tree.pos())) {
                     doHandleSwitchExpression((JCSwitchExpression) inner_tree);
-                } catch (CompletionFailure ex) {
-                    chk.completionError(_tree.pos(), ex);
-                    code.state.stacksize = 1;
                 }
                 CondItem result = items.makeCondItem(goto_,
                                                      switchExpressionTrueChain,
@@ -855,7 +850,7 @@ public class Gen extends JCTree.Visitor {
         }
 
         Type prevPt = this.pt;
-        try {
+        try (var _ =  chk.recordCompletionFailurePos(tree.pos())) {
             if (tree.type.constValue() != null) {
                 // Short circuit any expressions which are constants
                 tree.accept(classReferenceVisitor);
@@ -871,10 +866,6 @@ public class Gen extends JCTree.Visitor {
                 tree.accept(this);
             }
             return result.coerce(pt);
-        } catch (CompletionFailure ex) {
-            chk.completionError(tree.pos(), ex);
-            code.state.stacksize = 1;
-            return items.makeStackItem(pt);
         } finally {
             this.pt = prevPt;
         }
