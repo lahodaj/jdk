@@ -105,6 +105,7 @@ import com.sun.tools.javac.tree.JCTree.JCModuleDecl;
 import com.sun.tools.javac.tree.JCTree.JCRecordPattern;
 import com.sun.tools.javac.tree.JCTree.JCSwitch;
 import com.sun.tools.javac.tree.JCTree.JCSwitchExpression;
+import com.sun.tools.javac.util.JCDiagnostic.DiagnosticPosition;
 
 /** This class could be the main entry point for GJC when GJC is used as a
  *  component in a larger software system. It provides operations to
@@ -408,6 +409,7 @@ public class JavaCompiler {
             // catch completion problems with predefineds
             syms = Symtab.instance(context);
         } catch (CompletionFailure ex) {
+            //XXX - does this make any sense?
             // inlined Check.completionError as it is not initialized yet
             log.error(Errors.CantAccess(ex.sym, ex.getDetailValue()));
         }
@@ -776,6 +778,7 @@ public class JavaCompiler {
      *  @param cdef   The class definition from which code is generated.
      */
     JavaFileObject genCode(Env<AttrContext> env, JCClassDecl cdef) throws IOException {
+        DiagnosticPosition prevPos = dcfh.setReportingPosition(cdef.pos());
         try {
             if (gen.genClass(env, cdef) && (errorCount() == 0))
                 return writer.writeClass(cdef.sym);
@@ -784,8 +787,8 @@ public class JavaCompiler {
         } catch (ClassWriter.StringOverflow ex) {
             log.error(cdef.pos(),
                       Errors.LimitStringOverflow(ex.value.substring(0, 20)));
-        } catch (CompletionFailure ex) {
-            chk.completionError(cdef.pos(), ex);
+        } finally {
+            dcfh.setReportingPosition(prevPos);
         }
         return null;
     }
@@ -1224,6 +1227,7 @@ public class JavaCompiler {
 
         Assert.checkNonNull(deferredDiagnosticHandler);
 
+        DiagnosticPosition prevPos = dcfh.setReportingPosition(null);
         try {
             List<ClassSymbol> classSymbols = List.nil();
             List<PackageSymbol> pckSymbols = List.nil();
@@ -1248,7 +1252,7 @@ public class JavaCompiler {
                         }
                         try {
                             if (sym.kind == PCK)
-                                sym.complete();
+                                sym.doComplete();
                             if (sym.exists()) {
                                 if (sym.kind == PCK)
                                     pckSymbols = pckSymbols.prepend((PackageSymbol)sym);
@@ -1281,9 +1285,8 @@ public class JavaCompiler {
             } finally {
                 procEnvImpl.close();
             }
-        } catch (CompletionFailure ex) {
-            log.error(Errors.CantAccess(ex.sym, ex.getDetailValue()));
-            reportDeferredDiagnosticAndClearHandler();
+        } finally {
+            dcfh.setReportingPosition(prevPos);
         }
     }
 

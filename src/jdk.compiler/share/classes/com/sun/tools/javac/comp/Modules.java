@@ -280,8 +280,6 @@ public class Modules extends JCTree.Visitor {
                     msym.complete();
                 }
             }
-        } catch (CompletionFailure ex) {
-            chk.completionError(null, ex);
         } finally {
             depth--;
         }
@@ -464,12 +462,12 @@ public class Modules extends JCTree.Visitor {
                 String moduleOverride = singleModuleOverride(trees);
                 switch (rootModules.size()) {
                     case 0:
-                        try {
+//                        try {
                             defaultModule = moduleFinder.findSingleModule();
-                        } catch (CompletionFailure cf) {
-                            chk.completionError(null, cf);
-                            defaultModule = syms.unnamedModule;
-                        }
+//                        } catch (CompletionFailure cf) {
+//                            chk.completionError(null, cf);
+//                            defaultModule = syms.unnamedModule;
+//                        }
                         if (defaultModule == syms.unnamedModule) {
                             if (moduleOverride != null) {
                                 defaultModule = moduleFinder.findModule(names.fromString(moduleOverride));
@@ -1296,12 +1294,8 @@ public class Modules extends JCTree.Visitor {
             };
 
             for (ModuleSymbol sym : new HashSet<>(syms.getAllModules())) {
-                try {
-                    if (systemModulePred.test(sym) && observablePred.test(sym) && jdkModulePred.test(sym) && noIncubatorPred.test(sym)) {
-                        enabledRoot.add(sym);
-                    }
-                } catch (CompletionFailure ex) {
-                    chk.completionError(null, ex);
+                if (systemModulePred.test(sym) && observablePred.test(sym) && jdkModulePred.test(sym) && noIncubatorPred.test(sym)) {
+                    enabledRoot.add(sym);
                 }
             }
         }
@@ -1410,7 +1404,6 @@ public class Modules extends JCTree.Visitor {
         result.add(syms.java_base);
 
         while (primaryTodo.nonEmpty() || secondaryTodo.nonEmpty()) {
-            try {
                 ModuleSymbol current;
                 boolean isPrimaryTodo;
                 if (primaryTodo.nonEmpty()) {
@@ -1438,9 +1431,6 @@ public class Modules extends JCTree.Visitor {
                         secondaryTodo = secondaryTodo.prepend(rd.module);
                     }
                 }
-            } catch (CompletionFailure ex) {
-                chk.completionError(null, ex);
-            }
         }
 
         return result;

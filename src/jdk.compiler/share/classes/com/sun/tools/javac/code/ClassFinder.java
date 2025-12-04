@@ -443,7 +443,7 @@ public class ClassFinder {
 
         if (c.members_field == null) {
             try {
-                c.complete();
+                c.doComplete();
             } catch (CompletionFailure ex) {
                 if (absent) {
                     syms.removeClass(ps.modle, flatname);

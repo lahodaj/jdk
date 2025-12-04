@@ -2431,6 +2431,7 @@ public class Lower extends TreeTranslator {
         private MethodSymbol systemArraycopyMethod;
         private boolean useClone() {
             try {
+                syms.objectType.tsym.doComplete();
                 return syms.objectType.tsym.members().findFirst(names.clone) != null;
             }
             catch (CompletionFailure e) {

@@ -696,7 +696,7 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
 
     /** Complete the elaboration of this symbol's definition.
      */
-    public void complete() throws CompletionFailure {
+    public void doComplete() throws CompletionFailure {
         if (completer != Completer.NULL_COMPLETER) {
             Completer c = completer;
             completer = Completer.NULL_COMPLETER;
@@ -704,12 +704,17 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
         }
     }
 
-    public void apiComplete() throws CompletionFailure {
+    public void complete() throws CompletionFailure {
         try {
-            complete();
+            doComplete();
         } catch (CompletionFailure cf) {
             cf.dcfh.handleAPICompletionFailure(cf);
         }
+    }
+
+    //TODO: remove
+    public void apiComplete() throws CompletionFailure {
+        complete();
     }
 
     /** True if the symbol represents an entity that exists.
@@ -797,7 +802,7 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
         public boolean isEnclosedBy(ClassSymbol clazz) { return other.isEnclosedBy(clazz); }
         public boolean isInheritedIn(Symbol clazz, Types types) { return other.isInheritedIn(clazz, types); }
         public Symbol asMemberOf(Type site, Types types) { return other.asMemberOf(site, types); }
-        public void complete() throws CompletionFailure { other.complete(); }
+        public void doComplete() throws CompletionFailure { other.doComplete(); }
 
         @DefinedBy(Api.LANGUAGE_MODEL)
         public <R, P> R accept(ElementVisitor<R, P> v, P p) {
@@ -1466,10 +1471,10 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
 
         /** Complete the elaboration of this symbol's definition.
          */
-        public void complete() throws CompletionFailure {
+        public void doComplete() throws CompletionFailure {
             Completer origCompleter = completer;
             try {
-                super.complete();
+                super.doComplete();
             } catch (CompletionFailure ex) {
                 ex.dcfh.classSymbolCompleteFailed(this, origCompleter);
                 // quiet error recovery

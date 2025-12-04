@@ -108,6 +108,7 @@ public class TypeEnter implements Completer {
     private final TypeAnnotations typeAnnotations;
     private final Types types;
     private final TypeEnvs typeEnvs;
+    private final DeferredCompletionFailureHandler dcfh;
     private final Dependencies dependencies;
 
     public static TypeEnter instance(Context context) {
@@ -133,6 +134,7 @@ public class TypeEnter implements Completer {
         typeAnnotations = TypeAnnotations.instance(context);
         types = Types.instance(context);
         typeEnvs = TypeEnvs.instance(context);
+        dcfh = DeferredCompletionFailureHandler.instance(context);
         dependencies = Dependencies.instance(context);
         Source source = Source.instance(context);
         allowDeprecationOnImport = Feature.DEPRECATION_ON_IMPORT.allowedInSource(source);
@@ -208,6 +210,7 @@ public class TypeEnter implements Completer {
 
     void finishImports(JCCompilationUnit toplevel, Runnable resolve) {
         JavaFileObject prev = log.useSource(toplevel.sourcefile);
+        DiagnosticPosition prevPos = dcfh.setReportingPosition(toplevel.pos());
         try {
             resolve.run();
             chk.checkImportsUnique(toplevel);
@@ -216,10 +219,9 @@ public class TypeEnter implements Completer {
             toplevel.namedImportScope.finalizeScope();
             toplevel.starImportScope.finalizeScope();
             toplevel.moduleImportScope.finalizeScope();
-        } catch (CompletionFailure cf) {
-            chk.completionError(toplevel.pos(), cf);
         } finally {
             log.useSource(prev);
+            dcfh.setReportingPosition(prevPos);
         }
     }
 
@@ -269,14 +271,14 @@ public class TypeEnter implements Completer {
                 queue.add(env);
 
                 JavaFileObject prev = log.useSource(env.toplevel.sourcefile);
+                DiagnosticPosition prevPos = dcfh.setReportingPosition(tree.pos());
                 try {
                     dependencies.push(env.enclClass.sym, phaseName);
                     runPhase(env);
-                } catch (CompletionFailure ex) {
-                    chk.completionError(tree.pos(), ex);
                 } finally {
                     dependencies.pop();
                     log.useSource(prev);
+                    dcfh.setReportingPosition(prevPos);
                 }
             }
         }

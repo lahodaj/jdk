@@ -64,6 +64,7 @@ import static com.sun.tools.javac.jvm.ClassFile.externalize;
 import static com.sun.tools.javac.main.Option.DOE;
 
 import com.sun.tools.javac.resources.CompilerProperties.Fragments;
+import com.sun.tools.javac.util.JCDiagnostic.DiagnosticPosition;
 
 /**
  * Utility class containing various operations on types.
@@ -95,6 +96,7 @@ public class Types {
     final Names names;
     final Check chk;
     final Enter enter;
+    final DeferredCompletionFailureHandler dcfh;
     JCDiagnostic.Factory diags;
     List<Warner> warnStack = List.nil();
     final Name capturedName;
@@ -118,6 +120,7 @@ public class Types {
         Source source = Source.instance(context);
         chk = Check.instance(context);
         enter = Enter.instance(context);
+        dcfh = DeferredCompletionFailureHandler.instance(context);
         capturedName = names.fromString("<captured wildcard>");
         messages = JavacMessages.instance(context);
         diags = JCDiagnostic.Factory.instance(context);
@@ -3139,11 +3142,11 @@ public class Types {
     /** Return first abstract member of class `sym'.
      */
     public MethodSymbol firstUnimplementedAbstract(ClassSymbol sym) {
+        DiagnosticPosition prevPos = dcfh.setReportingPosition(enter.getEnv(sym).tree.pos());
         try {
             return firstUnimplementedAbstractImpl(sym, sym);
-        } catch (CompletionFailure ex) {
-            chk.completionError(enter.getEnv(sym).tree.pos(), ex);
-            return null;
+        } finally {
+            dcfh.setReportingPosition(prevPos);
         }
     }
         //where:

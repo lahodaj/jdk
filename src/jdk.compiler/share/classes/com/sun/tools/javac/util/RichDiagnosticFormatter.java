@@ -571,11 +571,12 @@ public class RichDiagnosticFormatter extends
             nameSimplifier.addUsage(t.tsym);
             visit(t.getTypeArguments());
             Type enclosingType;
-            try {
+            //TODO?
+//            try {
                 enclosingType = t.getEnclosingType();
-            } catch (CompletionFailure cf) {
-                return null;
-            }
+//            } catch (CompletionFailure cf) {
+//                return null;
+//            }
             if (enclosingType != Type.noType)
                 visit(t.getEnclosingType());
             return null;

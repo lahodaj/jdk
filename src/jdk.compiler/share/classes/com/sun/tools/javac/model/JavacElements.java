@@ -266,7 +266,7 @@ public class JavacElements implements Elements {
                 sym = javaCompiler.resolveIdent(module, nameStr);
 
             if (clazz.isInstance(sym)) {
-                sym.complete();
+                sym.doComplete();
                 if (sym.kind != ERR &&
                     sym.exists() &&
                     name.equals(sym.getQualifiedName())) {

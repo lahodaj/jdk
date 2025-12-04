@@ -113,6 +113,7 @@ public class Check {
     private final Target target;
     private final Profile profile;
     private final Preview preview;
+    private final DeferredCompletionFailureHandler dcfh;
     private final boolean warnOnAnyAccessToMembers;
 
     public boolean disablePreviewCheck;
@@ -162,6 +163,7 @@ public class Check {
 
         profile = Profile.instance(context);
         preview = Preview.instance(context);
+        dcfh = DeferredCompletionFailureHandler.instance(context);
 
         allowModules = Feature.MODULES.allowedInSource(source);
         allowRecords = Feature.RECORDS.allowedInSource(source);
@@ -1448,14 +1450,14 @@ public class Check {
                 this.checkRaw = checkRaw;
                 this.isOuter = isOuter;
 
+                DiagnosticPosition prevPos = dcfh.setReportingPosition(tree.pos());
                 try {
                     tree.accept(this);
                     if (checkRaw)
                         checkRaw(tree, env);
-                } catch (CompletionFailure ex) {
-                    completionError(tree.pos(), ex);
                 } finally {
                     this.checkRaw = prevCheckRaw;
+                    dcfh.setReportingPosition(prevPos);
                 }
             }
         }
@@ -1579,11 +1581,11 @@ public class Check {
     /** Same, but handling completion failures.
      */
     boolean isUnchecked(DiagnosticPosition pos, Type exc) {
+        DiagnosticPosition prevPos = dcfh.setReportingPosition(pos);
         try {
             return isUnchecked(exc);
-        } catch (CompletionFailure ex) {
-            completionError(pos, ex);
-            return true;
+        } finally {
+            dcfh.setReportingPosition(prevPos);
         }
     }
 
@@ -4418,22 +4420,16 @@ public class Check {
 
     // is the sym accessible everywhere in packge?
     public boolean importAccessible(Symbol sym, PackageSymbol packge) {
-        try {
-            int flags = (int)(sym.flags() & AccessFlags);
-            switch (flags) {
-            default:
-            case PUBLIC:
-                return true;
-            case PRIVATE:
-                return false;
-            case 0:
-            case PROTECTED:
-                return sym.packge() == packge;
-            }
-        } catch (ClassFinder.BadClassFile err) {
-            throw err;
-        } catch (CompletionFailure ex) {
+        int flags = (int)(sym.flags() & AccessFlags);
+        switch (flags) {
+        default:
+        case PUBLIC:
+            return true;
+        case PRIVATE:
             return false;
+        case 0:
+        case PROTECTED:
+            return sym.packge() == packge;
         }
     }
 
@@ -4844,7 +4840,7 @@ public class Check {
     /** check if a type is a subtype of Externalizable, if that is available. */
     boolean isExternalizable(Type t) {
         try {
-            syms.externalizableType.complete();
+            syms.externalizableType.tsym.doComplete();
         } catch (CompletionFailure e) {
             return false;
         }

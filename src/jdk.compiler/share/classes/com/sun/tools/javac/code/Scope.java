@@ -935,7 +935,7 @@ public abstract class Scope {
         public Iterable<Symbol> getSymbols(final Predicate<Symbol> sf, final LookupKind lookupKind) {
             if (filterName != null)
                 return getSymbolsByName(filterName, sf, lookupKind);
-            try {
+//            try {
                 SymbolImporter si = new SymbolImporter(imp.staticImport) {
                     @Override
                     Iterable<Symbol> doLookup(TypeSymbol tsym) {
@@ -947,10 +947,10 @@ public abstract class Scope {
                 return () -> createFilterIterator(createCompoundIterator(results,
                                                                          Iterable::iterator),
                                                   s -> filter.accepts(origin, s));
-            } catch (CompletionFailure cf) {
-                cfHandler.accept(imp, cf);
-                return Collections.emptyList();
-            }
+//            } catch (CompletionFailure cf) {
+//                cfHandler.accept(imp, cf);
+//                return Collections.emptyList();
+//            }
         }
 
         @Override
@@ -959,7 +959,7 @@ public abstract class Scope {
                                                  final LookupKind lookupKind) {
             if (filterName != null && filterName != name)
                 return Collections.emptyList();
-            try {
+//            try {
                 SymbolImporter si = new SymbolImporter(imp.staticImport) {
                     @Override
                     Iterable<Symbol> doLookup(TypeSymbol tsym) {
@@ -971,10 +971,10 @@ public abstract class Scope {
                 return () -> createFilterIterator(createCompoundIterator(results,
                                                                          Iterable::iterator),
                                                   s -> filter.accepts(origin, s));
-            } catch (CompletionFailure cf) {
-                cfHandler.accept(imp, cf);
-                return Collections.emptyList();
-            }
+//            } catch (CompletionFailure cf) {
+//                cfHandler.accept(imp, cf);
+//                return Collections.emptyList();
+//            }
         }
 
         @Override

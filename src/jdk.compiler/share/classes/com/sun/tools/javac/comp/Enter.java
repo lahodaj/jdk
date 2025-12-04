@@ -103,6 +103,7 @@ public class Enter extends JCTree.Visitor {
     PkgInfo pkginfoOpt;
     TypeEnvs typeEnvs;
     Modules modules;
+    DeferredCompletionFailureHandler dcfh;
     JCDiagnostic.Factory diags;
 
     private final Todo todo;
@@ -128,6 +129,7 @@ public class Enter extends JCTree.Visitor {
         lint = Lint.instance(context);
         names = Names.instance(context);
         modules = Modules.instance(context);
+        dcfh = DeferredCompletionFailureHandler.instance(context);
         diags = JCDiagnostic.Factory.instance(context);
 
         predefClassDef = make.ClassDef(
@@ -286,16 +288,16 @@ public class Enter extends JCTree.Visitor {
      */
     Type classEnter(JCTree tree, Env<AttrContext> env) {
         Env<AttrContext> prevEnv = this.env;
+        DiagnosticPosition prevPos = dcfh.setReportingPosition(tree.pos());
         try {
             this.env = env;
             annotate.blockAnnotations();
             tree.accept(this);
             return result;
-        }  catch (CompletionFailure ex) {
-            return chk.completionError(tree.pos(), ex);
         } finally {
             annotate.unblockAnnotations();
             this.env = prevEnv;
+            dcfh.setReportingPosition(prevPos);
         }
     }
 

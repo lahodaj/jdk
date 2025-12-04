@@ -124,6 +124,7 @@ public class Attr extends JCTree.Visitor {
     final ArgumentAttr argumentAttr;
     final MatchBindingsComputer matchBindingsComputer;
     final AttrRecover attrRecover;
+    final DeferredCompletionFailureHandler dcfh;
     final boolean captureMRefReturnType;
 
     public static Attr instance(Context context) {
@@ -164,6 +165,7 @@ public class Attr extends JCTree.Visitor {
         argumentAttr = ArgumentAttr.instance(context);
         matchBindingsComputer = MatchBindingsComputer.instance(context);
         attrRecover = AttrRecover.instance(context);
+        dcfh = DeferredCompletionFailureHandler.instance(context);
 
         Options options = Options.instance(context);
 
@@ -670,6 +672,7 @@ public class Attr extends JCTree.Visitor {
     Type attribTree(JCTree tree, Env<AttrContext> env, ResultInfo resultInfo) {
         Env<AttrContext> prevEnv = this.env;
         ResultInfo prevResult = this.resultInfo;
+        DiagnosticPosition prevPosition = dcfh.setReportingPosition(env.tree.pos());
         try {
             this.env = env;
             this.resultInfo = resultInfo;
@@ -685,12 +688,10 @@ public class Attr extends JCTree.Visitor {
                 breakTreeFound(copyEnv(env));
             }
             return result;
-        } catch (CompletionFailure ex) {
-            tree.type = syms.errType;
-            return chk.completionError(tree.pos(), ex);
         } finally {
             this.env = prevEnv;
             this.resultInfo = prevResult;
+            dcfh.setReportingPosition(prevPosition);
         }
     }
 
@@ -887,14 +888,14 @@ public class Attr extends JCTree.Visitor {
                     boolean classExpected,
                     boolean interfaceExpected,
                     boolean checkExtensible) {
-        Type t = tree.type != null ?
-            tree.type :
-            attribType(tree, env);
+        DiagnosticPosition prevPos = dcfh.setReportingPosition(tree.pos());
         try {
+            Type t = tree.type != null ?
+                tree.type :
+                attribType(tree, env);
             return checkBase(t, tree, env, classExpected, interfaceExpected, checkExtensible);
-        } catch (CompletionFailure ex) {
-            chk.completionError(tree.pos(), ex);
-            return t;
+        } finally {
+            dcfh.setReportingPosition(prevPos);
         }
     }
     Type checkBase(Type t,
@@ -3287,8 +3288,9 @@ public class Attr extends JCTree.Visitor {
             resultInfo.checkContext.report(that, cause);
             result = that.type = types.createErrorType(pt());
             return;
-        } catch (CompletionFailure cf) {
-            chk.completionError(that.pos(), cf);
+        //NOTE: position should be set in attribTree, right???
+//        } catch (CompletionFailure cf) {
+//            chk.completionError(that.pos(), cf);
         } catch (Throwable t) {
             //when an unexpected exception happens, avoid attempts to attribute the same tree again
             //as that would likely cause the same exception again.
@@ -5315,11 +5317,12 @@ public class Attr extends JCTree.Visitor {
     }
 
     public void attribPackage(DiagnosticPosition pos, PackageSymbol p) {
+        DiagnosticPosition prevPos = dcfh.setReportingPosition(pos);
         try {
             annotate.flush();
             attribPackage(p);
-        } catch (CompletionFailure ex) {
-            chk.completionError(pos, ex);
+        } finally {
+            dcfh.setReportingPosition(prevPos);
         }
     }
 
@@ -5329,11 +5332,12 @@ public class Attr extends JCTree.Visitor {
     }
 
     public void attribModule(DiagnosticPosition pos, ModuleSymbol m) {
+        DiagnosticPosition prevPos = dcfh.setReportingPosition(pos);
         try {
             annotate.flush();
             attribModule(m);
-        } catch (CompletionFailure ex) {
-            chk.completionError(pos, ex);
+        } finally {
+            dcfh.setReportingPosition(prevPos);
         }
     }
 
@@ -5368,11 +5372,12 @@ public class Attr extends JCTree.Visitor {
      *  @param c   The class symbol whose definition will be attributed.
      */
     public void attribClass(DiagnosticPosition pos, ClassSymbol c) {
+        DiagnosticPosition prevPos = dcfh.setReportingPosition(pos);
         try {
             annotate.flush();
             attribClass(c);
-        } catch (CompletionFailure ex) {
-            chk.completionError(pos, ex);
+        } finally {
+            dcfh.setReportingPosition(prevPos);
         }
     }
 

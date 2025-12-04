@@ -949,14 +949,6 @@ public class JavacProcessingEnvironment implements ProcessingEnvironment, Closea
         Handler prevDeferredHandler = dcfh.setHandler(dcfh.userCodeHandler);
         try {
             return proc.process(tes, renv);
-        } catch (ClassFinder.BadClassFile ex) {
-            log.error(Errors.ProcCantAccess1(ex.sym, ex.getDetailValue()));
-            return false;
-        } catch (CompletionFailure ex) {
-            StringWriter out = new StringWriter();
-            ex.printStackTrace(new PrintWriter(out));
-            log.error(Errors.ProcCantAccess(ex.sym, ex.getDetailValue(), out.toString()));
-            return false;
         } catch (ClientCodeException e) {
             throw e;
         } catch (Throwable t) {

@@ -82,6 +82,7 @@ import static com.sun.tools.javac.jvm.ClassFile.*;
 import static com.sun.tools.javac.jvm.ClassFile.Version.*;
 
 import static com.sun.tools.javac.main.Option.PARAMETERS;
+import com.sun.tools.javac.util.JCDiagnostic.DiagnosticPosition;
 
 /** This class provides operations to read a classfile into an internal
  *  representation. The internal representation is anchored in a
@@ -2057,6 +2058,7 @@ public class ClassReader {
         MethodSymbol findAccessMethod(Type container, Name name) {
             CompletionFailure failure = null;
             try {
+                container.tsym.doComplete();
                 for (Symbol sym : container.tsym.members().getSymbolsByName(name)) {
                     if (sym.kind == MTH && sym.type.getParameterTypes().length() == 0)
                         return (MethodSymbol) sym;
@@ -2135,6 +2137,7 @@ public class ClassReader {
             VarSymbol enumerator = null;
             CompletionFailure failure = null;
             try {
+                enumTypeSym.doComplete();
                 for (Symbol sym : enumTypeSym.members().getSymbolsByName(proxy.enumerator)) {
                     if (sym.kind == VAR) {
                         enumerator = (VarSymbol)sym;
@@ -2325,6 +2328,8 @@ public class ClassReader {
      * 4.7.20.2 type_path to associate the annotation with the correct contained type.
      */
     private void addTypeAnnotationsToSymbol(Symbol s, List<Attribute.TypeCompound> attributes) {
+        //XXX:
+        DiagnosticPosition prevPos = dcfh.setReportingPosition(DeferredCompletionFailureHandler.THROW_COMPLETION_FAILURE_POSITION);
         try {
             new TypeAnnotationSymbolVisitor(attributes).visit(s, null);
         } catch (CompletionFailure ex) {
@@ -2334,6 +2339,8 @@ public class ClassReader {
             } finally {
                 log.useSource(prev);
             }
+        } finally {
+            dcfh.setReportingPosition(prevPos);
         }
     }
 

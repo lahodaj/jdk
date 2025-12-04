@@ -78,6 +78,7 @@ public class Gen extends JCTree.Visitor {
     private final Lower lower;
     private final Annotate annotate;
     private final StringConcat concat;
+    private final DeferredCompletionFailureHandler dcfh;
 
     /** Format of stackmap tables to be generated. */
     private final Code.StackMapFormat stackMap;
@@ -110,6 +111,7 @@ public class Gen extends JCTree.Visitor {
         target = Target.instance(context);
         types = Types.instance(context);
         concat = StringConcat.instance(context);
+        dcfh = DeferredCompletionFailureHandler.instance(context);
 
         methodType = new MethodType(null, null, null, syms.methodClass);
         accessDollar = "access" + target.syntheticNameChar();
@@ -583,13 +585,13 @@ public class Gen extends JCTree.Visitor {
      */
     public void genDef(JCTree tree, Env<GenContext> env) {
         Env<GenContext> prevEnv = this.env;
+        DiagnosticPosition prevPos = dcfh.setReportingPosition(toplevel.pos());
         try {
             this.env = env;
             tree.accept(this);
-        } catch (CompletionFailure ex) {
-            chk.completionError(tree.pos(), ex);
         } finally {
             this.env = prevEnv;
+            dcfh.setReportingPosition(prevPos);
         }
     }
 
@@ -727,12 +729,7 @@ public class Gen extends JCTree.Visitor {
                 inCondSwitchExpression = true;
                 switchExpressionTrueChain = null;
                 switchExpressionFalseChain = null;
-                try {
-                    doHandleSwitchExpression((JCSwitchExpression) inner_tree);
-                } catch (CompletionFailure ex) {
-                    chk.completionError(_tree.pos(), ex);
-                    code.state.stacksize = 1;
-                }
+                doHandleSwitchExpression((JCSwitchExpression) inner_tree);
                 CondItem result = items.makeCondItem(goto_,
                                                      switchExpressionTrueChain,
                                                      switchExpressionFalseChain);
@@ -855,6 +852,7 @@ public class Gen extends JCTree.Visitor {
         }
 
         Type prevPt = this.pt;
+        DiagnosticPosition prevPos = dcfh.setReportingPosition(toplevel.pos());
         try {
             if (tree.type.constValue() != null) {
                 // Short circuit any expressions which are constants
@@ -871,12 +869,9 @@ public class Gen extends JCTree.Visitor {
                 tree.accept(this);
             }
             return result.coerce(pt);
-        } catch (CompletionFailure ex) {
-            chk.completionError(tree.pos(), ex);
-            code.state.stacksize = 1;
-            return items.makeStackItem(pt);
         } finally {
             this.pt = prevPt;
+            dcfh.setReportingPosition(prevPos);
         }
     }
 

@@ -61,6 +61,7 @@ public class MemberEnter extends JCTree.Visitor {
     private final Enter enter;
     private final Log log;
     private final Check chk;
+    private final DeferredCompletionFailureHandler dcfh;
     private final Attr attr;
     private final Symtab syms;
     private final Annotate annotate;
@@ -80,6 +81,7 @@ public class MemberEnter extends JCTree.Visitor {
         enter = Enter.instance(context);
         log = Log.instance(context);
         chk = Check.instance(context);
+        dcfh = DeferredCompletionFailureHandler.instance(context);
         attr = Attr.instance(context);
         syms = Symtab.instance(context);
         annotate = Annotate.instance(context);
@@ -163,13 +165,13 @@ public class MemberEnter extends JCTree.Visitor {
      */
     protected void memberEnter(JCTree tree, Env<AttrContext> env) {
         Env<AttrContext> prevEnv = this.env;
+        DiagnosticPosition prevPos = dcfh.setReportingPosition(tree.pos());
         try {
             this.env = env;
             tree.accept(this);
-        }  catch (CompletionFailure ex) {
-            chk.completionError(tree.pos(), ex);
         } finally {
             this.env = prevEnv;
+            dcfh.setReportingPosition(prevPos);
         }
     }
 

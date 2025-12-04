@@ -39,6 +39,7 @@ import com.sun.tools.javac.tree.JCTree.*;
 
 import com.sun.tools.javac.code.Kinds.Kind;
 import com.sun.tools.javac.code.Type.TypeVar;
+import com.sun.tools.javac.util.JCDiagnostic.DiagnosticPosition;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -60,6 +61,7 @@ public class ExhaustivenessComputer {
     private final Symtab syms;
     private final Types types;
     private final Check chk;
+    private final DeferredCompletionFailureHandler dcfh;
     private final Infer infer;
     private final Map<Pair<Type, Type>, Boolean> isSubtypeCache = new HashMap<>();
 
@@ -76,6 +78,7 @@ public class ExhaustivenessComputer {
         syms = Symtab.instance(context);
         types = Types.instance(context);
         chk = Check.instance(context);
+        dcfh = DeferredCompletionFailureHandler.instance(context);
         infer = Infer.instance(context);
     }
 
@@ -124,6 +127,7 @@ public class ExhaustivenessComputer {
         Set<PatternDescription> patterns = patternSet;
         Set<Set<PatternDescription>> seenFallback = new HashSet<>();
         boolean useHashes = true;
+        DiagnosticPosition prevPos = dcfh.setReportingPosition(selector.pos());
         try {
             boolean repeat = true;
             while (repeat) {
@@ -154,11 +158,9 @@ public class ExhaustivenessComputer {
                 patterns = updatedPatterns;
             }
             return checkCovered(selector.type, patterns);
-        } catch (CompletionFailure cf) {
-            chk.completionError(selector.pos(), cf);
-            return true; //error recovery
         } finally {
             isSubtypeCache.clear();
+            dcfh.setReportingPosition(prevPos);
         }
     }
 

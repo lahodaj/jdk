@@ -549,7 +549,7 @@ public class Annotate {
         //error is thrown, we should recover gracefully, and display an
         //ordinary resolution diagnostic.
         try {
-            expectedElementType.tsym.complete();
+            expectedElementType.tsym.doComplete();
         } catch(CompletionFailure e) {
             log.error(tree.pos(), Errors.CantResolve(Kinds.kindName(e.sym), e.sym.getQualifiedName(), null, null));
             expectedElementType = syms.errType;
@@ -946,13 +946,14 @@ public class Annotate {
         boolean fatalError = false;
 
         // Validate that there is a (and only 1) value method
+        //TODO: need to set the position here?
         Scope scope = null;
-        try {
+//        try {
             scope = targetContainerType.tsym.members();
-        } catch (CompletionFailure ex) {
-            chk.completionError(pos, ex);
-            return null;
-        }
+//        } catch (CompletionFailure ex) {
+//            chk.completionError(pos, ex);
+//            return null;
+//        }
         int nr_value_elems = 0;
         boolean error = false;
         for(Symbol elm : scope.getSymbolsByName(names.value)) {

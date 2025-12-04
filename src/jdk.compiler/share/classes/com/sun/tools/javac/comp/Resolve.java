@@ -100,6 +100,7 @@ public class Resolve {
     AttrRecover attrRecover;
     DeferredAttr deferredAttr;
     Check chk;
+    DeferredCompletionFailureHandler dcfh;
     Infer infer;
     Preview preview;
     ClassFinder finder;
@@ -134,6 +135,7 @@ public class Resolve {
         attrRecover = AttrRecover.instance(context);
         deferredAttr = DeferredAttr.instance(context);
         chk = Check.instance(context);
+        dcfh = DeferredCompletionFailureHandler.instance(context);
         infer = Infer.instance(context);
         finder = ClassFinder.instance(context);
         moduleFinder = ModuleFinder.instance(context);
@@ -2461,14 +2463,7 @@ public class Resolve {
      *                   (a subset of VAL, TYP, PCK).
      */
     Symbol findIdent(DiagnosticPosition pos, Env<AttrContext> env, Name name, KindSelector kind) {
-        try {
-            return checkNonExistentType(checkRestrictedType(pos, findIdentInternal(pos, env, name, kind), name));
-        } catch (ClassFinder.BadClassFile err) {
-            return new BadClassFileError(err);
-        } catch (CompletionFailure cf) {
-            chk.completionError(pos, cf);
-            return typeNotFound;
-        }
+        return checkNonExistentType(checkRestrictedType(pos, findIdentInternal(pos, env, name, kind), name));
     }
 
     Symbol findIdentInternal(DiagnosticPosition pos, Env<AttrContext> env, Name name, KindSelector kind) {
@@ -2540,14 +2535,7 @@ public class Resolve {
     Symbol findIdentInType(DiagnosticPosition pos,
                            Env<AttrContext> env, Type site,
                            Name name, KindSelector kind) {
-        try {
-            return checkNonExistentType(checkRestrictedType(pos, findIdentInTypeInternal(env, site, name, kind), name));
-        } catch (ClassFinder.BadClassFile err) {
-            return new BadClassFileError(err);
-        } catch (CompletionFailure cf) {
-            chk.completionError(pos, cf);
-            return typeNotFound;
-        }
+        return checkNonExistentType(checkRestrictedType(pos, findIdentInTypeInternal(env, site, name, kind), name));
     }
 
     private Symbol checkNonExistentType(Symbol symbol) {
@@ -2810,12 +2798,7 @@ public class Resolve {
     Symbol resolveQualifiedMethod(DiagnosticPosition pos, Env<AttrContext> env,
                                   Symbol location, Type site, Name name, List<Type> argtypes,
                                   List<Type> typeargtypes) {
-        try {
-            return resolveQualifiedMethod(new MethodResolutionContext(), pos, env, location, site, name, argtypes, typeargtypes);
-        } catch (CompletionFailure cf) {
-            chk.completionError(pos, cf);
-            return methodNotFound.access(name, site.tsym);
-        }
+        return resolveQualifiedMethod(new MethodResolutionContext(), pos, env, location, site, name, argtypes, typeargtypes);
     }
     private Symbol resolveQualifiedMethod(MethodResolutionContext resolveContext,
                                   DiagnosticPosition pos, Env<AttrContext> env,
@@ -4074,7 +4057,7 @@ public class Resolve {
     /** check if a type is a subtype of Serializable, if that is available.*/
     boolean isSerializable(Type t) {
         try {
-            syms.serializableType.complete();
+            syms.serializableType.tsym.doComplete();
         }
         catch (CompletionFailure e) {
             return false;
