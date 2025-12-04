@@ -3262,8 +3262,8 @@ public class ClassReader {
             if (c == currentModule.module_info) {
                 if (interimUses.nonEmpty() || interimProvides.nonEmpty()) {
                     Assert.check(currentModule.isCompleted());
-                    currentModule.usesProvidesCompleter =
-                            new UsesProvidesCompleter(currentModule, interimUses, interimProvides);
+                    currentModule.usesProvidesCompleter = dcfh.disableImmediateReporting(
+                            new UsesProvidesCompleter(currentModule, interimUses, interimProvides));
                 } else {
                     currentModule.uses = List.nil();
                     currentModule.provides = List.nil();

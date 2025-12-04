@@ -1526,7 +1526,7 @@ public class JavacProcessingEnvironment implements ProcessingEnvironment, Closea
                     node.defs = defs;
                 }
                 if (node.sym != null) {
-                    node.sym.completer = new ImplicitCompleter(topLevel);
+                    node.sym.completer = dcfh.disableImmediateReporting(new ImplicitCompleter(topLevel));
                     List<? extends RecordComponent> recordComponents = node.sym.getRecordComponents();
                     for (RecordComponent rc : recordComponents) {
                         List<JCAnnotation> originalAnnos = rc.getOriginalAnnos();

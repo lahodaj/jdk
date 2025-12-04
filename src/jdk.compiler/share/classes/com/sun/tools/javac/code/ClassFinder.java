@@ -165,7 +165,7 @@ public class ClassFinder {
     /**
      * Completer that delegates to the complete-method of this class.
      */
-    private final Completer thisCompleter = this::complete;
+    private final Completer thisCompleter;
 
     public Completer getCompleter() {
         return thisCompleter;
@@ -223,6 +223,8 @@ public class ClassFinder {
         profile = Profile.instance(context);
         cachedCompletionFailure = new CompletionFailure(null, () -> null, dcfh);
         cachedCompletionFailure.setStackTrace(new StackTraceElement[0]);
+
+        thisCompleter = dcfh.disableImmediateReporting(this::complete);
     }
 
 

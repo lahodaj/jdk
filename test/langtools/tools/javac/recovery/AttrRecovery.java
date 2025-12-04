@@ -32,8 +32,11 @@
  * @run main AttrRecovery
  */
 
+import com.sun.source.tree.IdentifierTree;
 import com.sun.source.tree.MemberReferenceTree;
+import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
+import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.VariableTree;
 import com.sun.source.util.TaskEvent;
 import com.sun.source.util.TaskListener;
@@ -46,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
@@ -478,6 +482,140 @@ public class AttrRecovery extends TestRunner {
                                         Element el = trees.getElement(getCurrentPath());
                                         if (!el.getSimpleName().contentEquals("get")) {
                                             error("Expected good Element, but got: " + el);
+                                        }
+                                    }
+                                }.scan(e.getCompilationUnit(), null);
+                            }
+                        });
+                    })
+                    .run(Expect.FAIL)
+                    .writeAll()
+                    .getOutputLines(OutputKind.DIRECT);
+
+            List<String> expected = List.of(tc.expectedErrors);
+
+            if (!Objects.equals(actual, expected)) {
+                error("Expected: " + expected + ", but got: " + actual);
+            }
+        }
+    }
+
+    @Test //JDK-9999999
+    public void testSensibleAttribution() throws Exception {
+        Path curPath = Path.of(".");
+        Path lib = curPath.resolve("lib");
+        Path classes = lib.resolve("classes");
+        Files.createDirectories(classes);
+        new JavacTask(tb)
+            .outdir(classes)
+            .sources("""
+                     package test;
+                     public class Intermediate<T> extends Base<T> {}
+                     """,
+                     """
+                     package test;
+                     public class Base<T> {
+                         public void t(Missing<T> m) {}
+                     }
+                     """,
+                     """
+                     package test;
+                     public class Missing<T> {
+                     }
+                     """)
+            .run()
+            .writeAll();
+
+        Files.delete(classes.resolve("test").resolve("Missing.class"));
+
+        record TestCase(String code, List<String> options, String... expectedErrors) {}
+        TestCase[] testCases = new TestCase[] {
+            new TestCase("""
+                         package test;
+                         public class Test extends Intermediate<String> {
+                             private void test() {
+                                 int i = 0;
+                                 System.err.println(i);
+                             }
+                         }
+                         """,
+                         List.of(),
+                         "Test.java:2:8: compiler.err.cant.access: test.Missing, (compiler.misc.class.file.not.found: test.Missing)",
+                         "1 error"),
+            new TestCase("""
+                         package test;
+                         public class Test extends Intermediate<String> {
+                             private void test() {
+                                 int i = 0;
+                                 System.err.println(i);
+                             }
+                         }
+                         """,
+                         List.of("-XDdev"),
+                         "Test.java:2:8: compiler.err.cant.access: test.Missing, (compiler.misc.class.file.not.found: test.Missing)",
+                         "1 error"),
+        };
+
+        for (TestCase tc : testCases) {
+            List<String> actual = new JavacTask(tb)
+                    .options(Stream.concat(List.of("-XDrawDiagnostics", "-XDdev").stream(),
+                                           tc.options.stream()).toList())
+                    .classpath(classes)
+                    .sources(tc.code())
+                    .outdir(curPath)
+                    .callback(task -> {
+                        task.addTaskListener(new TaskListener() {
+                            @Override
+                            public void finished(TaskEvent e) {
+                                if (e.getKind() != TaskEvent.Kind.ANALYZE) {
+                                    return ;
+                                }
+                                Trees trees = Trees.instance(task);
+                                new TreePathScanner<Void, Void>() {
+                                    boolean check;
+
+                                    @Override
+                                    public Void visitMethod(MethodTree node, Void p) {
+                                        if (node.getName().contentEquals("test")) {
+                                            check = true;
+                                            try {
+                                                return super.visitMethod(node, p);
+                                            } finally {
+                                                check = false;
+                                            }
+                                        }
+
+                                        return super.visitMethod(node, p);
+                                    }
+                                    
+                                    @Override
+                                    public Void visitMethodInvocation(MethodInvocationTree node, Void p) {
+                                        if (!node.toString().contains("super")) {
+                                            verifyElement();
+                                        }
+                                        return super.visitMethodInvocation(node, p);
+                                    }
+
+                                    @Override
+                                    public Void visitIdentifier(IdentifierTree node, Void p) {
+                                        verifyElement();
+                                        return super.visitIdentifier(node, p);
+                                    }
+
+                                    @Override
+                                    public Void visitMemberSelect(MemberSelectTree node, Void p) {
+                                        verifyElement();
+                                        return super.visitMemberSelect(node, p);
+                                    }
+                                    
+                                    private void verifyElement() {
+                                        if (!check) {
+                                            return ;
+                                        }
+
+                                        Element el = trees.getElement(getCurrentPath());
+                                        if (el == null) {
+                                            error("Unattributed tree: " + getCurrentPath().getLeaf());
                                         }
                                     }
                                 }.scan(e.getCompilationUnit(), null);

@@ -33,7 +33,12 @@ import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import com.sun.tools.javac.code.Symbol.Completer;
 import com.sun.tools.javac.code.Symbol.CompletionFailure;
+import com.sun.tools.javac.comp.Check;
+import com.sun.tools.javac.tree.EndPosTable;
+import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.util.Context;
+import com.sun.tools.javac.util.JCDiagnostic.DiagnosticPosition;
+import com.sun.tools.javac.util.Position;
 
 /** When a CompletionFailure is thrown when user code is running, it shouldn't be
  *  thrown out to the client code, but rather skipped, and then rethrown later if javac
@@ -106,23 +111,15 @@ public class DeferredCompletionFailureHandler {
         }
     };
 
-    public final Handler javacCodeHandler = new Handler() {
-        public void install() {
-        }
-        public void handleAPICompletionFailure(CompletionFailure cf) {
-            throw cf;
-        }
-        public void classSymbolCompleteFailed(ClassSymbol sym, Completer origCompleter) {}
-        public void classSymbolRemoved(ClassSymbol sym) {}
-        public void uninstall() {
-        }
-    };
+    public final JavacCompletionFailureHandler javacCodeHandler = new JavacCompletionFailureHandler();
 
+    private Check chk;
     private Handler handler = javacCodeHandler;
 
     @SuppressWarnings("this-escape")
     protected DeferredCompletionFailureHandler(Context context) {
         context.put(deferredCompletionFailureHandlerKey, this);
+        chk = Check.instance(context);
     }
 
     public Handler setHandler(Handler h) {
@@ -149,6 +146,18 @@ public class DeferredCompletionFailureHandler {
 
     public boolean isDeferredCompleter(Completer c) {
         return c instanceof DeferredCompleter;
+    }
+
+    public Completer disableImmediateReporting(Completer c) {
+        return sym -> {
+            DiagnosticPosition prevPos = javacCodeHandler.pos;
+            try {
+                javacCodeHandler.setPos(null);
+                c.complete(sym);
+            } finally {
+                javacCodeHandler.setPos(prevPos);
+            }
+        };
     }
 
     public interface Handler {
@@ -203,5 +212,34 @@ public class DeferredCompletionFailureHandler {
             this.members = prevMembers;
         }
 
+    }
+
+    public class JavacCompletionFailureHandler implements Handler {
+
+        private DiagnosticPosition pos = null;
+        private JavacCompletionFailureHandler() {}
+
+        public void install() {}
+
+        public void handleAPICompletionFailure(CompletionFailure cf) {
+            if (pos == null) {
+                throw cf;
+            } else {
+                chk.completionError(pos, cf);
+            }
+        }
+
+        public void classSymbolCompleteFailed(ClassSymbol sym, Completer origCompleter) {}
+
+        public void classSymbolRemoved(ClassSymbol sym) {}
+
+        public void uninstall() {}
+
+        public DiagnosticPosition setPos(DiagnosticPosition pos) {
+            DiagnosticPosition prev = this.pos;
+
+            this.pos = pos;
+            return prev;
+        }
     }
 }

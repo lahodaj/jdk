@@ -376,7 +376,7 @@ public class ModuleFinder {
                 }
             } else {
                 msym.module_info.classfile = fo;
-                msym.module_info.completer = new Symbol.Completer() {
+                msym.module_info.completer = dcfh.disableImmediateReporting(new Symbol.Completer() {
                     @Override
                     public void complete(Symbol sym) throws CompletionFailure {
                         classFinder.fillIn(msym.module_info);
@@ -385,7 +385,7 @@ public class ModuleFinder {
                     public String toString() {
                         return "ModuleInfoCompleter";
                     }
-                };
+                });
             }
         } catch (IOException e) {
             msym.kind = ERR;

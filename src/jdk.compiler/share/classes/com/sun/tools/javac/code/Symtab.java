@@ -107,6 +107,7 @@ public class Symtab {
 
     private final Names names;
     private final JavacMessages messages;
+    private final DeferredCompletionFailureHandler dcfh;
     private final Completer initialCompleter;
     private final Completer moduleCompleter;
 
@@ -329,7 +330,7 @@ public class Symtab {
 
     public void synthesizeEmptyInterfaceIfMissing(final Type type) {
         final Completer completer = type.tsym.completer;
-        type.tsym.completer = new Completer() {
+        type.tsym.completer = dcfh.disableImmediateReporting(new Completer() {
             @Override
             public void complete(Symbol sym) throws CompletionFailure {
                 try {
@@ -344,13 +345,13 @@ public class Symtab {
             public boolean isTerminal() {
                 return completer.isTerminal();
             }
-        };
+        });
     }
 
     public void synthesizeBoxTypeIfMissing(final Type type) {
         ClassSymbol sym = enterClass(java_base, boxedName[type.getTag().ordinal()]);
         final Completer completer = sym.completer;
-        sym.completer = new Completer() {
+        sym.completer = dcfh.disableImmediateReporting(new Completer() {
             @Override
             public void complete(Symbol sym) throws CompletionFailure {
                 try {
@@ -378,7 +379,7 @@ public class Symtab {
             public boolean isTerminal() {
                 return completer.isTerminal();
             }
-        };
+        });
     }
 
     // Enter a synthetic class that is used to mark classes in ct.sym.
@@ -631,15 +632,6 @@ public class Symtab {
         externalizableType = enterClass("java.io.Externalizable");
         objectInputType  = enterClass("java.io.ObjectInput");
         objectOutputType = enterClass("java.io.ObjectOutput");
-        synthesizeEmptyInterfaceIfMissing(autoCloseableType);
-        synthesizeEmptyInterfaceIfMissing(cloneableType);
-        synthesizeEmptyInterfaceIfMissing(serializableType);
-        synthesizeEmptyInterfaceIfMissing(lambdaMetafactory);
-        synthesizeEmptyInterfaceIfMissing(serializedLambdaType);
-        synthesizeEmptyInterfaceIfMissing(stringConcatFactory);
-        synthesizeBoxTypeIfMissing(doubleType);
-        synthesizeBoxTypeIfMissing(floatType);
-        synthesizeBoxTypeIfMissing(voidType);
 
         // Enter a synthetic class that is used to mark internal
         // proprietary classes in ct.sym.  This class does not have a
@@ -673,9 +665,19 @@ public class Symtab {
             arrayClass);
         arrayClass.members().enter(arrayCloneMethod);
 
+        dcfh = DeferredCompletionFailureHandler.instance(context);
         if (java_base != noModule)
-            java_base.completer = moduleCompleter::complete; //bootstrap issues
+            java_base.completer = dcfh.disableImmediateReporting(moduleCompleter::complete); //bootstrap issues
 
+        synthesizeEmptyInterfaceIfMissing(autoCloseableType);
+        synthesizeEmptyInterfaceIfMissing(cloneableType);
+        synthesizeEmptyInterfaceIfMissing(serializableType);
+        synthesizeEmptyInterfaceIfMissing(lambdaMetafactory);
+        synthesizeEmptyInterfaceIfMissing(serializedLambdaType);
+        synthesizeEmptyInterfaceIfMissing(stringConcatFactory);
+        synthesizeBoxTypeIfMissing(doubleType);
+        synthesizeBoxTypeIfMissing(floatType);
+        synthesizeBoxTypeIfMissing(voidType);
     }
 
     /** Define a new class given its name and owner.

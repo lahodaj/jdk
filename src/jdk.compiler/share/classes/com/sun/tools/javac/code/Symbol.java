@@ -700,16 +700,16 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
         if (completer != Completer.NULL_COMPLETER) {
             Completer c = completer;
             completer = Completer.NULL_COMPLETER;
-            c.complete(this);
+            try {
+                c.complete(this);
+            } catch (CompletionFailure cf) {
+                cf.dcfh.handleAPICompletionFailure(cf);
+            }
         }
     }
 
     public void apiComplete() throws CompletionFailure {
-        try {
-            complete();
-        } catch (CompletionFailure cf) {
-            cf.dcfh.handleAPICompletionFailure(cf);
-        }
+        complete();
     }
 
     /** True if the symbol represents an entity that exists.

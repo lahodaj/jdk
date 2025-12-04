@@ -124,6 +124,7 @@ public class Attr extends JCTree.Visitor {
     final ArgumentAttr argumentAttr;
     final MatchBindingsComputer matchBindingsComputer;
     final AttrRecover attrRecover;
+    final DeferredCompletionFailureHandler dcfh;
     final boolean captureMRefReturnType;
 
     public static Attr instance(Context context) {
@@ -164,6 +165,7 @@ public class Attr extends JCTree.Visitor {
         argumentAttr = ArgumentAttr.instance(context);
         matchBindingsComputer = MatchBindingsComputer.instance(context);
         attrRecover = AttrRecover.instance(context);
+        dcfh = DeferredCompletionFailureHandler.instance(context);
 
         Options options = Options.instance(context);
 
@@ -5424,6 +5426,7 @@ public class Attr extends JCTree.Visitor {
             Lint prevLint = chk.setLint(env.info.lint);
             JavaFileObject prev = log.useSource(c.sourcefile);
             ResultInfo prevReturnRes = env.info.returnResult;
+            DiagnosticPosition prevPosition = dcfh.javacCodeHandler.setPos(env.tree.pos());
 
             try {
                 if (c.isSealed() &&
@@ -5568,6 +5571,7 @@ public class Attr extends JCTree.Visitor {
                 env.info.returnResult = prevReturnRes;
                 log.useSource(prev);
                 chk.setLint(prevLint);
+                dcfh.javacCodeHandler.setPos(prevPosition);
             }
 
         }

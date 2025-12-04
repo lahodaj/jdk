@@ -52,6 +52,7 @@ import javax.tools.JavaFileObject.Kind;
 import javax.tools.StandardLocation;
 
 import com.sun.source.tree.ModuleTree.ModuleKind;
+import com.sun.tools.javac.code.DeferredCompletionFailureHandler;
 import com.sun.tools.javac.code.Directive;
 import com.sun.tools.javac.code.Directive.ExportsDirective;
 import com.sun.tools.javac.code.Directive.ExportsFlag;
@@ -146,6 +147,7 @@ public class Modules extends JCTree.Visitor {
     private final ModuleFinder moduleFinder;
     private final Source source;
     private final Target target;
+    private final DeferredCompletionFailureHandler dcfh;
     private final boolean allowModules;
     private final boolean allowAccessIntoSystem;
 
@@ -195,6 +197,7 @@ public class Modules extends JCTree.Visitor {
         fileManager = context.get(JavaFileManager.class);
         source = Source.instance(context);
         target = Target.instance(context);
+        dcfh = DeferredCompletionFailureHandler.instance(context);
         allowModules = Feature.MODULES.allowedInSource(source);
         Options options = Options.instance(context);
 
@@ -215,6 +218,53 @@ public class Modules extends JCTree.Visitor {
         limitModsOpt = options.get(Option.LIMIT_MODULES);
         moduleVersionOpt = options.get(Option.MODULE_VERSION);
         sourceLauncher = options.isSet("sourceLauncher");
+        mainCompleter = dcfh.disableImmediateReporting(new Completer() {
+            @Override
+            public void complete(Symbol sym) throws CompletionFailure {
+                ModuleSymbol msym = moduleFinder.findModule((ModuleSymbol) sym);
+
+                if (msym.kind == ERR) {
+                    //make sure the module is initialized:
+                    initErrModule(msym);
+                } else if ((msym.flags_field & Flags.AUTOMATIC_MODULE) != 0) {
+                    setupAutomaticModule(msym);
+                } else {
+                    try {
+                        msym.module_info.complete();
+                    } catch (CompletionFailure cf) {
+                        msym.kind = ERR;
+                        //make sure the module is initialized:
+                        initErrModule(msym);
+                        completeModule(msym);
+                        throw cf;
+                    }
+                }
+
+                // If module-info comes from a .java file, the underlying
+                // call of classFinder.fillIn will have called through the
+                // source completer, to Enter, and then to Modules.enter,
+                // which will call completeModule.
+                // But, if module-info comes from a .class file, the underlying
+                // call of classFinder.fillIn will just call ClassReader to read
+                // the .class file, and so we call completeModule here.
+                if (msym.module_info.classfile == null || msym.module_info.classfile.getKind() == Kind.CLASS) {
+                    completeModule(msym);
+                }
+            }
+
+            private void initErrModule(ModuleSymbol msym) {
+                msym.directives = List.nil();
+                msym.exports = List.nil();
+                msym.provides = List.nil();
+                msym.requires = List.nil();
+                msym.uses = List.nil();
+            }
+
+            @Override
+            public String toString() {
+                return "mainCompleter";
+            }
+        });
     }
 
     int depth = -1;
@@ -635,53 +685,7 @@ public class Modules extends JCTree.Visitor {
         }
     }
 
-    private final Completer mainCompleter = new Completer() {
-        @Override
-        public void complete(Symbol sym) throws CompletionFailure {
-            ModuleSymbol msym = moduleFinder.findModule((ModuleSymbol) sym);
-
-            if (msym.kind == ERR) {
-                //make sure the module is initialized:
-                initErrModule(msym);
-            } else if ((msym.flags_field & Flags.AUTOMATIC_MODULE) != 0) {
-                setupAutomaticModule(msym);
-            } else {
-                try {
-                    msym.module_info.complete();
-                } catch (CompletionFailure cf) {
-                    msym.kind = ERR;
-                    //make sure the module is initialized:
-                    initErrModule(msym);
-                    completeModule(msym);
-                    throw cf;
-                }
-            }
-
-            // If module-info comes from a .java file, the underlying
-            // call of classFinder.fillIn will have called through the
-            // source completer, to Enter, and then to Modules.enter,
-            // which will call completeModule.
-            // But, if module-info comes from a .class file, the underlying
-            // call of classFinder.fillIn will just call ClassReader to read
-            // the .class file, and so we call completeModule here.
-            if (msym.module_info.classfile == null || msym.module_info.classfile.getKind() == Kind.CLASS) {
-                completeModule(msym);
-            }
-        }
-
-        private void initErrModule(ModuleSymbol msym) {
-            msym.directives = List.nil();
-            msym.exports = List.nil();
-            msym.provides = List.nil();
-            msym.requires = List.nil();
-            msym.uses = List.nil();
-        }
-
-        @Override
-        public String toString() {
-            return "mainCompleter";
-        }
-    };
+    private final Completer mainCompleter;
 
     private void setupAutomaticModule(ModuleSymbol msym) throws CompletionFailure {
         try {
@@ -736,7 +740,7 @@ public class Modules extends JCTree.Visitor {
     }
 
     private Completer getSourceCompleter(JCCompilationUnit tree) {
-        return new Completer() {
+        return dcfh.disableImmediateReporting(new Completer() {
             @Override
             public void complete(Symbol sym) throws CompletionFailure {
                 ModuleSymbol msym = (ModuleSymbol) sym;
@@ -760,7 +764,7 @@ public class Modules extends JCTree.Visitor {
                 return "SourceCompleter: " + tree.sourcefile.getName();
             }
 
-        };
+        });
     }
 
     public boolean isRootModule(ModuleSymbol module) {
@@ -1458,7 +1462,7 @@ public class Modules extends JCTree.Visitor {
 
     private Completer getUnnamedModuleCompleter() {
         moduleFinder.findAllModules();
-        return new Symbol.Completer() {
+        return dcfh.disableImmediateReporting(new Symbol.Completer() {
             @Override
             public void complete(Symbol sym) throws CompletionFailure {
                 if (inInitModules) {
@@ -1478,7 +1482,7 @@ public class Modules extends JCTree.Visitor {
             public String toString() {
                 return "unnamedModule Completer";
             }
-        };
+        });
     }
 
     private final Map<ModuleSymbol, Set<ModuleSymbol>> requiresTransitiveCache = new HashMap<>();

@@ -428,7 +428,7 @@ public class JavaCompiler {
         diags = Factory.instance(context);
         dcfh = DeferredCompletionFailureHandler.instance(context);
 
-        finder.sourceCompleter = sourceCompleter;
+        finder.sourceCompleter = dcfh.disableImmediateReporting(sourceCompleter);
         modules.findPackageInFile = this::findPackageInFile;
         moduleFinder.moduleNameFromSourceReader = this::readModuleName;
 
