@@ -556,43 +556,11 @@ public class JavacFileManager extends BaseFileManager implements StandardJavaFil
 
     private final class ArchiveContainer implements Container {
         private final Path archivePath;
-        private final FileSystem fileSystem;
-        private final Map<RelativeDirectory, Path> packages;
+        private final OpenedFileSystem fileSystem;
 
         public ArchiveContainer(Path archivePath) throws IOException, ProviderNotFoundException {
             this.archivePath = archivePath;
-            if (multiReleaseValue != null && archivePath.toString().endsWith(".jar")) {
-                FileSystemProvider jarFSProvider = fsInfo.getJarFSProvider();
-                Assert.checkNonNull(jarFSProvider, "should have been caught before!");
-                Map<String, ?> env = fsInfo.readOnlyJarFSEnv(multiReleaseValue);
-                try {
-                    this.fileSystem = jarFSProvider.newFileSystem(archivePath, env);
-                } catch (ZipException ze) {
-                    throw new IOException("ZipException opening \"" + archivePath.getFileName() + "\": " + ze.getMessage(), ze);
-                }
-            } else {
-                // Less common case is possible if the file manager was not initialized in JavacTask,
-                // or if non "*.jar" files are on the classpath. If this is not a ZIP/JAR file then it
-                // will ignore ZIP specific parameters in env, and may not end up being read-only.
-                // However, Javac should never attempt to write back to archives either way.
-                Map<String, ?> env = fsInfo.readOnlyJarFSEnv(null);
-                this.fileSystem = FileSystems.newFileSystem(archivePath, env);
-            }
-            packages = new HashMap<>();
-            for (Path root : fileSystem.getRootDirectories()) {
-                Files.walkFileTree(root, NO_FILE_VISIT_OPTIONS, Integer.MAX_VALUE,
-                        new SimpleFileVisitor<Path>() {
-                            @Override
-                            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                                if (isValid(dir.getFileName())) {
-                                    packages.put(new RelativeDirectory(root.relativize(dir).toString()), dir);
-                                    return FileVisitResult.CONTINUE;
-                                } else {
-                                    return FileVisitResult.SKIP_SUBTREE;
-                                }
-                            }
-                        });
-            }
+            this.fileSystem = OpenedFileSystem.acquire(archivePath, multiReleaseValue);
         }
 
         /**
@@ -605,7 +573,7 @@ public class JavacFileManager extends BaseFileManager implements StandardJavaFil
                          Set<JavaFileObject.Kind> fileKinds,
                          boolean recurse,
                          ListBuffer<JavaFileObject> resultList) throws IOException {
-            Path resolvedSubdirectory = packages.get(subdirectory);
+            Path resolvedSubdirectory = fileSystem.packages.get(subdirectory);
 
             if (resolvedSubdirectory == null)
                 return ;
@@ -650,7 +618,7 @@ public class JavacFileManager extends BaseFileManager implements StandardJavaFil
         @Override
         public JavaFileObject getFileObject(Path userPath, RelativeFile name) throws IOException {
             RelativeDirectory root = name.dirname();
-            Path packagepath = packages.get(root);
+            Path packagepath = fileSystem.packages.get(root);
             if (packagepath != null) {
                 Path relpath = packagepath.resolve(name.basename());
                 if (Files.exists(relpath)) {
@@ -662,7 +630,7 @@ public class JavacFileManager extends BaseFileManager implements StandardJavaFil
 
         @Override
         public void close() throws IOException {
-            fileSystem.close();
+            fileSystem.release();
         }
 
         @Override
@@ -672,7 +640,133 @@ public class JavacFileManager extends BaseFileManager implements StandardJavaFil
 
         @Override
         public Iterable<RelativeDirectory> indexedDirectories() {
-            return packages.keySet();
+            return fileSystem.packages.keySet();
+        }
+    }
+
+    private static final class OpenedFileSystem {
+        record Key(Path archivePath, String multiReleaseValue) {}
+        private static final Map<Key, OpenedFileSystem> path2OpenedFileSystem = new HashMap<>();
+        private static int reused;
+        private static int nue;
+        public static synchronized OpenedFileSystem acquire(Path archivePath, String multiReleaseValue) throws IOException, ProviderNotFoundException {
+            Key key = new Key(archivePath, multiReleaseValue);
+            OpenedFileSystem result = path2OpenedFileSystem.get(key);
+            if (result == null) {
+                result = new OpenedFileSystem(key, archivePath, multiReleaseValue);
+                path2OpenedFileSystem.put(key, result);
+                nue++;
+            } else {
+                reused++;
+            }
+            result.useCount++;
+//            System.err.println("nue: " + nue + "/reused: " + reused);
+            return result;
+        }
+        private final Key key;
+        private final FileSystem fileSystem;
+        private final Map<RelativeDirectory, Path> packages;
+        private int useCount;
+
+        private OpenedFileSystem(Key key, Path archivePath, String multiReleaseValue) throws IOException, ProviderNotFoundException {
+            this.key = key;
+            if (multiReleaseValue != null && archivePath.toString().endsWith(".jar")) {
+                FileSystemProvider jarFSProvider = getJarFSProvider();
+                Assert.checkNonNull(jarFSProvider, "should have been caught before!");
+                Map<String, ?> env = readOnlyJarFSEnv(multiReleaseValue);
+                try {
+                    this.fileSystem = jarFSProvider.newFileSystem(archivePath, env);
+                } catch (ZipException ze) {
+                    throw new IOException("ZipException opening \"" + archivePath.getFileName() + "\": " + ze.getMessage(), ze);
+                }
+            } else {
+                // Less common case is possible if the file manager was not initialized in JavacTask,
+                // or if non "*.jar" files are on the classpath. If this is not a ZIP/JAR file then it
+                // will ignore ZIP specific parameters in env, and may not end up being read-only.
+                // However, Javac should never attempt to write back to archives either way.
+                Map<String, ?> env = readOnlyJarFSEnv(null);
+                this.fileSystem = FileSystems.newFileSystem(archivePath, env);
+            }
+            Map<RelativeDirectory, Path> packages = new HashMap<>();
+            for (Path root : fileSystem.getRootDirectories()) {
+                Files.walkFileTree(root, NO_FILE_VISIT_OPTIONS, Integer.MAX_VALUE,
+                        new SimpleFileVisitor<Path>() {
+                            @Override
+                            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                                if (isValid(dir.getFileName())) {
+                                    packages.put(new RelativeDirectory(root.relativize(dir).toString()), dir);
+                                    return FileVisitResult.CONTINUE;
+                                } else {
+                                    return FileVisitResult.SKIP_SUBTREE;
+                                }
+                            }
+                        });
+            }
+            this.packages = Map.copyOf(packages);
+        }
+
+        private boolean isValid(Path fileName) {
+            if (fileName == null) {
+                return true;
+            } else {
+                String name = fileName.toString();
+                if (name.endsWith("/")) {
+                    name = name.substring(0, name.length() - 1);
+                }
+                return SourceVersion.isIdentifier(name);
+            }
+        }
+
+        public void release() throws IOException {
+            synchronized (OpenedFileSystem.class) {
+                useCount--;
+
+                if (useCount == 0) {
+                    path2OpenedFileSystem.remove(key);
+                    fileSystem.close();
+                }
+            }
+        }
+
+        private static FileSystemProvider jarFSProvider;
+
+        public static synchronized FileSystemProvider getJarFSProvider() {
+            if (jarFSProvider != null) {
+                return jarFSProvider;
+            }
+            for (FileSystemProvider provider: FileSystemProvider.installedProviders()) {
+                if (provider.getScheme().equals("jar")) {
+                    return (jarFSProvider = provider);
+                }
+            }
+            return null;
+        }
+
+        // Must match the keys/values expected by ZipFileSystem.java.
+        private static final Map<String, String> READ_ONLY_JARFS_ENV = Map.of(
+                // Jar files opened by Javac should always be read-only.
+                "accessMode", "readOnly",
+                // ignores timestamps not stored in ZIP central directory, reducing I/O.
+                "zipinfo-time", "false");
+
+        /**
+         * Returns a {@link java.nio.file.FileSystem FileSystem} environment map
+         * suitable for creating read-only JAR file-systems with default timestamp
+         * information via {@link FileSystemProvider#newFileSystem(Path, Map)}
+         * or {@link java.nio.file.FileSystems#newFileSystem(Path, Map)}.
+         *
+         * @param releaseVersion the release version to use when creating a
+         *                       file-system from a multi-release JAR (or
+         *                       {@code null} to ignore release versioning).
+         */
+        public static Map<String, ?> readOnlyJarFSEnv(String releaseVersion) {
+            if (releaseVersion == null) {
+                return READ_ONLY_JARFS_ENV;
+            }
+            // Multi-release JARs need an additional attribute.
+            Map<String, String> env = new HashMap<>(READ_ONLY_JARFS_ENV);
+            env.put("releaseVersion", releaseVersion);
+            return Collections.unmodifiableMap(env);
         }
     }
 
