@@ -645,22 +645,16 @@ public class JavacFileManager extends BaseFileManager implements StandardJavaFil
     }
 
     private static final class OpenedFileSystem {
-        record Key(Path archivePath, String multiReleaseValue) {}
+        record Key(Path archivePath, long size, long lastModified, Object key, String multiReleaseValue) {}
         private static final Map<Key, OpenedFileSystem> path2OpenedFileSystem = new HashMap<>();
-        private static int reused;
-        private static int nue;
         public static synchronized OpenedFileSystem acquire(Path archivePath, String multiReleaseValue) throws IOException, ProviderNotFoundException {
-            Key key = new Key(archivePath, multiReleaseValue);
+            BasicFileAttributes attrs = Files.readAttributes(archivePath, BasicFileAttributes.class);
+            Key key = new Key(archivePath, attrs.size(), attrs.lastModifiedTime().toMillis(), attrs.fileKey(), multiReleaseValue);
             OpenedFileSystem result = path2OpenedFileSystem.get(key);
             if (result == null) {
                 result = new OpenedFileSystem(key, archivePath, multiReleaseValue);
                 path2OpenedFileSystem.put(key, result);
-                nue++;
-            } else {
-                reused++;
             }
-            result.useCount++;
-//            System.err.println("nue: " + nue + "/reused: " + reused);
             return result;
         }
         private final Key key;
