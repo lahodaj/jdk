@@ -657,6 +657,7 @@ public class JavacFileManager extends BaseFileManager implements StandardJavaFil
                     result = new OpenedFileSystem(key, archivePath, multiReleaseValue);
                     key2OpenedFileSystem.put(key, new WeakReference<>(result));
                 }
+                result.useCount++;
                 return result;
             }
 
