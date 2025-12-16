@@ -149,9 +149,9 @@ public class FSInfo {
         return retVal;
     }
 
-    private FileSystemProvider jarFSProvider;
+    private static FileSystemProvider jarFSProvider;
 
-    public synchronized FileSystemProvider getJarFSProvider() {
+    public static synchronized FileSystemProvider getJarFSProvider() {
         if (jarFSProvider != null) {
             return jarFSProvider;
         }
@@ -180,7 +180,7 @@ public class FSInfo {
      *                       file-system from a multi-release JAR (or
      *                       {@code null} to ignore release versioning).
      */
-    public Map<String, ?> readOnlyJarFSEnv(String releaseVersion) {
+    public static Map<String, ?> readOnlyJarFSEnv(String releaseVersion) {
         if (releaseVersion == null) {
             return READ_ONLY_JARFS_ENV;
         }

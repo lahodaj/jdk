@@ -233,7 +233,7 @@ public class Locations {
         }
 
         Path enclosingJar = null;
-        if (file.getFileSystem().provider() == fsInfo.getJarFSProvider()) {
+        if (file.getFileSystem().provider() == FSInfo.getJarFSProvider()) {
             URI uri = file.toUri();
             if (uri.getScheme().equals("jar")) {
                 String ssp = uri.getSchemeSpecificPart();
@@ -386,7 +386,7 @@ public class Locations {
                             return;
                         }
                     } else {
-                        if (fsInfo.getJarFSProvider() == null) {
+                        if (FSInfo.getJarFSProvider() == null) {
                             log.error(Errors.NoZipfsForArchive(file));
                             return ;
                         }
@@ -1372,12 +1372,12 @@ public class Locations {
                 }
 
                 if (p.getFileName().toString().endsWith(".jar") && fsInfo.exists(p)) {
-                    FileSystemProvider jarFSProvider = fsInfo.getJarFSProvider();
+                    FileSystemProvider jarFSProvider = FSInfo.getJarFSProvider();
                     if (jarFSProvider == null) {
                         log.error(Errors.NoZipfsForArchive(p));
                         return null;
                     }
-                    try (FileSystem fs = jarFSProvider.newFileSystem(p, fsInfo.readOnlyJarFSEnv(releaseVersion))) {
+                    try (FileSystem fs = jarFSProvider.newFileSystem(p, FSInfo.readOnlyJarFSEnv(releaseVersion))) {
                         Path moduleInfoClass = fs.getPath("module-info.class");
                         if (Files.exists(moduleInfoClass)) {
                             String moduleName = readModuleName(moduleInfoClass);
@@ -1448,12 +1448,12 @@ public class Locations {
                         // workaround for now
                         FileSystem fs = fileSystems.get(p);
                         if (fs == null) {
-                            FileSystemProvider jarFSProvider = fsInfo.getJarFSProvider();
+                            FileSystemProvider jarFSProvider = FSInfo.getJarFSProvider();
                             if (jarFSProvider == null) {
                                 log.error(Errors.LocnCantReadFile(p));
                                 return null;
                             }
-                            fs = jarFSProvider.newFileSystem(p, fsInfo.readOnlyJarFSEnv(null));
+                            fs = jarFSProvider.newFileSystem(p, FSInfo.readOnlyJarFSEnv(null));
                             try {
                                 Path moduleInfoClass = fs.getPath("classes/module-info.class");
                                 String moduleName = readModuleName(moduleInfoClass);
