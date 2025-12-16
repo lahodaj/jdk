@@ -57,6 +57,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
@@ -648,69 +649,46 @@ public class JavacFileManager extends BaseFileManager implements StandardJavaFil
         private static final class OpenedFileSystem {
             private record Key(Path archivePath, long size, long lastModified, Object key, String multiReleaseValue) {}
             private static final Map<Key, Reference<OpenedFileSystem>> key2OpenedFileSystem = new HashMap<>();
-            public static synchronized OpenedFileSystem acquire(Path archivePath, String multiReleaseValue) throws IOException, ProviderNotFoundException {
+            private static final Set<Key> beingOpen = new HashSet<>();
+
+            public static OpenedFileSystem acquire(Path archivePath, String multiReleaseValue) throws IOException, ProviderNotFoundException {
                 BasicFileAttributes attrs = Files.readAttributes(archivePath, BasicFileAttributes.class);
                 Key key = new Key(archivePath, attrs.size(), attrs.lastModifiedTime().toMillis(), attrs.fileKey(), multiReleaseValue);
-                Reference<OpenedFileSystem> ref = key2OpenedFileSystem.get(key);
-                OpenedFileSystem result = ref != null ? ref.get() : null;
-                if (result == null) {
-                    result = new OpenedFileSystem(key, archivePath, multiReleaseValue);
-                    key2OpenedFileSystem.put(key, new WeakReference<>(result));
-                }
-                result.useCount++;
-                return result;
-            }
 
-            //TODO: would be better to not block all threads while opening the filesystem:
-//            private static final Map<Key, Reference<OpenedFileSystem>> key2OpenedFileSystem = new HashMap<>();
-//            private static final Set<Key> beingOpen = new HashSet<>();
-//
-//            public static OpenedFileSystem acquire(Path archivePath, String multiReleaseValue) throws IOException, ProviderNotFoundException {
-//                BasicFileAttributes attrs = Files.readAttributes(archivePath, BasicFileAttributes.class);
-//                Key key = new Key(archivePath, attrs.size(), attrs.lastModifiedTime().toMillis(), attrs.fileKey(), multiReleaseValue);
-//
-//                synchronized (key2OpenedFileSystem) {
-//                    while (true) {
-//                        Reference<OpenedFileSystem> ref =
-//                                key2OpenedFileSystem.get(key);
-//                        OpenedFileSystem result = ref != null ? ref.get() : null;
-//
-//                        if (result != null) {
-//                            result.useCount++;
-//                            return result;
-//                        }
-//
-//                        if (beingOpen.add(key)) {
-//                            break;
-//                        }
-//
-//                        try {
-//                            key2OpenedFileSystem.wait();
-//                        } catch (InterruptedException ex) {
-//                            Thread.currentThread().interrupt();
-//                        }
-//                    }
-//                }
-//
-//                OpenedFileSystem result =
-//                        new OpenedFileSystem(key, archivePath, multiReleaseValue);
-//
-//                synchronized (key2OpenedFileSystem) {
-//                    key2OpenedFileSystem.put(key, new WeakReference<>(result));
-//                    key2OpenedFileSystem.notifyAll();
-//                    beingOpen.remove(key);
-//                    result.useCount++;
-//                    return result;
-//                }
-//            }
-//            public void release() throws IOException {
-//                synchronized (key2OpenedFileSystem) {
-//                    if (--useCount == 0) {
-//                        key2OpenedFileSystem.remove(key);
-//                        fileSystem.close();
-//                    }
-//                }
-//            }
+                synchronized (key2OpenedFileSystem) {
+                    while (true) {
+                        Reference<OpenedFileSystem> ref =
+                                key2OpenedFileSystem.get(key);
+                        OpenedFileSystem result = ref != null ? ref.get() : null;
+
+                        if (result != null) {
+                            result.useCount++;
+                            return result;
+                        }
+
+                        if (beingOpen.add(key)) {
+                            break;
+                        }
+
+                        try {
+                            key2OpenedFileSystem.wait();
+                        } catch (InterruptedException ex) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                }
+
+                OpenedFileSystem result =
+                        new OpenedFileSystem(key, archivePath, multiReleaseValue);
+
+                synchronized (key2OpenedFileSystem) {
+                    key2OpenedFileSystem.put(key, new WeakReference<>(result));
+                    key2OpenedFileSystem.notifyAll();
+                    beingOpen.remove(key);
+                    result.useCount++;
+                    return result;
+                }
+            }
 
             private final Key key;
             private final FileSystem fileSystem;
@@ -755,7 +733,7 @@ public class JavacFileManager extends BaseFileManager implements StandardJavaFil
             }
 
             public void release() throws IOException {
-                synchronized (OpenedFileSystem.class) {
+                synchronized (key2OpenedFileSystem) {
                     if (--useCount == 0) {
                         key2OpenedFileSystem.remove(key);
                         fileSystem.close();
