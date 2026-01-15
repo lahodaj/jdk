@@ -158,6 +158,11 @@ public enum Source {
       * 26, tbd
       */
     JDK26("26"),
+
+    /**
+      * 27, tbd
+      */
+    JDK27("27"),
     ; // Reduce code churn when appending new constants
 
     private static final Context.Key<Source> sourceKey = new Context.Key<>();
@@ -210,6 +215,7 @@ public enum Source {
 
     public Target requiredTarget() {
         return switch(this) {
+        case JDK27  -> Target.JDK1_27;
         case JDK26  -> Target.JDK1_26;
         case JDK25  -> Target.JDK1_25;
         case JDK24  -> Target.JDK1_24;
@@ -277,7 +283,8 @@ public enum Source {
         JAVA_BASE_TRANSITIVE(JDK25, Fragments.FeatureJavaBaseTransitive, DiagKind.PLURAL),
         PRIVATE_MEMBERS_IN_PERMITS_CLAUSE(JDK19),
         ERASE_POLY_SIG_RETURN_TYPE(JDK24),
-        CONSTANT_PATTERNS(JDK26, Fragments.FeatureConstantPatterns, DiagKind.PLURAL), //TODO: will not be JDK 26, but there's no newer usable constant(!!!)
+        CAPTURE_MREF_RETURN_TYPE(JDK26),
+        CONSTANT_PATTERNS(JDK27, Fragments.FeatureConstantPatterns, DiagKind.PLURAL), //TODO: may or may not be JDK 27, but there's no newer usable constant(!!!)
         ;
 
         enum DiagKind {
@@ -366,6 +373,7 @@ public enum Source {
         case JDK24  -> RELEASE_24;
         case JDK25  -> RELEASE_25;
         case JDK26  -> RELEASE_26;
+        case JDK27  -> RELEASE_27;
         default     -> null;
         };
     }
