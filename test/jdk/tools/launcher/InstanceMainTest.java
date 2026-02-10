@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2023, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,6 +33,7 @@ import java.util.function.Consumer;
  * @run main/timeout=480 InstanceMainTest
  */
 public class InstanceMainTest extends TestHelper {
+    private static String JAVA_VERSION = System.getProperty("java.specification.version");
 
     private static final String[] SOURCES = new String[] {
             // static dominating with args
@@ -227,11 +228,7 @@ public class InstanceMainTest extends TestHelper {
     private static void testExecutionOrder() throws Exception {
         for (TestCase testCase : EXECUTION_ORDER) {
             performTest(testCase.sourceCode, testCase.enablePreview(), tr -> {
-                if (!Objects.equals(testCase.expectedOutput, tr.testOutput)) {
-                    throw new AssertionError("Unexpected output, " +
-                            "expected: " + testCase.expectedOutput +
-                            ", actual: " + tr.testOutput);
-                }
+                assertEquals(testCase.expectedOutput, tr.testOutput);
             });
         }
     }
@@ -350,20 +347,171 @@ public class InstanceMainTest extends TestHelper {
     private static void performTest(String source, boolean enablePreview, Consumer<TestResult> validator) throws Exception {
         Path mainClass = Path.of("MainClass.java");
         Files.writeString(mainClass, source);
-        var version = System.getProperty("java.specification.version");
         var previewRuntime = enablePreview ? "--enable-preview" : "-DtestNoPreview";
         var previewCompile = enablePreview ? "--enable-preview" : "-XDtestNoPreview";
-        var trSource = doExec(javaCmd, previewRuntime, "--source", version, "MainClass.java");
+        var trSource = doExec(javaCmd, previewRuntime, "--source", JAVA_VERSION, "MainClass.java");
         validator.accept(trSource);
-        compile(previewCompile, "--source", version, "MainClass.java");
+        compile(previewCompile, "--source", JAVA_VERSION, "MainClass.java");
         String cp = mainClass.toAbsolutePath().getParent().toString();
         var trCompile = doExec(javaCmd, previewRuntime, "--class-path", cp, "MainClass");
         validator.accept(trCompile);
     }
 
+    private static void testInheritance() throws Exception {
+        Path packagePrivateTest = Path.of("packageprivate");
+        Path src = packagePrivateTest.resolve("src");
+        Path classes = packagePrivateTest.resolve("classes");
+        Path mainClass = src.resolve("Main.java");
+        Path libClass = src.resolve("p").resolve("Lib.java");
+
+        Files.createDirectories(libClass.getParent());
+
+        Files.writeString(mainClass,
+                          """
+                          import p.Lib;
+
+                          public class Main extends Lib {
+                              public void main() {
+                                  System.err.println("Main!");
+                              }
+                          }
+                          """);
+
+        {
+            Files.writeString(libClass,
+                              """
+                              package p;
+                              public class Lib {
+                                  void main(String... args) {
+                                      System.err.println("Lib!");
+                                  }
+                              }
+                              """);
+            compile("--release", JAVA_VERSION, "-d", classes.toString(), mainClass.toString(), libClass.toString());
+            var tr = doExec(javaCmd, "--class-path", classes.toString(), "Main");
+            assertEquals(List.of("Main!"), tr.testOutput);
+        }
+
+        {
+            Files.writeString(libClass,
+                              """
+                              package p;
+                              public class Lib {
+                                  protected void main(String... args) {
+                                      System.err.println("Lib!");
+                                  }
+                              }
+                              """);
+            compile("--release", JAVA_VERSION, "-d", classes.toString(), mainClass.toString(), libClass.toString());
+            var tr = doExec(javaCmd, "--class-path", classes.toString(), "Main");
+            assertEquals(List.of("Lib!"), tr.testOutput);
+        }
+
+        {
+            Files.writeString(libClass,
+                              """
+                              package p;
+                              public class Lib {
+                                  public void main(String... args) {
+                                      System.err.println("Lib!");
+                                  }
+                              }
+                              """);
+            compile("--release", JAVA_VERSION, "-d", classes.toString(), mainClass.toString(), libClass.toString());
+            var tr = doExec(javaCmd, "--class-path", classes.toString(), "Main");
+            assertEquals(List.of("Lib!"), tr.testOutput);
+        }
+
+        {
+            Files.writeString(mainClass,
+                              """
+                              package p;
+
+                              public class Main extends Lib {
+                                  public void main() {
+                                      System.err.println("Main!");
+                                  }
+                              }
+                              """);
+
+            Files.writeString(libClass,
+                              """
+                              package p;
+                              public class Lib {
+                                  void main(String... args) {
+                                      System.err.println("Lib!");
+                                  }
+                              }
+                              """);
+            compile("--release", JAVA_VERSION, "-d", classes.toString(), mainClass.toString(), libClass.toString());
+            var tr = doExec(javaCmd, "--class-path", classes.toString(), "p.Main");
+            assertEquals(List.of("Lib!"), tr.testOutput);
+        }
+
+        {
+            Files.writeString(mainClass,
+                              """
+                              package p;
+
+                              public class Main implements Lib {
+                                  public void main() {
+                                      System.err.println("Main!");
+                                  }
+                              }
+                              """);
+
+            Files.writeString(libClass,
+                              """
+                              package p;
+                              public interface Lib {
+                                  public default void main(String... args) {
+                                      System.err.println("Lib!");
+                                  }
+                              }
+                              """);
+            compile("--release", JAVA_VERSION, "-d", classes.toString(), mainClass.toString(), libClass.toString());
+            var tr = doExec(javaCmd, "--class-path", classes.toString(), "p.Main");
+            assertEquals(List.of("Lib!"), tr.testOutput);
+        }
+
+        {
+            Files.writeString(mainClass,
+                              """
+                              package p;
+
+                              public class Main implements Lib {
+                                  public void main() {
+                                      System.err.println("Main!");
+                                  }
+                              }
+                              """);
+
+            Files.writeString(libClass,
+                              """
+                              package p;
+                              public interface Lib {
+                                  public static void main(String... args) {
+                                      System.err.println("Lib!");
+                                  }
+                              }
+                              """);
+            compile("--release", JAVA_VERSION, "-d", classes.toString(), mainClass.toString(), libClass.toString());
+            var tr = doExec(javaCmd, "--class-path", classes.toString(), "p.Main");
+            assertEquals(List.of("Main!"), tr.testOutput);
+        }
+    }
+
+    private static void assertEquals(List<String> expected, List<String> actual) {
+        if (!Objects.equals(expected, actual)) {
+            throw new AssertionError("Unexpected output, " +
+                    "expected: " + expected +
+                    ", actual: " + actual);
+        }
+    }
     public static void main(String... args) throws Exception {
         testMethodOrder();
         testExecutionOrder();
         testExecutionErrors();
+        testInheritance();
     }
 }
