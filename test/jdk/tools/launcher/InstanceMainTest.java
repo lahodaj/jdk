@@ -499,6 +499,62 @@ public class InstanceMainTest extends TestHelper {
             var tr = doExec(javaCmd, "--class-path", classes.toString(), "p.Main");
             assertEquals(List.of("Main!"), tr.testOutput);
         }
+
+        {
+            Files.writeString(mainClass,
+                              """
+                              package p;
+
+                              public class Main extends AbstractClass implements Lib {
+                              }
+                              abstract class AbstractClass {
+                                   public void main(String... args) {
+                                       System.err.println("Correct.");
+                                   }
+                              }
+                              """);
+
+            Files.writeString(libClass,
+                              """
+                              package p;
+                              public interface Lib {
+                                  default void main(String... args) {
+                                      System.err.println("Incorrect!");
+                                  }
+                              }
+                              """);
+            compile("--release", JAVA_VERSION, "-d", classes.toString(), mainClass.toString(), libClass.toString());
+            var tr = doExec(javaCmd, "--class-path", classes.toString(), "p.Main");
+            assertEquals(List.of("Correct."), tr.testOutput);
+        }
+
+        {
+            Files.writeString(mainClass,
+                              """
+                              package p;
+
+                              public class Main extends AbstractClass implements Lib {
+                              }
+                              abstract class AbstractClass {
+                                   public void main() {
+                                       System.err.println("Incorrect!");
+                                   }
+                              }
+                              """);
+
+            Files.writeString(libClass,
+                              """
+                              package p;
+                              public interface Lib {
+                                  default void main(String... args) {
+                                      System.err.println("Correct.");
+                                  }
+                              }
+                              """);
+            compile("--release", JAVA_VERSION, "-d", classes.toString(), mainClass.toString(), libClass.toString());
+            var tr = doExec(javaCmd, "--class-path", classes.toString(), "p.Main");
+            assertEquals(List.of("Correct."), tr.testOutput);
+        }
     }
 
     private static void assertEquals(List<String> expected, List<String> actual) {
