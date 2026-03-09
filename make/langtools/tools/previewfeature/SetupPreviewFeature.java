@@ -29,7 +29,7 @@ import com.sun.source.util.Trees;
 import java.io.StringWriter;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -53,7 +53,7 @@ public class SetupPreviewFeature {
         }
         var dummy = new StringWriter();
         var compiler = ToolProvider.getSystemJavaCompiler();
-        var source = Paths.get(args[0]);
+        var source = Path.of(args[0]);
         try (var fm = compiler.getStandardFileManager(null, null, null)) {
             JavacTask task =
                     (JavacTask) compiler.getTask(dummy, null, null, null, null, fm.getJavaFileObjects(source));
@@ -74,7 +74,7 @@ public class SetupPreviewFeature {
                 }
             }
             String sourceCode = Files.readString(source);
-            var target = Paths.get(args[1]);
+            var target = Path.of(args[1]);
             Files.createDirectories(target.getParent());
             try (var out = Files.newBufferedWriter(target)) {
                 if (constantsToAdd.isEmpty()) {
