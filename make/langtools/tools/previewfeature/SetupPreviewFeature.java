@@ -73,13 +73,13 @@ public class SetupPreviewFeature {
                     }
                 }
             }
-            String sourceCode = Files.readString(source);
             var target = Path.of(args[1]);
             Files.createDirectories(target.getParent());
-            try (var out = Files.newBufferedWriter(target)) {
-                if (constantsToAdd.isEmpty()) {
-                    out.write(sourceCode);
-                } else {
+            if (constantsToAdd.isEmpty()) {
+                Files.copy(source, target);
+            } else {
+                String sourceCode = Files.readString(source);
+                try (var out = Files.newBufferedWriter(target)) {
                     out.write(sourceCode, 0, insertPosition);
                     out.write(constantsToAdd.stream()
                                             .collect(Collectors.joining(", ",
