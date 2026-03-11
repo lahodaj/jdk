@@ -23,15 +23,16 @@
 
 /*
  * @test
- * @bug 8371155
+ * @bug 8371155 8379550
  * @summary Verify type annotations on local-like variables are propagated to
  *          their types at an appropriate time.
  * @library /tools/lib
  * @modules
  *      jdk.compiler/com.sun.tools.javac.api
  *      jdk.compiler/com.sun.tools.javac.main
+ *      jdk.jdeps/com.sun.tools.javap
  * @build toolbox.ToolBox toolbox.JavacTask
- * @run main TypeAnnotationsOnVariables
+ * @run junit TypeAnnotationsOnVariables
  */
 
 import com.sun.source.tree.LambdaExpressionTree;
@@ -41,31 +42,36 @@ import com.sun.source.util.TaskEvent;
 import com.sun.source.util.TaskListener;
 import com.sun.source.util.TreePathScanner;
 import com.sun.source.util.Trees;
+import java.lang.classfile.Attributes;
+import java.lang.classfile.ClassFile;
+import java.lang.classfile.ClassModel;
+import java.lang.classfile.MethodModel;
+import java.lang.classfile.TypeAnnotation;
+import java.lang.classfile.attribute.RuntimeInvisibleTypeAnnotationsAttribute;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.UnionType;
+import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import toolbox.JavacTask;
+import toolbox.JavapTask;
+import toolbox.Task;
 import toolbox.ToolBox;
 
 public class TypeAnnotationsOnVariables {
 
-    public static void main(String... args) throws Exception {
-        new TypeAnnotationsOnVariables().run();
-    }
+    final ToolBox tb = new ToolBox();
+    Path base;
 
-    ToolBox tb = new ToolBox();
-
-    void run() throws Exception {
-        typeAnnotationInConstantExpressionFieldInit(Paths.get("."));
-    }
-
-    void typeAnnotationInConstantExpressionFieldInit(Path base) throws Exception {
+    @Test
+    void typeAnnotationInConstantExpressionFieldInit() throws Exception {
         Path src = base.resolve("src");
         Path classes = base.resolve("classes");
         tb.writeJavaFiles(src,
@@ -207,5 +213,95 @@ public class TypeAnnotationsOnVariables {
             System.err.println("!!!");
         }
         return String.valueOf(tree).replaceAll("\\R", " ");
+    }
+
+    @Test
+    void properPathForLocalVarsInLambdas() throws Exception {
+        Path src = base.resolve("src");
+        Path classes = base.resolve("classes");
+        tb.writeJavaFiles(src,
+                          """
+                          import java.lang.annotation.ElementType;
+                          import java.lang.annotation.Target;
+                          import java.util.function.Supplier;
+
+                          class Test {
+                              @Target(ElementType.TYPE_USE)
+                              @interface TypeAnno { }
+
+                              void o() {
+                                  Runnable r = () -> {
+                                      @TypeAnno long test1 = 0;
+                                      while (true) {
+                                          @TypeAnno long test2 = 0;
+                                          System.err.println(test2);
+                                      }
+                                  };
+                              }
+                          }
+                          """);
+        Files.createDirectories(classes);
+        new JavacTask(tb)
+                .options("-d", classes.toString())
+                .files(tb.findJavaFiles(src))
+                .run()
+                .writeAll();
+
+        Path testClass = classes.resolve("Test.class");
+        ClassModel model = ClassFile.of().parse(testClass);
+        Map<String, List<MethodModel>> name2Method =
+                model.methods()
+                     .stream()
+                     .collect(Collectors.groupingBy(m -> m.methodName().stringValue()));
+        MethodModel oMethod = singletonValue(name2Method.get("o"));
+        var oTypeAnnos = getAnnotations(oMethod);
+        assertFalse(oTypeAnnos.isPresent(), () -> oTypeAnnos.toString());
+        String lambdaMethodName =
+                name2Method.keySet()
+                           .stream()
+                           .filter(s -> s.startsWith("lambda"))
+                           .findAny()
+                           .orElseThrow();
+        MethodModel lambdaMethod = singletonValue(name2Method.get(lambdaMethodName));
+        var lambdaTypeAnnos = getAnnotations(lambdaMethod);
+        assertTrue(lambdaTypeAnnos.isPresent(), () -> lambdaTypeAnnos.toString());
+
+        checkJavapOutput(testClass,
+                         List.of("      RuntimeInvisibleTypeAnnotations:",
+                                 "        0: #31(): LOCAL_VARIABLE, {start_pc=2, length=12, index=0}",
+                                 "          Test$TypeAnno",
+                                 "        1: #31(): LOCAL_VARIABLE, {start_pc=4, length=7, index=2}",
+                                 "          Test$TypeAnno"));
+    }
+
+    private <T> T singletonValue(List<T> values) {
+        assertEquals(1, values.size());
+        return values.get(0);
+    }
+
+    private Optional<RuntimeInvisibleTypeAnnotationsAttribute> getAnnotations(MethodModel m) {
+        return m.findAttribute(Attributes.code())
+                .orElseThrow()
+                .findAttribute(Attributes.runtimeInvisibleTypeAnnotations());
+    }
+
+    void checkJavapOutput(Path pathToClass, List<String> expectedOutput) {
+        String javapOut = new JavapTask(tb)
+                .options("-v", "-p")
+                .classes(pathToClass.toString())
+                .run()
+                .getOutput(Task.OutputKind.DIRECT);
+
+        for (String expected : expectedOutput) {
+            if (!javapOut.contains(expected)) {
+                System.err.println(javapOut);
+                throw new AssertionError("unexpected output");
+            }
+        }
+    }
+
+    @BeforeEach
+    void setUp(TestInfo thisTest) {
+        base = Path.of(thisTest.getTestMethod().orElseThrow().getName());
     }
 }
