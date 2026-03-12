@@ -28,7 +28,7 @@ import java.util.function.Consumer;
 
 /**
  * @test
- * @bug 8329420
+ * @bug 8329420 8377004
  * @summary test execution priority and behavior of main methods
  * @run main/timeout=480 InstanceMainTest
  */
