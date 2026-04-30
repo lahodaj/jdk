@@ -268,17 +268,28 @@ public class Check {
      *  @param pos        Position to be used for error reporting.
      *  @param required   An internationalized string describing the type tag
      *                    required.
-     *  @param found      The type that was found.
+     *  @param type       the type that was found
      */
-    Type typeTagError(DiagnosticPosition pos, JCDiagnostic required, Object found) {
+    Type typeTagError(DiagnosticPosition pos, JCDiagnostic required, Type type) {
+        return typeTagError(pos, required, type, type);
+    }
+
+    /** Report an error that wrong type tag was found.
+     *  @param pos        Position to be used for error reporting.
+     *  @param required   An internationalized string describing the type tag
+     *                    required.
+     *  @param message    the type that was found, as a user-friendly message
+     *  @param type       the type that was found
+     */
+    Type typeTagError(DiagnosticPosition pos, JCDiagnostic required, Object message, Type type) {
         // this error used to be raised by the parser,
         // but has been delayed to this point:
-        if (found instanceof Type type && type.hasTag(VOID)) {
+        if (type.hasTag(VOID)) {
             log.error(pos, Errors.IllegalStartOfType);
             return syms.errType;
         }
-        log.error(pos, Errors.TypeFoundReq(found, required));
-        return types.createErrorType(found instanceof Type type ? type : syms.errType);
+        log.error(pos, Errors.TypeFoundReq(message, required));
+        return types.createErrorType(type);
     }
 
     /** Report duplicate declaration error.
@@ -645,7 +656,8 @@ public class Check {
         if (!t.hasTag(CLASS) && !t.hasTag(ARRAY) && !t.hasTag(ERROR)) {
             return typeTagError(pos,
                                 diags.fragment(Fragments.TypeReqClassArray),
-                                asTypeParam(t));
+                                asTypeParam(t),
+                                t);
         } else {
             return t;
         }
@@ -659,7 +671,8 @@ public class Check {
         if (!t.hasTag(CLASS) && !t.hasTag(ERROR)) {
             return typeTagError(pos,
                                 diags.fragment(Fragments.TypeReqClass),
-                                asTypeParam(t));
+                                asTypeParam(t),
+                                t);
         } else {
             return t;
         }
