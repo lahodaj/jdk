@@ -62,7 +62,7 @@ import jdk.internal.classfile.impl.UnboundAttribute;
 public sealed interface Attribute<A extends Attribute<A>>
         extends ClassFileElement
         permits AnnotationDefaultAttribute, BootstrapMethodsAttribute,
-                CharacterRangeTableAttribute, CodeAttribute, CompilationIDAttribute,
+                CharacterRangeTableAttribute, ClassComponentsAttribute, CodeAttribute, CompilationIDAttribute,
                 ConstantValueAttribute, DeprecatedAttribute, EnclosingMethodAttribute,
                 ExceptionsAttribute, InnerClassesAttribute, LineNumberTableAttribute,
                 LocalVariableTableAttribute, LocalVariableTypeTableAttribute,

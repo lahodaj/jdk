@@ -306,6 +306,30 @@ public abstract sealed class UnboundAttribute<T extends Attribute<T>>
         }
     }
 
+    public static final class UnboundClassComponentsAttribute
+            extends UnboundAttribute<ClassComponentsAttribute>
+            implements ClassComponentsAttribute {
+
+        private static final Utf8Entry NAME = TemporaryConstantPool.INSTANCE.utf8Entry(Attributes.NAME_RECORD);
+
+        private final List<RecordComponentInfo> components;
+
+        public UnboundClassComponentsAttribute(List<RecordComponentInfo> components) {
+            super(Attributes.classComponents());
+            this.components = Util.sanitizeU2List(components);
+        }
+
+        @Override
+        public List<RecordComponentInfo> components() {
+            return components;
+        }
+
+        @Override
+        public Utf8Entry attributeName() {
+            return NAME;
+        }
+    }
+
     public static final class UnboundEnclosingMethodAttribute
             extends UnboundAttribute<EnclosingMethodAttribute>
             implements EnclosingMethodAttribute {

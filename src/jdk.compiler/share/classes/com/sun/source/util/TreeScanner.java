@@ -196,6 +196,7 @@ public class TreeScanner<R,P> implements TreeVisitor<R,P> {
     public R visitClass(ClassTree node, P p) {
         R r = scan(node.getModifiers(), p);
         r = scanAndReduce(node.getTypeParameters(), p, r);
+        r = scanAndReduce(node.getComponents(), p, r);
         r = scanAndReduce(node.getExtendsClause(), p, r);
         r = scanAndReduce(node.getImplementsClause(), p, r);
         r = scanAndReduce(node.getPermitsClause(), p, r);

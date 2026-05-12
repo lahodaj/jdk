@@ -238,6 +238,7 @@ public interface TypeElement extends Element, Parameterizable, QualifiedNameable
         return List.of();
     }
 
+    //TODO: getClassComponents() (!!!)
     /**
      * Returns the permitted classes of this class or interface
      * element in declaration order.

@@ -72,6 +72,9 @@ public interface ClassTree extends StatementTree {
      */
     List<? extends TypeParameterTree> getTypeParameters();
 
+    ///{@return the interface or record components defined by this type declaration.}
+    List<? extends VariableTree> getComponents();
+
     /**
      * Returns the supertype of this type declaration,
      * or {@code null} if none is provided.

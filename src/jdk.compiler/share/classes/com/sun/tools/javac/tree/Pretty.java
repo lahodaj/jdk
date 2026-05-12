@@ -37,6 +37,7 @@ import com.sun.tools.javac.util.*;
 import static com.sun.tools.javac.code.Flags.*;
 import static com.sun.tools.javac.code.Flags.ANNOTATION;
 import static com.sun.tools.javac.tree.JCTree.Tag.*;
+import java.util.Iterator;
 
 /** Prints out a tree as an indented Java source program.
  *
@@ -570,6 +571,7 @@ public class Pretty extends JCTree.Visitor {
                 print("interface ");
                 print(tree.name);
                 printTypeParameters(tree.typarams);
+                printClassComponents(tree);
                 if (tree.implementing.nonEmpty()) {
                     print(" extends ");
                     printExprs(tree.implementing);
@@ -581,10 +583,13 @@ public class Pretty extends JCTree.Visitor {
             } else {
                 if ((tree.mods.flags & ENUM) != 0)
                     print("enum ");
+                else if ((tree.mods.flags & RECORD) != 0)
+                    print("record ");
                 else
                     print("class ");
                 print(tree.name);
                 printTypeParameters(tree.typarams);
+                printClassComponents(tree);
                 if (tree.extending != null) {
                     print(" extends ");
                     printExpr(tree.extending);
@@ -607,6 +612,36 @@ public class Pretty extends JCTree.Visitor {
             enclClassName = enclClassNamePrev;
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    private void printClassComponents(JCClassDecl forTree) throws IOException {
+        //TODO: tests
+        if (forTree.headerFields != null) {
+            print('(');
+
+            String sep = "";
+
+            Iterator<JCVariableDecl> headerFieldsIt = forTree.headerFields.iterator();
+            Iterator<List<JCAnnotation>> headerFieldsAnnotationsIt = forTree.headerFieldsAnnotations != null ? forTree.headerFieldsAnnotations.iterator() : null;
+            Iterator<JCExpression> headerFieldsTypesIt = forTree.headerFieldsTypes != null ? forTree.headerFieldsTypes.iterator() : null;
+
+            while (headerFieldsIt.hasNext()) {
+                JCVariableDecl comp = headerFieldsIt.next();
+                print(sep);
+                List<JCAnnotation> annotations = headerFieldsAnnotationsIt != null ? headerFieldsAnnotationsIt.next() : comp.mods.annotations;
+                JCExpression type = headerFieldsTypesIt != null ? headerFieldsTypesIt.next() : comp.vartype;
+                if (annotations.nonEmpty()) {
+                    printAnnotations(annotations);
+                    print(' ');
+                }
+                printExpr(type); //TODO: varargs
+                print(' ');
+                print(comp.name);
+                sep = ", ";
+            }
+
+            print(')');
         }
     }
 

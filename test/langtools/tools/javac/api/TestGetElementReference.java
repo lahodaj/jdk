@@ -35,9 +35,7 @@ import com.sun.source.tree.Tree;
 import com.sun.source.util.*;
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -45,14 +43,10 @@ import javax.lang.model.element.Element;
 import javax.tools.Diagnostic;
 import javax.tools.DiagnosticCollector;
 import javax.tools.JavaFileObject;
-import javax.tools.SimpleJavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 
 public class TestGetElementReference {
-
-    private static final String JDK_VERSION =
-            Integer.toString(Runtime.getRuntime().version().feature());
 
     public static void main(String... args) throws IOException {
         analyze(false, "TestGetElementReferenceData.java");
@@ -136,17 +130,6 @@ public class TestGetElementReference {
             case CONSTRUCTOR: return symbolToString(el.getEnclosingElement().getEnclosingElement()) + "." + el.toString();
             default:
                 return el.toString();
-        }
-    }
-
-    static class TestFileObject extends SimpleJavaFileObject {
-        private final String text;
-        public TestFileObject(String text) {
-            super(URI.create("myfo:/Test.java"), JavaFileObject.Kind.SOURCE);
-            this.text = text;
-        }
-        @Override public CharSequence getCharContent(boolean ignoreEncodingErrors) {
-            return text;
         }
     }
 

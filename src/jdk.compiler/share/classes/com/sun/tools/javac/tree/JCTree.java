@@ -839,6 +839,14 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
         public Name name;
         /** formal class parameters */
         public List<JCTypeParameter> typarams;
+        /** header fields*/
+        public List<JCVariableDecl> headerFields = null; //TODO: should annotations really be filtered out of these???
+        /** unfiltered types of header fields*/
+        //TODO: can we find a better way?
+        public List<JCExpression> headerFieldsTypes = null;
+        /** unfiltered declaration annotations of header fields*/
+        //TODO: can we find a better way?
+        public List<List<JCAnnotation>> headerFieldsAnnotations = null;
         /** the classes this class extends */
         public JCExpression extending;
         /** the interfaces implemented by this class */
@@ -891,6 +899,11 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
         @DefinedBy(Api.COMPILER_TREE)
         public List<JCTypeParameter> getTypeParameters() {
             return typarams;
+        }
+        @DefinedBy(Api.COMPILER_TREE)
+        @Override
+        public List<JCVariableDecl> getComponents() {
+            return headerFields;
         }
         @DefinedBy(Api.COMPILER_TREE)
         public JCExpression getExtendsClause() { return extending; }

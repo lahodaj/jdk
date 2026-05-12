@@ -1024,6 +1024,46 @@ public class CreateSymbolsTestImpl {
                            """);
     }
 
+    @Test
+    void testDeconstructibleInterface() throws Exception {
+        doPrintElementTest("""
+                           package t;
+                           public interface I {
+                               public int c1();
+                               public String c2();
+                           }
+                           """,
+                           """
+                           package t;
+                           public interface I(int c1, String c2) {
+                               public int c1();
+                               public String c2();
+                           }
+                           """,
+                           "t.I",
+                           """
+                           package t;
+                           
+                           public interface I {
+                           
+                             int c1();
+                           
+                             java.lang.String c2();
+                           }
+                           """,
+                           "t.I",
+                           """
+                           package t;
+                           
+                           public interface I(int c1, java.lang.String c2) {
+                           
+                             int c1();
+                           
+                             java.lang.String c2();
+                           }
+                           """);
+    }
+
     void doTestData(String data,
                           String... code) throws Exception {
         String testClasses = System.getProperty("test.classes");

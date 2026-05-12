@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,9 @@
 
 package java.lang.reflect;
 
+import java.lang.annotation.Annotation;
+import java.util.Map;
+import java.util.Objects;
 import jdk.internal.access.SharedSecrets;
 import sun.reflect.annotation.AnnotationParser;
 import sun.reflect.annotation.TypeAnnotation;
@@ -33,20 +36,13 @@ import sun.reflect.generics.factory.CoreReflectionFactory;
 import sun.reflect.generics.factory.GenericsFactory;
 import sun.reflect.generics.repository.FieldRepository;
 import sun.reflect.generics.scope.ClassScope;
-import java.lang.annotation.Annotation;
-import java.util.Map;
-import java.util.Objects;
 
 /**
- * A {@code RecordComponent} provides information about, and dynamic access to, a
- * component of a record class.
+ * XXX
  *
- * @see Class#getRecordComponents()
- * @see java.lang.Record
- * @jls 8.10 Record Classes
- * @since 16
+ * @since 26
  */
-public final class RecordComponent extends AbstractDataComponent {
+public final class ClassComponent extends AbstractDataComponent {
     // declaring class
     private Class<?> clazz;
     private String name;
@@ -57,10 +53,31 @@ public final class RecordComponent extends AbstractDataComponent {
     private transient volatile FieldRepository genericInfo;
     private byte[] annotations;
     private byte[] typeAnnotations;
-    private RecordComponent root;
+    private ClassComponent root;
 
     // only the JVM can create record components
-    private RecordComponent() {}
+    private ClassComponent() {}
+
+    /**
+     * This is transient, this should not be part of the API.
+     *
+     * @param clazz XXX
+     * @param name XXX
+     * @param type XXX
+     * @param accessor XXX
+     * @param signature XXX
+     * @param annotations XXX
+     * @param typeAnnotations XXX
+     */
+    public ClassComponent(Class<?> clazz, String name, Class<?> type, Method accessor, String signature, byte[] annotations, byte[] typeAnnotations) {
+        this.clazz = clazz;
+        this.name = name;
+        this.type = type;
+        this.accessor = accessor;
+        this.signature = signature;
+        this.annotations = annotations;
+        this.typeAnnotations = typeAnnotations;
+    }
 
     /**
      * Returns the name of this record component.
@@ -139,7 +156,7 @@ public final class RecordComponent extends AbstractDataComponent {
 
     // Accessor for factory
     private GenericsFactory getFactory() {
-        Class<?> c = getDeclaringRecord();
+        Class<?> c = getDeclaringClass();
         // create scope and factory
         return CoreReflectionFactory.make(c, ClassScope.make(c));
     }
@@ -153,9 +170,9 @@ public final class RecordComponent extends AbstractDataComponent {
     public AnnotatedType getAnnotatedType() {
         return TypeAnnotationParser.buildAnnotatedType(typeAnnotations,
                 SharedSecrets.getJavaLangAccess().
-                        getConstantPool(getDeclaringRecord()),
+                        getConstantPool(getDeclaringClass()),
                 this,
-                getDeclaringRecord(),
+                getDeclaringClass(),
                 getGenericType(),
                 TypeAnnotation.TypeAnnotationTarget.FIELD);
     }
@@ -190,15 +207,15 @@ public final class RecordComponent extends AbstractDataComponent {
         if ((declAnnos = declaredAnnotations) == null) {
             synchronized (this) {
                 if ((declAnnos = declaredAnnotations) == null) {
-                    RecordComponent root = this.root;
+                    ClassComponent root = this.root;
                     if (root != null) {
                         declAnnos = root.declaredAnnotations();
                     } else {
                         declAnnos = AnnotationParser.parseAnnotations(
                                 annotations,
                                 SharedSecrets.getJavaLangAccess()
-                                        .getConstantPool(getDeclaringRecord()),
-                                getDeclaringRecord());
+                                        .getConstantPool(getDeclaringClass()),
+                                getDeclaringClass());
                     }
                     declaredAnnotations = declAnnos;
                 }
@@ -246,12 +263,7 @@ public final class RecordComponent extends AbstractDataComponent {
      *
      * @return The record class declaring this record component.
      */
-    public Class<?> getDeclaringRecord() {
-        return clazz;
-    }
-
-    @Override
     public Class<?> getDeclaringClass() {
-        return getDeclaringRecord();
+        return clazz;
     }
 }

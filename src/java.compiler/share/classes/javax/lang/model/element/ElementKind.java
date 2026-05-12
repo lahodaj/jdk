@@ -118,6 +118,12 @@ public enum ElementKind {
     RECORD_COMPONENT,
 
     /**
+     * A class component of a {@code class} or {@code interface}.
+     * @since 99
+     */
+    CLASS_COMPONENT,
+
+    /**
      * A binding variable in a pattern.
      * @since 16
      */

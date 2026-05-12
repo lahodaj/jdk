@@ -429,6 +429,30 @@ public abstract sealed class BoundAttribute<T extends Attribute<T>>
         }
     }
 
+    public static final class BoundClassComponentsAttribute extends BoundAttribute<ClassComponentsAttribute>
+            implements ClassComponentsAttribute {
+        private List<RecordComponentInfo> components = null;
+
+        public BoundClassComponentsAttribute(ClassReader cf, AttributeMapper<ClassComponentsAttribute> mapper, int pos) {
+            super(cf, mapper, pos);
+        }
+
+        @Override
+        public List<RecordComponentInfo> components() {
+            if (components == null) {
+                final int cnt = classReader.readU2(payloadStart);
+                RecordComponentInfo[] elements = new RecordComponentInfo[cnt];
+                int p = payloadStart + 2;
+                for (int i = 0; i < cnt; i++) {
+                    elements[i] = new BoundRecordComponentInfo(classReader, p);
+                    p = classReader.skipAttributeHolder(p + 4);
+                }
+                components = List.of(elements);
+            }
+            return components;
+        }
+    }
+
     public static final class BoundDeprecatedAttribute extends BoundAttribute<DeprecatedAttribute>
             implements DeprecatedAttribute {
         public BoundDeprecatedAttribute(ClassReader cf, AttributeMapper<DeprecatedAttribute> mapper, int pos) {
@@ -1049,6 +1073,8 @@ public abstract sealed class BoundAttribute<T extends Attribute<T>>
                 name.equalsString(NAME_PERMITTED_SUBCLASSES) ? permittedSubclasses() : null;
             case 0xd1ab5871 ->
                 name.equalsString(NAME_RECORD) ? record() : null;
+            case 0xe1534a8e ->
+                name.equalsString(NAME_CLASS_COMPONENTS) ? classComponents(): null;
             case 0x7588550f ->
                 name.equalsString(NAME_RUNTIME_INVISIBLE_ANNOTATIONS) ? runtimeInvisibleAnnotations() : null;
             case 0xcc74da30 ->

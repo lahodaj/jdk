@@ -1996,6 +1996,10 @@ public class Flow {
                 }
 
                 // define all the instance fields
+                if (tree.sym.isRecord()) {
+                    tree.headerFields
+                        .forEach(component -> newVar(((RecordComponent) component.sym).fieldDecl));
+                }
                 for (List<JCTree> l = tree.defs; l.nonEmpty(); l = l.tail) {
                     if (l.head.hasTag(VARDEF)) {
                         JCVariableDecl def = (JCVariableDecl)l.head;

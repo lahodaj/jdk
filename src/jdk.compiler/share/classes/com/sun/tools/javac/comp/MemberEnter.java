@@ -250,9 +250,11 @@ public class MemberEnter extends JCTree.Visitor {
     }
 
     public void visitVarDef(JCVariableDecl tree) {
+        int headIdx = env.enclClass.headerFields != null ? env.enclClass.headerFields.indexOf(tree)
+                                                         : -1;
         Env<AttrContext> localEnv = env;
         if ((tree.mods.flags & STATIC) != 0 ||
-            (env.info.scope.owner.flags() & INTERFACE) != 0) {
+            ((env.info.scope.owner.flags() & INTERFACE) != 0) && headIdx == (-1)) {
             localEnv = env.dup(tree, env.info.dup());
             localEnv.info.staticLevel++;
         }
@@ -284,8 +286,16 @@ public class MemberEnter extends JCTree.Visitor {
                                                                              : syms.errType;
         };
         Name name = tree.name;
-        VarSymbol v = new VarSymbol(0, name, vartype, enclScope.owner);
-        v.flags_field = chk.checkFlags(tree.mods.flags | tree.declKind.additionalSymbolFlags, v, tree);
+        VarSymbol v;
+        long flags = tree.mods.flags;
+        if (headIdx != (-1)) {
+            //TODO: should take type from the side store?
+            v = new RecordComponent(name, vartype, enclScope.owner, (tree.mods.flags & VARARGS) != 0);
+            flags |= PUBLIC;
+        } else {
+            v = new VarSymbol(0, name, vartype, enclScope.owner);
+        }
+        v.flags_field = chk.checkFlags(flags | tree.declKind.additionalSymbolFlags, v, tree);
         tree.sym = v;
         if (tree.init != null) {
             v.flags_field |= HASINIT;
@@ -297,11 +307,11 @@ public class MemberEnter extends JCTree.Visitor {
             }
         }
 
-        if(!(Feature.UNNAMED_VARIABLES.allowedInSource(source) && tree.sym.isUnnamedVariable())) {
+        if(!(Feature.UNNAMED_VARIABLES.allowedInSource(source) && tree.sym.isUnnamedVariable()) && !(v instanceof RecordComponent)) { //we don't enter the header components anywhere, they are not in scope
             if (chk.checkUnique(tree.pos(), v, enclScope)) {
                 chk.checkTransparentVar(tree.pos(), v, enclScope);
                 enclScope.enter(v);
-            } else if (v.owner.kind == MTH || (v.flags_field & (Flags.PRIVATE | Flags.FINAL | Flags.GENERATED_MEMBER | Flags.RECORD)) != 0) {
+            } else if (v.owner.kind == MTH || (v.flags_field & (Flags.PRIVATE | Flags.FINAL | Flags.GENERATED_MEMBER | Flags.RECORD)) != 0) { //TODO: is the record test still needed?
                 // if this is a parameter or a field obtained from a record component, enter it
                 enclScope.enter(v);
             }

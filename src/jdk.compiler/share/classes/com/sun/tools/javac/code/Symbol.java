@@ -1565,28 +1565,6 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
             return null;
         }
 
-        /* creates a record component if non is related to the given variable and recreates a brand new one
-         * in other case
-         */
-        public RecordComponent createRecordComponent(RecordComponent existing, JCVariableDecl rcDecl, VarSymbol varSym) {
-            RecordComponent rc = null;
-            if (existing != null && !recordComponents.isEmpty()) {
-                ListBuffer<RecordComponent> newRComps = new ListBuffer<>();
-                for (RecordComponent rcomp : recordComponents) {
-                    if (existing == rcomp) {
-                        newRComps.add(rc = new RecordComponent(varSym, existing.ast, existing.isVarargs));
-                    } else {
-                        newRComps.add(rcomp);
-                    }
-                }
-                recordComponents = newRComps.toList();
-            } else {
-                // Didn't find the record component: create one.
-                recordComponents = recordComponents.append(rc = new RecordComponent(varSym, rcDecl));
-            }
-            return rc;
-        }
-
         @Override @DefinedBy(Api.LANGUAGE_MODEL)
         public List<? extends RecordComponent> getRecordComponents() {
             return recordComponents;
@@ -1844,48 +1822,26 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
         }
     }
 
+    //TODO: we probably need to model this better:
     public static class RecordComponent extends VarSymbol implements RecordComponentElement {
+        public VarSymbol field;
+        public JCVariableDecl fieldDecl;
         public MethodSymbol accessor;
         public JCTree.JCMethodDecl accessorMeth;
 
-        /* if the user happens to erroneously declare two components with the same name, we need a way to differentiate
-         * them, the code will fail anyway but we need to keep the information for better error recovery
-         */
-        private final int pos;
-
         private final boolean isVarargs;
-
-        private JCVariableDecl ast;
 
         /**
          * Construct a record component, given its flags, name, type and owner.
          */
-        public RecordComponent(Name name, Type type, Symbol owner) {
+        public RecordComponent(Name name, Type type, Symbol owner, boolean isVarargs) {
             super(PUBLIC, name, type, owner);
-            pos = -1;
-            ast = null;
-            isVarargs = false;
-        }
-
-        public RecordComponent(VarSymbol field, JCVariableDecl ast) {
-            this(field, ast, field.type.hasTag(TypeTag.ARRAY) && ((ArrayType)field.type).isVarargs());
-        }
-
-        public RecordComponent(VarSymbol field, JCVariableDecl ast, boolean isVarargs) {
-            super(PUBLIC, field.name, field.type, field.owner);
-            this.ast = ast;
-            this.pos = field.pos;
-            /* it is better to store the original information for this one, instead of relying
-             * on the info in the type of the symbol. This is because on the presence of APs
-             * the symbol will be blown out and we won't be able to know if the original
-             * record component was declared varargs or not.
-             */
             this.isVarargs = isVarargs;
         }
 
-        public List<JCAnnotation> getOriginalAnnos() { return this.ast == null ? List.nil() : this.ast.mods.annotations; }
-
-        public JCVariableDecl declarationFor() { return this.ast; }
+        public RecordComponent(Name name, Type type, Symbol owner) {
+            this(name, type, owner, false);
+        }
 
         public boolean isVarargs() {
             return isVarargs;
@@ -1893,7 +1849,8 @@ public abstract class Symbol extends AnnoConstruct implements PoolConstant, Elem
 
         @Override @DefinedBy(Api.LANGUAGE_MODEL)
         public ElementKind getKind() {
-            return ElementKind.RECORD_COMPONENT;
+            return getEnclosingElement().getKind() == ElementKind.RECORD ? ElementKind.RECORD_COMPONENT
+                                                                         : ElementKind.CLASS_COMPONENT;
         }
 
         @Override @DefinedBy(Api.LANGUAGE_MODEL)

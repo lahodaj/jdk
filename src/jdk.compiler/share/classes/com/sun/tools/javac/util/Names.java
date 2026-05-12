@@ -136,6 +136,7 @@ public class Names {
     public final Name BootstrapMethods;
     public final Name Bridge;
     public final Name CharacterRangeTable;
+    public final Name ClassComponents;
     public final Name Code;
     public final Name CompilationID;
     public final Name ConstantValue;
@@ -182,6 +183,7 @@ public class Names {
     public final Name TYPE_PARAMETER;
     public final Name TYPE_USE;
     public final Name RECORD_COMPONENT;
+    public final Name CLASS_COMPONENT;
 
     // members of java.lang.annotation.RetentionPolicy
     public final Name CLASS;
@@ -328,6 +330,7 @@ public class Names {
         BootstrapMethods = fromString("BootstrapMethods");
         Bridge = fromString("Bridge");
         CharacterRangeTable = fromString("CharacterRangeTable");
+        ClassComponents = fromString("ClassComponents");
         Code = fromString("Code");
         CompilationID = fromString("CompilationID");
         ConstantValue = fromString("ConstantValue");
@@ -374,6 +377,7 @@ public class Names {
         TYPE_PARAMETER = fromString("TYPE_PARAMETER");
         TYPE_USE = fromString("TYPE_USE");
         RECORD_COMPONENT = fromString("RECORD_COMPONENT");
+        CLASS_COMPONENT = fromString("CLASS_COMPONENT");
 
         // members of java.lang.annotation.RetentionPolicy
         CLASS = fromString("CLASS");

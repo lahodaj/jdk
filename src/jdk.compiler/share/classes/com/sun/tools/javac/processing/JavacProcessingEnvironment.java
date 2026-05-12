@@ -1535,10 +1535,10 @@ public class JavacProcessingEnvironment implements ProcessingEnvironment, Closea
                 }
                 if (node.sym != null) {
                     node.sym.completer = new ImplicitCompleter(topLevel);
-                    List<? extends RecordComponent> recordComponents = node.sym.getRecordComponents();
-                    for (RecordComponent rc : recordComponents) {
-                        List<JCAnnotation> originalAnnos = rc.getOriginalAnnos();
-                        originalAnnos.forEach(a -> visitAnnotation(a));
+                    if (node.headerFields != null) {
+                        for (List<JCAnnotation> originalAnnos : node.headerFieldsAnnotations) {
+                            originalAnnos.forEach(a -> visitAnnotation(a));
+                        }
                     }
                     // we should empty the list of permitted subclasses for next round
                     node.sym.clearPermittedSubclasses();

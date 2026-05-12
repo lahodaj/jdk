@@ -2160,7 +2160,10 @@ public class Lower extends TreeTranslator {
             (types.supertype(currentClass.type).tsym.flags() & ENUM) == 0)
             visitEnumDef(tree);
 
-        if ((tree.mods.flags & RECORD) != 0) {
+        if (tree.headerFields != null) {
+            tree.defs = tree.defs.appendList(generateMandatedAccessors(tree));
+        }
+        if (tree.sym.isRecord()) {
             visitRecordDef(tree);
         }
 
@@ -2269,16 +2272,20 @@ public class Lower extends TreeTranslator {
     }
 
     List<JCTree> generateMandatedAccessors(JCClassDecl tree) {
-        List<JCVariableDecl> fields = TreeInfo.recordFields(tree);
-        return tree.sym.getRecordComponents().stream()
-                .filter(rc -> (rc.accessor.flags() & Flags.GENERATED_MEMBER) != 0)
-                .map(rc -> {
-                    // we need to return the field not the record component
-                    JCVariableDecl field = fields.stream().filter(f -> f.name == rc.name).findAny().get();
-                    make_at(tree.pos());
-                    return make.MethodDef(rc.accessor, make.Block(0,
-                            List.of(make.Return(make.Ident(field)))));
-                }).collect(List.collector());
+        if (!tree.sym.isRecord()) {
+            return List.nil();
+        }
+        ListBuffer<JCTree> result = new ListBuffer<>();
+        for (RecordComponent rc : tree.sym.getRecordComponents()) {
+            make_at(tree.pos());
+            result.append(make.VarDef(rc.field, null));
+            if ((rc.accessor.flags() & Flags.GENERATED_MEMBER) != 0 && rc.accessor.owner == tree.sym) {
+                JCBlock body = make.Block(0,
+                        List.of(make.Return(make.Ident(rc.field))));
+                result.append(make.MethodDef(rc.accessor, body));
+            }
+        }
+        return result.toList();
     }
 
     /** Translate an enum class. */
@@ -2464,7 +2471,7 @@ public class Lower extends TreeTranslator {
     /** Translate a record. */
     private void visitRecordDef(JCClassDecl tree) {
         make_at(tree.pos());
-        List<VarSymbol> vars = recordVars(tree.type);
+        List<VarSymbol> vars = tree.headerFields.stream().map(decl -> ((RecordComponent) decl.sym).field).collect(List.collector());
         MethodHandleSymbol[] getterMethHandles = new MethodHandleSymbol[vars.size()];
         int index = 0;
         for (VarSymbol var : vars) {
@@ -2475,7 +2482,6 @@ public class Lower extends TreeTranslator {
             index++;
         }
 
-        tree.defs = tree.defs.appendList(generateMandatedAccessors(tree));
         tree.defs = tree.defs.appendList(List.of(
                 generateRecordMethod(tree, names.toString, vars, getterMethHandles),
                 generateRecordMethod(tree, names.hashCode, vars, getterMethHandles),

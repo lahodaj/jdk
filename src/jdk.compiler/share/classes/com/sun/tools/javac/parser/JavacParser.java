@@ -4408,10 +4408,9 @@ public class JavacParser implements Parser {
         Name name = typeName();
 
         List<JCTypeParameter> typarams = typeParametersOpt();
-
         List<JCVariableDecl> headerFields = formalParameters(false, true);
-
         List<JCExpression> implementing = List.nil();
+
         if (token.kind == IMPLEMENTS) {
             nextToken();
             implementing = typeList();
@@ -4420,10 +4419,6 @@ public class JavacParser implements Parser {
         saveDanglingDocComments(dc);
 
         List<JCTree> defs = classInterfaceOrRecordBody(name, false, true);
-        java.util.List<JCVariableDecl> fields = new ArrayList<>();
-        for (JCVariableDecl field : headerFields) {
-            fields.add(field);
-        }
         for (JCTree def : defs) {
             if (def.hasTag(METHODDEF)) {
                 JCMethodDecl methDef = (JCMethodDecl) def;
@@ -4441,11 +4436,8 @@ public class JavacParser implements Parser {
                 }
             }
         }
-        for (int i = fields.size() - 1; i >= 0; i--) {
-            JCVariableDecl field = fields.get(i);
-            defs = defs.prepend(field);
-        }
         JCClassDecl result = toP(F.at(pos).ClassDef(mods, name, typarams, null, implementing, defs));
+        result.headerFields = headerFields;
         return attach(result, dc);
     }
 
@@ -4471,6 +4463,15 @@ public class JavacParser implements Parser {
         Name name = typeName();
 
         List<JCTypeParameter> typarams = typeParametersOpt();
+        List<JCVariableDecl> headerFields;
+
+        if (token.kind == LPAREN) {
+             //TODO: recordComponent false here, as we don't want final and private (and maybe not even RECORD) - this should be better (and we don't really want to allow public/protected/private, of course)
+            headerFields = formalParameters(false, false);
+            headerFields.forEach(d -> d.mods.flags |= Flags.HEADER_COMPONENT);
+        } else {
+            headerFields = null;
+        }
 
         List<JCExpression> extending = List.nil();
         if (token.kind == EXTENDS) {
@@ -4485,6 +4486,7 @@ public class JavacParser implements Parser {
         defs = classInterfaceOrRecordBody(name, true, false);
         JCClassDecl result = toP(F.at(pos).ClassDef(
             mods, name, typarams, null, extending, permitting, defs));
+        result.headerFields = headerFields;
         return attach(result, dc);
     }
 
@@ -5426,9 +5428,6 @@ public class JavacParser implements Parser {
         }
         if (recordComponent && mods.flags != 0) {
             log.error(mods.pos, Errors.RecordCantDeclareFieldModifiers);
-        }
-        if (recordComponent) {
-            mods.flags |= Flags.RECORD | Flags.FINAL | Flags.PRIVATE | Flags.GENERATED_MEMBER;
         }
         // need to distinguish between vararg annos and array annos
         // look at typeAnnotationsPushedBack comment

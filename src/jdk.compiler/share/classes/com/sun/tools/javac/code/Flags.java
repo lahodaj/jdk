@@ -493,6 +493,12 @@ public class Flags {
     public static final long REQUIRES_IDENTITY = 1L<<62;
 
     /**
+     * Flag to indicate a class with components.
+     */
+    @Use(FlagTarget.CLASS)
+    public static final long HAS_COMPONENTS = 1L<<62;
+
+    /**
      * Flag to indicate type annotations have been queued for field initializers.
      */
     @Use({FlagTarget.VARIABLE})
@@ -504,6 +510,12 @@ public class Flags {
     @Use({FlagTarget.CLASS})
     @CustomToStringValue("non-sealed")
     public static final long NON_SEALED = 1L<<63;  // part of ExtendedStandardFlags, cannot be reused
+
+    /**
+     * Flag for synthesized default constructors of anonymous classes that have an enclosing expression.
+     */
+    @Use({FlagTarget.VARIABLE})
+    public static final long HEADER_COMPONENT = 1L<<57;
 
     /**
      * Describe modifier flags as they might appear in source code, i.e.,

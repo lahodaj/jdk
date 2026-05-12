@@ -34,6 +34,14 @@ import java.lang.ref.SoftReference;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectStreamField;
+import java.lang.classfile.Attributes;
+import java.lang.classfile.ClassFile;
+import java.lang.classfile.ClassModel;
+import java.lang.classfile.attribute.ClassComponentsAttribute;
+import java.lang.classfile.attribute.RecordComponentInfo;
+import java.lang.classfile.attribute.RuntimeVisibleAnnotationsAttribute;
+import java.lang.classfile.attribute.RuntimeVisibleTypeAnnotationsAttribute;
+import java.lang.classfile.attribute.SignatureAttribute;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.AnnotatedType;
 import java.lang.reflect.AccessFlag;
@@ -52,6 +60,7 @@ import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.lang.constant.Constable;
+import java.lang.reflect.ClassComponent;
 import java.net.URL;
 import java.security.AllPermission;
 import java.security.Permissions;
@@ -68,6 +77,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import jdk.internal.classfile.impl.BoundAttribute;
+import jdk.internal.classfile.impl.BoundAttribute.BoundRuntimeVisibleAnnotationsAttribute;
 
 import jdk.internal.constant.ConstantUtils;
 import jdk.internal.loader.BootLoader;
@@ -2289,6 +2300,66 @@ public final class Class<T> implements java.io.Serializable,
         return getRecordComponents0();
     }
 
+    /**{@return the class components, or {@code null}
+     * if this class is not deconstructible.}
+     * @since 99
+     */
+    public ClassComponent[] getClassComponents() {
+        return getClassComponents0();
+    }
+
+    /**{@return {@code true} if and only if this class can be deconstructed.}
+     * @since 99
+     */
+    public boolean isDeconstructible() {
+        return getClassComponents0() != null;
+    }
+
+    /**{@return the types of the component in the canonical order, or {@code null}
+     * if this class is not deconstructible.}
+     * @since 99
+     */
+    public Class<?>[] getDeconstructionShape() {
+        ClassComponent[] components = getClassComponents0();
+
+        if (components == null) {
+            return null;
+        }
+
+        return Arrays.stream(components)
+                     .map(c -> c.getType())
+                     .toArray(Class<?>[]::new);
+    }
+
+    /**
+     * Deconstructs the given object.
+     *
+     * @param o the object to deconstruct
+     * @return the values of the components
+     * @throws IllegalArgumentException if this class is not deconstructible
+     * @throws MatchException if any of the accessor methods throw an exception.
+     * @since 99
+     */
+    public Object[] deconstruct(Object o) throws IllegalArgumentException, MatchException {
+        if (!isDeconstructible()) {
+            throw new IllegalArgumentException("This class is not deconstructible!");
+        }
+
+        List<Object> result = new ArrayList<>();
+
+        for (ClassComponent c : getClassComponents0()) {
+            try {
+                Method accessor = c.getAccessor();
+                accessor.setAccessible(true);
+                result.add(accessor.invoke(o));
+            } catch (Throwable ex) {
+                throw new MatchException(ex.getMessage(), ex);
+            }
+        }
+
+        return result.toArray();
+    }
+
     /**
      * Returns an array containing {@code Method} objects reflecting all the
      * declared methods of the class or interface represented by this {@code
@@ -3257,6 +3328,39 @@ public final class Class<T> implements java.io.Serializable,
      */
     private native RecordComponent[] getRecordComponents0();
     private native boolean       isRecord0();
+    private ClassComponent[] getClassComponents0() {
+        if (this.isPrimitive()) return null;
+        try (var in = (getClassLoader() != null)
+                ? getClassLoader().getResourceAsStream(getResourcePath())
+                : ClassLoader.getSystemResourceAsStream(getResourcePath())) {
+            if (in == null) throw new RuntimeException("Resource not found: " + name);
+            byte[] bytes = in.readAllBytes();
+            ClassModel cm = ClassFile.of().parse(bytes);
+            Optional<ClassComponentsAttribute> classComponentsAttribute = cm.findAttribute(Attributes.classComponents());
+            if (classComponentsAttribute.isPresent()) {
+                List<ClassComponent> components = new ArrayList<>();
+                for (RecordComponentInfo info : classComponentsAttribute.get().components()) {
+                    Class<?> componentClass = info.descriptorSymbol().resolveConstantDesc(MethodHandles.lookup());//XXX: correct Lookup(!!!)
+                    String componentName = info.name().stringValue();
+                    Method accessor = getMethod(componentName);
+                    Optional<SignatureAttribute> signatureAttr = info.findAttribute(Attributes.signature());
+                    Optional<RuntimeVisibleAnnotationsAttribute> annotationsAttr = info.findAttribute(Attributes.runtimeVisibleAnnotations());
+                    byte[] annotations = annotationsAttr.map(attr -> ((BoundRuntimeVisibleAnnotationsAttribute) attr).contents()).orElse(null);
+                    Optional<RuntimeVisibleTypeAnnotationsAttribute> typeAnnotationsAttr = info.findAttribute(Attributes.runtimeVisibleTypeAnnotations());
+                    byte[] typeAnnotations = typeAnnotationsAttr.map(attr -> ((BoundAttribute.BoundRuntimeVisibleTypeAnnotationsAttribute) attr).contents()).orElse(null);
+                    components.add(new ClassComponent(this, componentName, componentClass, accessor, signatureAttr.map(attr -> attr.asClassSignature().signatureString()).orElse(null), annotations, typeAnnotations));
+                }
+                return components.toArray(ClassComponent[]::new);
+            }
+            return null;
+        } catch (IOException | ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private String getResourcePath() {
+        return this.getName().replace('.', '/') + ".class";
+    }
 
     /**
      * Helper method to get the method name from arguments.

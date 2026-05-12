@@ -630,8 +630,8 @@ public class TestGetScopeResult {
                             @interface Annotation {}
                             """,
                             List.of(
-                                List.of("i:int", "super:java.lang.Record", "this:Test"),
-                                List.of("super:java.lang.Record", "this:Test")
+                                List.of("super:java.lang.Record", "this:Test"),
+                                List.of("i:int", "super:java.lang.Record", "this:Test")
                             ))
             };
             for (Variant currentVariant : variants) {

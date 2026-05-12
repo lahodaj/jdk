@@ -245,7 +245,7 @@ public class PrintingProcessor extends AbstractProcessor {
 
                 printFormalTypeParameters(e, false);
 
-                if (kind == RECORD) {
+                if (kind == RECORD || !e.getRecordComponents().isEmpty()) { //XXX: need a different approach to allow empty component list(!!!)
                     // Print out record components
                     writer.print("(");
                     writer.print(e.getRecordComponents()

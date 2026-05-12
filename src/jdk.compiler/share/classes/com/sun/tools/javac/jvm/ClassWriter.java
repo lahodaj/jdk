@@ -860,9 +860,8 @@ public class ClassWriter extends ClassFile {
         endAttr(alenIdx);
     }
 
-    int writeRecordAttribute(ClassSymbol csym) {
-        int alenIdx = writeAttr(names.Record);
-        Scope s = csym.members();
+    int writeRecordLikeAttribute(ClassSymbol csym) {
+        int alenIdx = writeAttr(csym.isRecord() ? names.Record : names.ClassComponents);
         databuf.appendChar(csym.getRecordComponents().size());
         for (VarSymbol v: csym.getRecordComponents()) {
             //databuf.appendChar(poolWriter.putMember(v.accessor.head.snd));
@@ -1695,8 +1694,8 @@ public class ClassWriter extends ClassFile {
             }
         }
 
-        if (c.isRecord()) {
-            acount += writeRecordAttribute(c);
+        if (c.getRecordComponents().nonEmpty() || c.isRecord()) {
+            acount += writeRecordLikeAttribute(c);
         }
 
         if (target.hasSealedClasses()) {

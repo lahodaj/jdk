@@ -127,5 +127,16 @@ public enum ElementType {
      *
      * @since 16
      */
-    RECORD_COMPONENT;
+    RECORD_COMPONENT,
+
+    /**
+     * Class or interface component
+     *
+     * @jls 99 TODO
+     * @jls 9.7.4 Where Annotations May Appear
+     *
+     * @since 99
+     */
+    CLASS_COMPONENT
+    ;
 }

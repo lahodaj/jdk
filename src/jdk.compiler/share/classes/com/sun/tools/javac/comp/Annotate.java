@@ -850,10 +850,25 @@ public class Annotate {
                 JCAnnotation annoTree = m.Annotation(c);
 
                 boolean isRecordMember = (on.flags_field & Flags.RECORD) != 0 || on.enclClass() != null && on.enclClass().isRecord();
-                /* if it is a record member we will not issue the error now and wait until annotations on records are
-                 * checked at Check::validateAnnotation, which will issue it
-                 */
-                if (!chk.annotationApplicable(annoTree, on) && (!isRecordMember || isRecordMember && (on.flags_field & Flags.GENERATED_MEMBER) == 0)) {
+                boolean checkApplicability;
+                if (on instanceof RecordComponent) {
+                    /* if it is a class component we will not check applicability
+                     * now and wait until annotations on records are checked at
+                     * Check::validateAnnotation, which will check applicability
+                     * TODO: verify this is correct
+                     */
+                    checkApplicability = false;
+                } else if (isRecordMember) {
+                    /* if it is an auto-generated record member
+                     * we will not check applicability now and wait until annotations
+                     * on records are checked at Check::validateAnnotation, which will
+                     * check applicability(TODO: check)
+                     */
+                    checkApplicability = (on.flags_field & Flags.GENERATED_MEMBER) == 0;
+                } else {
+                    checkApplicability = true;
+                }
+                if (checkApplicability && !chk.annotationApplicable(annoTree, on)) {
                     log.error(annoTree.pos(),
                               Errors.InvalidRepeatableAnnotationNotApplicable(targetContainerType, on));
                 }

@@ -1,4 +1,4 @@
-/*
+/*TODO: investigate the change in the order of reported errors!!!
  * @test /nodynamiccopyright/
  * @bug 4909690
  * @summary AssertionError(com.sun.tools.javac.v8.code.Symbol$MethodSymbol.isOverridableIn)

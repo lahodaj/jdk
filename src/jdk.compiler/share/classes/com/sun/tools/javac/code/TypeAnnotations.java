@@ -1151,6 +1151,7 @@ public class TypeAnnotations {
             }
             scan(tree.defs);
             if (tree.sym.isRecord()) {
+                tree.sym.getRecordComponents().forEach(rc -> scan(rc.fieldDecl));
                 tree.sym.getRecordComponents().forEach(rc -> scan(rc.accessorMeth));
             }
         }

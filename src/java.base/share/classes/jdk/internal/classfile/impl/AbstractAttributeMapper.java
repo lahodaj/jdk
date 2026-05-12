@@ -604,6 +604,31 @@ public sealed abstract class AbstractAttributeMapper<T extends Attribute<T>>
         }
     }
 
+    public static final class ClassComponentsMapper extends AbstractAttributeMapper<ClassComponentsAttribute> {
+        public static final ClassComponentsMapper INSTANCE = new ClassComponentsMapper();
+
+        private ClassComponentsMapper() {
+            super(NAME_CLASS_COMPONENTS, AttributeStability.CP_REFS);
+        }
+
+        @Override
+        public ClassComponentsAttribute readAttribute(AttributedElement e, ClassReader cf, int p) {
+            return new BoundAttribute.BoundClassComponentsAttribute(cf, this, p);
+        }
+
+        @Override
+        protected void writeBody(BufWriter bufWriter, ClassComponentsAttribute attr) {
+            List<RecordComponentInfo> components = attr.components();
+            BufWriterImpl buf = (BufWriterImpl) bufWriter;
+            buf.writeU2(components.size());
+            for (RecordComponentInfo info : components) {
+                buf.writeU2U2(buf.cpIndex(info.name()),
+                        buf.cpIndex(info.descriptor()));
+                Util.writeAttributes(buf, info.attributes());
+            }
+        }
+    }
+
     public static final class RuntimeInvisibleAnnotationsMapper extends AbstractAttributeMapper<RuntimeInvisibleAnnotationsAttribute> {
         public static final RuntimeInvisibleAnnotationsMapper INSTANCE = new RuntimeInvisibleAnnotationsMapper();
 

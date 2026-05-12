@@ -120,6 +120,9 @@ public final class Attributes {
     /** Record */
     public static final String NAME_RECORD = "Record";
 
+    /** ClassComponents */
+    public static final String NAME_CLASS_COMPONENTS = "ClassComponents";
+
     /** RuntimeInvisibleAnnotations */
     public static final String NAME_RUNTIME_INVISIBLE_ANNOTATIONS = "RuntimeInvisibleAnnotations";
 
@@ -342,6 +345,13 @@ public final class Attributes {
      */
     public static AttributeMapper<RecordAttribute> record() {
         return RecordMapper.INSTANCE;
+    }
+
+    /**
+     * {@return the mapper for the {@code ClassComponents} attribute}
+     */
+    public static AttributeMapper<ClassComponentsAttribute> classComponents() {
+        return ClassComponentsMapper.INSTANCE;
     }
 
     /**

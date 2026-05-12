@@ -178,10 +178,18 @@ public class TreeCopier<P> implements TreeVisitor<JCTree,P> {
         JCClassDecl t = (JCClassDecl) node;
         JCModifiers mods = copy(t.mods, p);
         List<JCTypeParameter> typarams = copy(t.typarams, p);
+        List<JCVariableDecl> headerFields = copy(t.headerFields, p);
+        //TODO: is the copying of annotations and type correct???
+        List<List<JCAnnotation>> headerFieldsAnnotations = t.headerFieldsAnnotations != null ? t.headerFieldsAnnotations.map(e -> copy(e, p)) : null;
+        List<JCExpression> headerFieldsTypes = t.headerFieldsTypes != null ? t.headerFieldsTypes.map(e -> copy(e, p)) : null;
         JCExpression extending = copy(t.extending, p);
         List<JCExpression> implementing = copy(t.implementing, p);
         List<JCTree> defs = copy(t.defs, p);
-        return M.at(t.pos).ClassDef(mods, t.name, typarams, extending, implementing, defs);
+        JCClassDecl res = M.at(t.pos).ClassDef(mods, t.name, typarams, extending, implementing, defs);
+        res.headerFields = headerFields;
+        res.headerFieldsAnnotations = headerFieldsAnnotations;
+        res.headerFieldsTypes = headerFieldsTypes;
+        return res;
     }
 
     @DefinedBy(Api.COMPILER_TREE)

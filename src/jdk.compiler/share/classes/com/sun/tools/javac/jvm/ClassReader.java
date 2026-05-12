@@ -1307,9 +1307,28 @@ public class ClassReader {
                     return super.accepts(kind) && allowRecords;
                 }
                 protected void read(Symbol sym, int attrLen) {
-                    if (sym.kind == TYP) {
-                        sym.flags_field |= RECORD;
+                    if (sym.kind == TYP && !sym.isInterface()) {
+                        sym.flags_field |= RECORD | HAS_COMPONENTS;
                     }
+                    int componentCount = nextChar();
+                    ListBuffer<RecordComponent> components = new ListBuffer<>();
+                    for (int i = 0; i < componentCount; i++) {
+                        Name name = poolReader.getName(nextChar());
+                        Type type = poolReader.getType(nextChar());
+                        RecordComponent c = new RecordComponent(name, type, sym);
+                        readAttrs(c, AttributeKind.MEMBER);
+                        components.add(c);
+                    }
+                    ((ClassSymbol) sym).setRecordComponents(components.toList());
+                }
+            },
+            new AttributeReader(names.ClassComponents, V58, CLASS_ATTRIBUTE) { //TODO: tests
+                @Override
+                protected boolean accepts(AttributeKind kind) {
+                    return super.accepts(kind);//TODO: allow && allowRecords;
+                }
+                protected void read(Symbol sym, int attrLen) {
+                    sym.flags_field |= HAS_COMPONENTS;
                     int componentCount = nextChar();
                     ListBuffer<RecordComponent> components = new ListBuffer<>();
                     for (int i = 0; i < componentCount; i++) {
@@ -3138,7 +3157,7 @@ public class ClassReader {
         for (int i = 0; i < fieldCount; i++) enterMember(c, readField());
         Assert.check(methodCount == nextChar());
         for (int i = 0; i < methodCount; i++) enterMember(c, readMethod());
-        if (c.isRecord()) {
+        if (c.getRecordComponents().nonEmpty()) {
             for (RecordComponent rc: c.getRecordComponents()) {
                 rc.accessor = lookupMethod(c, rc.name, List.nil());
             }

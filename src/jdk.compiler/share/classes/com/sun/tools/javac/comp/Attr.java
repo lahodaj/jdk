@@ -1142,7 +1142,7 @@ public class Attr extends JCTree.Visitor {
                          * record components
                          */
                         List<? extends RecordComponent> recordComponents = env.enclClass.sym.getRecordComponents();
-                        List<Type> recordFieldTypes = TreeInfo.recordFields(env.enclClass).map(vd -> vd.sym.type);
+                        List<Type> recordFieldTypes = env.enclClass.headerFields.map(vd -> vd.sym.type);
                         for (JCVariableDecl param: tree.params) {
                             boolean paramIsVarArgs = (param.sym.flags_field & VARARGS) != 0;
                             if (!types.isSameType(param.type, recordFieldTypes.head) ||
@@ -1219,7 +1219,7 @@ public class Attr extends JCTree.Visitor {
                                   Errors.CallToSuperNotAllowedInEnumCtor(env.enclClass.sym));
                     }
                     if (env.enclClass.sym.isRecord() && (tree.sym.flags_field & RECORD) != 0) { // we are seeing the canonical constructor
-                        List<Name> recordComponentNames = TreeInfo.recordFields(env.enclClass).map(vd -> vd.sym.name);
+                        List<Name> recordComponentNames = env.enclClass.headerFields.map(vd -> vd.sym.name);
                         List<Name> initParamNames = tree.sym.params.map(p -> p.name);
                         if (!initParamNames.equals(recordComponentNames)) {
                             log.error(tree, Errors.InvalidCanonicalConstructorInRecord(
@@ -1328,11 +1328,6 @@ public class Attr extends JCTree.Visitor {
                 }
             }
             result = tree.type = v.type;
-            if (env.enclClass.sym.isRecord() && tree.sym.owner.kind == TYP && !v.isStatic()) {
-                if (isNonArgsMethodInObject(v.name)) {
-                    log.error(tree, Errors.IllegalRecordComponentName(v));
-                }
-            }
             chk.checkRequiresIdentity(tree, env.info.lint);
         }
         finally {
@@ -1590,6 +1585,11 @@ public class Attr extends JCTree.Visitor {
                     // This is the bare minimum we need to verify to make sure code generation doesn't crash.
                     Symbol iterSymbol = rs.resolveInternalMethod(tree.pos(),
                             loopEnv, types.skipTypeVars(exprType, false), names.iterator, List.nil(), List.nil());
+                    if (iterSymbol == null) {
+                        System.err.println("!!!");
+                        rs.resolveInternalMethod(tree.pos(),
+                            loopEnv, types.skipTypeVars(exprType, false), names.iterator, List.nil(), List.nil());
+                    }
                     if (types.asSuper(iterSymbol.type.getReturnType(), syms.iteratorType.tsym) == null) {
                         log.error(tree.pos(),
                                 Errors.ForeachNotApplicableToType(exprType, Fragments.TypeReqArrayOrIterable));
@@ -4280,7 +4280,7 @@ public class Attr extends JCTree.Visitor {
         }
 
         List<Type> expectedRecordTypes;
-        if (site.tsym instanceof ClassSymbol clazz && clazz.isRecord()) {
+        if (site.tsym instanceof ClassSymbol clazz && (clazz.flags() & HAS_COMPONENTS) != 0) {
             ClassSymbol record = (ClassSymbol) site.tsym;
             expectedRecordTypes = record.getRecordComponents()
                                         .stream()
@@ -5686,6 +5686,10 @@ public class Attr extends JCTree.Visitor {
         //check that a resource implementing AutoCloseable cannot throw InterruptedException
         checkAutoCloseable(env, tree, false);
 
+        if (tree.headerFields != null) {
+            attribStats(tree.headerFields, env);
+        }
+
         for (List<JCTree> l = tree.defs; l.nonEmpty(); l = l.tail) {
             // Attribute declaration
             attribStat(l.head, env);
@@ -5725,6 +5729,14 @@ public class Attr extends JCTree.Visitor {
 
         // Check type annotations applicability rules
         validateTypeAnnotations(tree, false);
+
+        if (tree.headerFields != null) {
+            for (JCVariableDecl component : tree.headerFields) {
+                if (isNonArgsMethodInObject(component.name)) {
+                    log.error(component.pos(), Errors.IllegalRecordComponentName(component.sym));
+                }
+            }
+        }
     }
         // where
         /** get a diagnostic position for an attribute of Type t, or null if attribute missing */

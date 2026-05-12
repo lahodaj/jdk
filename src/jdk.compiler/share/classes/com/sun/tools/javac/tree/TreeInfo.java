@@ -228,20 +228,6 @@ public class TreeInfo {
         }
     }
 
-    public static List<JCVariableDecl> recordFields(JCClassDecl tree) {
-        return tree.defs.stream()
-                .filter(t -> t.hasTag(VARDEF))
-                .map(t -> (JCVariableDecl)t)
-                .filter(vd -> (vd.getModifiers().flags & (Flags.RECORD)) == RECORD)
-                .collect(List.collector());
-    }
-
-    public static List<Type> recordFieldTypes(JCClassDecl tree) {
-        return recordFields(tree).stream()
-                .map(vd -> vd.type)
-                .collect(List.collector());
-    }
-
     /** Is the given method a constructor containing a super() or this() call?
       */
     public static boolean hasAnyConstructorCall(JCMethodDecl tree) {
@@ -868,11 +854,9 @@ public class TreeInfo {
                 result = that;
                 return true;
             }
-            if (this.sym.getKind() == ElementKind.RECORD_COMPONENT) {
-                if (thatSym != null && thatSym.getKind() == ElementKind.FIELD && (thatSym.flags_field & RECORD) != 0) {
-                    RecordComponent rc = thatSym.enclClass().getRecordComponent((VarSymbol)thatSym);
-                    return checkMatch(rc.declarationFor(), rc);
-                }
+            if (thatSym instanceof RecordComponent rc && rc.field == this.sym) {
+                result = that;
+                return true;
             }
             return false;
         }

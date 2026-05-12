@@ -47,7 +47,7 @@ import java.lang.classfile.attribute.*;
  */
 public sealed interface ClassElement extends ClassFileElement
         permits AccessFlags, Superclass, Interfaces, ClassFileVersion,
-                FieldModel, MethodModel,
+                FieldModel, MethodModel, ClassComponentsAttribute,
                 CustomAttribute, CompilationIDAttribute, DeprecatedAttribute,
                 EnclosingMethodAttribute, InnerClassesAttribute,
                 ModuleAttribute, ModuleHashesAttribute, ModuleMainClassAttribute,

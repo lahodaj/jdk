@@ -909,7 +909,7 @@ public class CreateSymbols {
         if (header.nestMembers != null && !header.nestMembers.isEmpty()) {
             builder.with(NestMembersAttribute.ofSymbols(header.nestMembers.stream().map(ClassDesc::ofInternalName).collect(Collectors.toList())));
         }
-        if (header.isRecord) {
+        if (header.isRecord || header.recordComponents != null) {
             builder.with(RecordAttribute.of(header.recordComponents.stream().map(desc -> {
                 List<Attribute<?>> attributes = new ArrayList<>();
                 addGenericAttributes(desc, attributes::add, builder.constantPool());
@@ -2250,6 +2250,17 @@ public class CreateSymbols {
                     return rcd;
                 }).collect(Collectors.toList());
             }
+            case ClassComponentsAttribute a -> {
+                var chd = (ClassHeaderDescription) feature;
+                chd.isRecord = false;
+                chd.recordComponents = a.components().stream().map(rci -> {
+                    var rcd = new RecordComponentDescription();
+                    rcd.name = rci.name().stringValue();
+                    rcd.descriptor = rci.descriptor().stringValue();
+                    rci.attributes().forEach(child -> readAttribute(rcd, child));
+                    return rcd;
+                }).collect(Collectors.toList());
+            }
             case MethodParametersAttribute a -> ((MethodDescription) feature).methodParameters = a.parameters().stream()
                     .map(mpi -> new MethodDescription.MethodParam(mpi.flagsMask(), mpi.name().map(Utf8Entry::stringValue).orElse(null)))
                     .collect(Collectors.toList());
@@ -3245,6 +3256,8 @@ public class CreateSymbols {
                 output.append(" nestMembers " + serializeList(nestMembers));
             if (isRecord) {
                 output.append(" record true");
+            } else if (recordComponents != null) {
+                output.append(" hascomponents true");
             }
             if (isSealed) {
                 output.append(" sealed true");
@@ -3274,10 +3287,11 @@ public class CreateSymbols {
                 String subclassesList = reader.attributes.get("permittedSubclasses");
                 permittedSubclasses = deserializeList(subclassesList);
             }
+            boolean hascomponents = reader.attributes.containsKey("hascomponents");
 
             readAttributes(reader);
             reader.moveNext();
-            if (isRecord) {
+            if (isRecord || hascomponents) {
                 readRecordComponents(reader);
             }
             readInnerClasses(reader);

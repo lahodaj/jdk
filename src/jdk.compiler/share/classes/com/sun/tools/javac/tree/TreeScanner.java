@@ -119,6 +119,7 @@ public class TreeScanner extends Visitor {
     public void visitClassDef(JCClassDecl tree) {
         scan(tree.mods);
         scan(tree.typarams);
+        scan(tree.headerFields);
         scan(tree.extending);
         scan(tree.implementing);
         scan(tree.permitting);
