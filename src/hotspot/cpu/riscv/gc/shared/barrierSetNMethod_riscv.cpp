@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2026, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -23,7 +23,6 @@
  *
  */
 
-#include "precompiled.hpp"
 #include "code/codeCache.hpp"
 #include "code/nativeInst.hpp"
 #include "gc/shared/barrierSetAssembler.hpp"
@@ -32,8 +31,8 @@
 #include "memory/resourceArea.hpp"
 #include "runtime/frame.inline.hpp"
 #include "runtime/javaThread.hpp"
-#include "runtime/sharedRuntime.hpp"
 #include "runtime/registerMap.hpp"
+#include "runtime/sharedRuntime.hpp"
 #include "utilities/align.hpp"
 #include "utilities/debug.hpp"
 #if INCLUDE_JVMCI
@@ -42,19 +41,16 @@
 
 static int slow_path_size(nmethod* nm) {
   // The slow path code is out of line with C2.
-  // Leave a jal to the stub in the fast path.
-  return nm->is_compiled_by_c2() ? 1 : 8;
+  return nm->is_compiled_by_c2() ? 0 : 4;
 }
 
 static int entry_barrier_offset(nmethod* nm) {
   BarrierSetAssembler* bs_asm = BarrierSet::barrier_set()->barrier_set_assembler();
   switch (bs_asm->nmethod_patching_type()) {
     case NMethodPatchingType::stw_instruction_and_data_patch:
-      return -4 * (4 + slow_path_size(nm));
-    case NMethodPatchingType::conc_data_patch:
       return -4 * (5 + slow_path_size(nm));
     case NMethodPatchingType::conc_instruction_and_data_patch:
-      return -4 * (15 + slow_path_size(nm));
+      return -4 * ((UseZtso ? 14 : 16) + slow_path_size(nm));
   }
   ShouldNotReachHere();
   return 0;
@@ -106,21 +102,35 @@ public:
         }
         _guard_addr = reinterpret_cast<int*>(instruction_address() + local_guard_offset(nm));
       }
+
+      // Perform the checking as verification.
+      err_msg msg("%s", "");
+      assert(check_barrier(msg), "%s", msg.buffer());
   }
 
   int get_value() {
-    return Atomic::load_acquire(guard_addr());
+    return AtomicAccess::load_acquire(guard_addr());
   }
 
-  void set_value(int value) {
-    Atomic::release_store(guard_addr(), value);
+  void set_value(int value, int bit_mask) {
+    if (bit_mask == ~0) {
+      AtomicAccess::release_store(guard_addr(), value);
+      return;
+    }
+    assert((value & ~bit_mask) == 0, "trying to set bits outside the mask");
+    value &= bit_mask;
+    int old_value = AtomicAccess::load(guard_addr());
+    while (true) {
+      // Only bits in the mask are changed
+      int new_value = value | (old_value & ~bit_mask);
+      if (new_value == old_value) break;
+      int v = AtomicAccess::cmpxchg(guard_addr(), old_value, new_value, memory_order_release);
+      if (v == old_value) break;
+      old_value = v;
+    }
   }
 
   bool check_barrier(err_msg& msg) const;
-  void verify() const {
-    err_msg msg("%s", "");
-    assert(check_barrier(msg), "%s", msg.buffer());
-  }
 };
 
 // Store the instruction bitmask, bits and name for checking the barrier.
@@ -131,8 +141,8 @@ struct CheckInsn {
 };
 
 static const struct CheckInsn barrierInsn[] = {
-  { 0x00000fff, 0x00000297, "auipc  t0, 0                     "},
-  { 0x000fffff, 0x0002e283, "lwu    t0, guard_offset(t0)      "},
+  { 0x00000fff, 0x00000297, "auipc  t0, 0               " },
+  { 0x000fffff, 0x0002e283, "lwu    t0, guard_offset(t0)" },
   /* ...... */
   /* ...... */
   /* guard: */
@@ -144,10 +154,11 @@ static const struct CheckInsn barrierInsn[] = {
 // register numbers and immediate values in the encoding.
 bool NativeNMethodBarrier::check_barrier(err_msg& msg) const {
   address addr = instruction_address();
-  for(unsigned int i = 0; i < sizeof(barrierInsn)/sizeof(struct CheckInsn); i++ ) {
+  for (unsigned int i = 0; i < sizeof(barrierInsn) / sizeof(struct CheckInsn); i++) {
     uint32_t inst = Assembler::ld_instr(addr);
     if ((inst & barrierInsn[i].mask) != barrierInsn[i].bits) {
-      msg.print("Addr: " INTPTR_FORMAT " Code: 0x%x not an %s instruction", p2i(addr), inst, barrierInsn[i].name);
+      msg.print("Nmethod entry barrier did not start with auipc & lwu as expected. "
+                "Addr: " INTPTR_FORMAT " Code: 0x%x not an %s instruction.", p2i(addr), inst, barrierInsn[i].name);
       return false;
     }
     addr += 4;
@@ -195,7 +206,7 @@ void BarrierSetNMethod::deoptimize(nmethod* nm, address* return_address_ptr) {
   new_frame->pc = SharedRuntime::get_handle_wrong_method_stub();
 }
 
-void BarrierSetNMethod::set_guard_value(nmethod* nm, int value) {
+void BarrierSetNMethod::set_guard_value(nmethod* nm, int value, int bit_mask) {
   if (!supports_entry_barrier(nm)) {
     return;
   }
@@ -212,7 +223,7 @@ void BarrierSetNMethod::set_guard_value(nmethod* nm, int value) {
   }
 
   NativeNMethodBarrier barrier(nm);
-  barrier.set_value(value);
+  barrier.set_value(value, bit_mask);
 }
 
 int BarrierSetNMethod::guard_value(nmethod* nm) {

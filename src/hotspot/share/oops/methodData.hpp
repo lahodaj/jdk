@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,12 +29,12 @@
 #include "interpreter/invocationCounter.hpp"
 #include "oops/metadata.hpp"
 #include "oops/method.hpp"
-#include "oops/oop.hpp"
-#include "runtime/atomic.hpp"
+#include "runtime/atomicAccess.hpp"
 #include "runtime/deoptimization.hpp"
 #include "runtime/mutex.hpp"
 #include "utilities/align.hpp"
 #include "utilities/copy.hpp"
+#include "utilities/integerCast.hpp"
 
 class BytecodeStream;
 
@@ -56,8 +56,7 @@ class BytecodeStream;
 // counter overflow, multiprocessor races during data collection, space
 // limitations, missing MDO blocks, etc.  Bad or missing data will degrade
 // optimization quality but will not affect correctness.  Also, each MDO
-// is marked with its birth-date ("creation_mileage") which can be used
-// to assess the quality ("maturity") of its data.
+// can be checked for its "maturity" by calling is_mature().
 //
 // Short (<32-bit) counters are designed to overflow to a known "saturated"
 // state.  Also, certain recorded per-BCI events are given one-bit counters
@@ -183,7 +182,7 @@ public:
   }
 
   u1 flags() const {
-    return Atomic::load_acquire(&_header._struct._flags);
+    return AtomicAccess::load_acquire(&_header._struct._flags);
   }
 
   u2 bci() const {
@@ -203,9 +202,12 @@ public:
   intptr_t cell_at(int index) const {
     return _cells[index];
   }
+  intptr_t* cell_at_adr(int index) const {
+    return const_cast<intptr_t*>(&_cells[index]);
+  }
 
   bool set_flag_at(u1 flag_number) {
-    const u1 bit = 1 << flag_number;
+    const u1 bit = integer_cast<u1>(1 << flag_number);
     u1 compare_value;
     do {
       compare_value = _header._struct._flags;
@@ -213,12 +215,12 @@ public:
         // already set.
         return false;
       }
-    } while (compare_value != Atomic::cmpxchg(&_header._struct._flags, compare_value, static_cast<u1>(compare_value | bit)));
+    } while (compare_value != AtomicAccess::cmpxchg(&_header._struct._flags, compare_value, static_cast<u1>(compare_value | bit)));
     return true;
   }
 
   bool clear_flag_at(u1 flag_number) {
-    const u1 bit = 1 << flag_number;
+    const u1 bit = integer_cast<u1>(1 << flag_number);
     u1 compare_value;
     u1 exchange_value;
     do {
@@ -228,7 +230,7 @@ public:
         return false;
       }
       exchange_value = compare_value & ~bit;
-    } while (compare_value != Atomic::cmpxchg(&_header._struct._flags, compare_value, exchange_value));
+    } while (compare_value != AtomicAccess::cmpxchg(&_header._struct._flags, compare_value, exchange_value));
     return true;
   }
 
@@ -346,6 +348,10 @@ protected:
     assert(0 <= index && index < cell_count(), "oob");
     return data()->cell_at(index);
   }
+  intptr_t* intptr_at_adr(int index) const {
+    assert(0 <= index && index < cell_count(), "oob");
+    return data()->cell_at_adr(index);
+  }
   void set_uint_at(int index, uint value) {
     set_intptr_at(index, (intptr_t) value);
   }
@@ -362,12 +368,6 @@ protected:
   }
   int int_at_unchecked(int index) const {
     return (int)data()->cell_at(index);
-  }
-  void set_oop_at(int index, oop value) {
-    set_intptr_at(index, cast_from_oop<intptr_t>(value));
-  }
-  oop oop_at(int index) const {
-    return cast_to_oop(intptr_at(index));
   }
 
   void set_flag_at(u1 flag_number) {
@@ -489,7 +489,10 @@ public:
   // GC support
   virtual void clean_weak_klass_links(bool always_clean) {}
 
-  // CI translation: ProfileData can represent both MethodDataOop data
+  // CDS support
+  virtual void metaspace_pointers_do(MetaspaceClosure* it) {}
+
+    // CI translation: ProfileData can represent both MethodDataOop data
   // as well as CIMethodData data. This function is provided for translating
   // an oop in a ProfileData to the ci equivalent. Generally speaking,
   // most ProfileData don't require any translation, so we provide the null
@@ -854,6 +857,11 @@ public:
     return _pd->intptr_at(type_offset_in_cells(i));
   }
 
+  intptr_t* type_adr(int i) const {
+    assert(i >= 0 && i < _number_of_entries, "oob");
+    return _pd->intptr_at_adr(type_offset_in_cells(i));
+  }
+
   // set type for entry i
   void set_type(int i, intptr_t k) {
     assert(i >= 0 && i < _number_of_entries, "oob");
@@ -874,6 +882,9 @@ public:
 
   // GC support
   void clean_weak_klass_links(bool always_clean);
+
+  // CDS support
+  virtual void metaspace_pointers_do(MetaspaceClosure* it);
 
   void print_data_on(outputStream* st) const;
 };
@@ -899,6 +910,10 @@ public:
     return _pd->intptr_at(_base_off);
   }
 
+  intptr_t* type_adr() const {
+    return _pd->intptr_at_adr(_base_off);
+  }
+
   void set_type(intptr_t k) {
     _pd->set_intptr_at(_base_off, k);
   }
@@ -917,6 +932,9 @@ public:
 
   // GC support
   void clean_weak_klass_links(bool always_clean);
+
+  // CDS support
+  virtual void metaspace_pointers_do(MetaspaceClosure* it);
 
   void print_data_on(outputStream* st) const;
 };
@@ -1109,6 +1127,16 @@ public:
     }
   }
 
+  // CDS support
+  virtual void metaspace_pointers_do(MetaspaceClosure* it) {
+    if (has_arguments()) {
+      _args.metaspace_pointers_do(it);
+    }
+    if (has_return()) {
+      _ret.metaspace_pointers_do(it);
+    }
+  }
+
   virtual void print_data_on(outputStream* st, const char* extra = nullptr) const;
 };
 
@@ -1120,6 +1148,8 @@ public:
 // the check, the associated count is incremented every time the type
 // is seen. A per ReceiverTypeData counter is incremented on type
 // overflow (when there's no more room for a not yet profiled Klass*).
+//
+// Updated by platform-specific code, for example MacroAssembler::profile_receiver_type.
 //
 class ReceiverTypeData : public CounterData {
   friend class VMStructs;
@@ -1218,6 +1248,9 @@ public:
 
   // GC support
   virtual void clean_weak_klass_links(bool always_clean);
+
+  // CDS support
+  virtual void metaspace_pointers_do(MetaspaceClosure* it);
 
   void print_receiver_data_on(outputStream* st) const;
   void print_data_on(outputStream* st, const char* extra = nullptr) const;
@@ -1381,6 +1414,17 @@ public:
     }
     if (has_return()) {
       _ret.clean_weak_klass_links(always_clean);
+    }
+  }
+
+  // CDS support
+  virtual void metaspace_pointers_do(MetaspaceClosure* it) {
+    ReceiverTypeData::metaspace_pointers_do(it);
+    if (has_arguments()) {
+      _args.metaspace_pointers_do(it);
+    }
+    if (has_return()) {
+      _ret.metaspace_pointers_do(it);
     }
   }
 
@@ -1567,10 +1611,6 @@ protected:
     int aindex = index + array_start_off_set;
     return int_at(aindex);
   }
-  oop array_oop_at(int index) const {
-    int aindex = index + array_start_off_set;
-    return oop_at(aindex);
-  }
   void array_set_int_at(int index, int value) {
     int aindex = index + array_start_off_set;
     set_int_at(aindex, value);
@@ -1712,7 +1752,7 @@ public:
   virtual bool is_ArgInfoData() const { return true; }
 
 
-  int number_of_args() const {
+  int size_of_args() const {
     return array_len();
   }
 
@@ -1781,6 +1821,11 @@ public:
 
   virtual void clean_weak_klass_links(bool always_clean) {
     _parameters.clean_weak_klass_links(always_clean);
+  }
+
+  // CDS support
+  virtual void metaspace_pointers_do(MetaspaceClosure* it) {
+    _parameters.metaspace_pointers_do(it);
   }
 
   virtual void print_data_on(outputStream* st, const char* extra = nullptr) const;
@@ -1852,6 +1897,9 @@ public:
   static ByteSize method_offset() {
     return cell_offset(speculative_trap_method);
   }
+
+  // CDS support
+  virtual void metaspace_pointers_do(MetaspaceClosure* it);
 
   virtual void print_data_on(outputStream* st, const char* extra = nullptr) const;
 };
@@ -1946,10 +1994,10 @@ class ciMethodData;
 class MethodData : public Metadata {
   friend class VMStructs;
   friend class JVMCIVMStructs;
-private:
   friend class ProfileData;
   friend class TypeEntriesAtCall;
   friend class ciMethodData;
+  friend class VM_ReinitializeMDO;
 
   // If you add a new field that points to any metaspace object, you
   // must add this field to MethodData::metaspace_pointers_do().
@@ -1963,14 +2011,23 @@ private:
   // Cached hint for bci_to_dp and bci_to_data
   int _hint_di;
 
-  Mutex _extra_data_lock;
+  Mutex* volatile _extra_data_lock;
 
   MethodData(const methodHandle& method);
+
+  void initialize();
+
 public:
+  MethodData();
+
   static MethodData* allocate(ClassLoaderData* loader_data, const methodHandle& method, TRAPS);
 
   virtual bool is_methodData() const { return true; }
-  void initialize();
+
+  // Safely reinitialize the data in the MDO.  This is intended as a testing facility as the
+  // reinitialization is performed at a safepoint so it's isn't cheap and it doesn't ensure that all
+  // readers will see consistent profile data.
+  void reinitialize();
 
   // Whole-method sticky bits and flags
   enum {
@@ -2054,8 +2111,6 @@ private:
   intx              _arg_stack;       // bit set of stack-allocatable arguments
   intx              _arg_returned;    // bit set of returned arguments
 
-  int               _creation_mileage; // method mileage at MDO creation
-
   // How many invocations has this MDO seen?
   // These counters are used to determine the exact age of MDO.
   // We need those because in tiered a method can be concurrently
@@ -2070,11 +2125,6 @@ private:
   int               _invoke_mask;      // per-method Tier0InvokeNotifyFreqLog
   int               _backedge_mask;    // per-method Tier0BackedgeNotifyFreqLog
 
-#if INCLUDE_RTM_OPT
-  // State of RTM code generation during compilation of the method
-  int               _rtm_state;
-#endif
-
   // Number of loops and blocks is computed when compiling the first
   // time with C1. It is used to determine if method is trivial.
   short             _num_loops;
@@ -2085,8 +2135,8 @@ private:
 
 #if INCLUDE_JVMCI
   // Support for HotSpotMethodData.setCompiledIRSize(int)
-  int                _jvmci_ir_size;
   FailedSpeculation* _failed_speculations;
+  int                _jvmci_ir_size;
 #endif
 
   // Size of _data array in bytes.  (Excludes header and extra_data fields.)
@@ -2168,7 +2218,7 @@ private:
   // What is the index of the first data entry?
   int first_di() const { return 0; }
 
-  ProfileData* bci_to_extra_data_helper(int bci, Method* m, DataLayout*& dp, bool concurrent);
+  ProfileData* bci_to_extra_data_find(int bci, Method* m, DataLayout*& dp);
   // Find or create an extra ProfileData:
   ProfileData* bci_to_extra_data(int bci, Method* m, bool create_if_missing);
 
@@ -2223,9 +2273,6 @@ public:
   int size_in_bytes() const { return _size; }
   int size() const    { return align_metadata_size(align_up(_size, BytesPerWord)/BytesPerWord); }
 
-  int      creation_mileage() const { return _creation_mileage; }
-  void set_creation_mileage(int x)  { _creation_mileage = x; }
-
   int invocation_count() {
     if (invocation_counter()->carry()) {
       return InvocationCounter::count_limit;
@@ -2270,20 +2317,9 @@ public:
   }
 #endif
 
-#if INCLUDE_RTM_OPT
-  int rtm_state() const {
-    return _rtm_state;
-  }
-  void set_rtm_state(RTMState rstate) {
-    _rtm_state = (int)rstate;
-  }
-  void atomic_set_rtm_state(RTMState rstate) {
-    Atomic::store(&_rtm_state, (int)rstate);
-  }
-
-  static ByteSize rtm_state_offset() {
-    return byte_offset_of(MethodData, _rtm_state);
-  }
+#if INCLUDE_CDS
+  void remove_unshareable_info();
+  void restore_unshareable_info(TRAPS);
 #endif
 
   void set_would_profile(bool p)              { _would_profile = p ? profile : no_profile; }
@@ -2294,8 +2330,7 @@ public:
   int num_blocks() const                      { return _num_blocks; }
   void set_num_blocks(short n)                { _num_blocks = n;    }
 
-  bool is_mature() const;  // consult mileage and ProfileMaturityPercentage
-  static int mileage_of(Method* m);
+  bool is_mature() const;
 
   // Support for interprocedural escape analysis, from Thomas Kotzmann.
   enum EscapeFlag {
@@ -2310,20 +2345,12 @@ public:
   intx arg_local()                               { return _arg_local; }
   intx arg_stack()                               { return _arg_stack; }
   intx arg_returned()                            { return _arg_returned; }
-  uint arg_modified(int a)                       { ArgInfoData *aid = arg_info();
-                                                   assert(aid != nullptr, "arg_info must be not null");
-                                                   assert(a >= 0 && a < aid->number_of_args(), "valid argument number");
-                                                   return aid->arg_modified(a); }
-
+  uint arg_modified(int a);
   void set_eflags(intx v)                        { _eflags = v; }
   void set_arg_local(intx v)                     { _arg_local = v; }
   void set_arg_stack(intx v)                     { _arg_stack = v; }
   void set_arg_returned(intx v)                  { _arg_returned = v; }
-  void set_arg_modified(int a, uint v)           { ArgInfoData *aid = arg_info();
-                                                   assert(aid != nullptr, "arg_info must be not null");
-                                                   assert(a >= 0 && a < aid->number_of_args(), "valid argument number");
-                                                   aid->set_arg_modified(a, v); }
-
+  void set_arg_modified(int a, uint v);
   void clear_escape_info()                       { _eflags = _arg_local = _arg_stack = _arg_returned = 0; }
 
   // Location and size of data area
@@ -2371,6 +2398,8 @@ public:
 
   // Same, but try to create an extra_data record if one is needed:
   ProfileData* allocate_bci_to_data(int bci, Method* m) {
+    check_extra_data_locked();
+
     ProfileData* data = nullptr;
     // If m not null, try to allocate a SpeculativeTrapData entry
     if (m == nullptr) {
@@ -2397,7 +2426,10 @@ public:
 
   // Add a handful of extra data records, for trap tracking.
   // Only valid after 'set_size' is called at the end of MethodData::initialize
-  DataLayout* extra_data_base() const  { return limit_data_position(); }
+  DataLayout* extra_data_base() const  {
+    check_extra_data_locked();
+    return limit_data_position();
+  }
   DataLayout* extra_data_limit() const { return (DataLayout*)((address)this + size_in_bytes()); }
   // pointers to sections in extra data
   DataLayout* args_data_limit() const  { return parameters_data_base(); }
@@ -2412,7 +2444,7 @@ public:
   DataLayout* exception_handler_data_base() const { return data_layout_at(_exception_handler_data_di); }
   DataLayout* exception_handler_data_limit() const { return extra_data_limit(); }
 
-  int extra_data_size() const          { return (int)((address)extra_data_limit() - (address)extra_data_base()); }
+  int extra_data_size() const          { return (int)((address)extra_data_limit() - (address)limit_data_position()); }
   static DataLayout* next_extra(DataLayout* dp);
 
   // Return (uint)-1 for overflow.
@@ -2528,7 +2560,8 @@ public:
 
   void clean_method_data(bool always_clean);
   void clean_weak_method_links();
-  Mutex* extra_data_lock() { return &_extra_data_lock; }
+  Mutex* extra_data_lock();
+  void check_extra_data_locked() const NOT_DEBUG_RETURN;
 };
 
 #endif // SHARE_OOPS_METHODDATA_HPP

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2026, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2015, 2019, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -38,8 +38,8 @@ define_pd_global(bool, UncommonNullCast,         true);  // Uncommon-trap nulls 
 
 define_pd_global(bool, DelayCompilerStubsGeneration, COMPILER2_OR_JVMCI);
 
-define_pd_global(uintx, CodeCacheSegmentSize,    64 COMPILER1_AND_COMPILER2_PRESENT(+64)); // Tiered compilation has large code-entry alignment.
-define_pd_global(intx, CodeEntryAlignment,       64);
+define_pd_global(size_t, CodeCacheSegmentSize,   64);
+define_pd_global(uint, CodeEntryAlignment,       64);
 define_pd_global(intx, OptoLoopAlignment,        16);
 
 #define DEFAULT_STACK_YELLOW_PAGES (2)
@@ -80,14 +80,9 @@ define_pd_global(intx, InlineSmallCode,          1000);
 
 #define ARCH_FLAGS(develop,                                             \
                    product,                                             \
-                   notproduct,                                          \
                    range,                                               \
                    constraint)                                          \
                                                                         \
-  product(bool, NearCpool, true,                                        \
-         "constant pool is close to instructions")                      \
-  product(bool, UseNeon, false,                                         \
-          "Use Neon for CRC32 computation")                             \
   product(bool, UseCRC32, false,                                        \
           "Use CRC32 instructions for CRC32 computation")               \
   product(bool, UseCryptoPmullForCRC32, false,                          \
@@ -100,6 +95,8 @@ define_pd_global(intx, InlineSmallCode,          1000);
           "Use simplest and shortest implementation for array equals")  \
   product(bool, UseSIMDForBigIntegerShiftIntrinsics, true,              \
           "Use SIMD instructions for left/right shift of BigInteger")   \
+  product(bool, UseSIMDForSHA3Intrinsic, false,                         \
+          "Use SIMD SHA3 instructions for SHA3 intrinsic")              \
   product(bool, AvoidUnalignedAccesses, false,                          \
           "Avoid generating unaligned memory accesses")                 \
   product(bool, UseLSE, false,                                          \
@@ -117,16 +114,27 @@ define_pd_global(intx, InlineSmallCode,          1000);
           "Use prfm hint with specified distance in compiled code."     \
           "Value -1 means off.")                                        \
           range(-1, 4096)                                               \
-  product(ccstr, OnSpinWaitInst, "none", DIAGNOSTIC,                    \
-          "The instruction to use to implement "                        \
-          "java.lang.Thread.onSpinWait()."                              \
-          "Options: none, nop, isb, yield.")                            \
+  product(ccstr, OnSpinWaitInst, "yield", DIAGNOSTIC,                   \
+          "The instruction to use for java.lang.Thread.onSpinWait(). "  \
+          "Valid values are: none, nop, isb, yield, sb, wfet.")         \
+          constraint(OnSpinWaitInstNameConstraintFunc, AtParse)         \
   product(uint, OnSpinWaitInstCount, 1, DIAGNOSTIC,                     \
-          "The number of OnSpinWaitInst instructions to generate."      \
-          "It cannot be used with OnSpinWaitInst=none.")                \
+          "The number of OnSpinWaitInst instructions to generate. "     \
+          "It cannot be used with OnSpinWaitInst=none. "                \
+          "For OnSpinWaitInst=wfet it must be 1.")                      \
           range(1, 99)                                                  \
+  product(uint, OnSpinWaitDelay, 40, DIAGNOSTIC,                        \
+          "The minimum delay (in nanoseconds) of the OnSpinWait loop. " \
+          "It can only be used with -XX:OnSpinWaitInst=wfet.")          \
+          range(1, 1000)                                                \
   product(ccstr, UseBranchProtection, "none",                           \
           "Branch Protection to use: none, standard, pac-ret")          \
+  product(bool, AlwaysMergeDMB, true, DIAGNOSTIC,                       \
+          "Always merge DMB instructions in code emission")             \
+  product(bool, NeoverseN1ICacheErratumMitigation, false, DIAGNOSTIC,   \
+          "Enable workaround for Neoverse N1 erratum 1542419")          \
+  product(bool, UseSingleICacheInvalidation, false, DIAGNOSTIC,         \
+          "Defer multiple ICache invalidation to single invalidation")  \
 
 // end of ARCH_FLAGS
 

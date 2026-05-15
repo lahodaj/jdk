@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,11 +27,22 @@
  * @summary Fuzzing loops with different (random) init, limit, stride, scale etc. Do not force alignment.
  * @modules java.base/jdk.internal.misc
  * @library /test/lib
- * @requires vm.compiler2.enabled
  * @key randomness
  * @run main/bootclasspath/othervm -XX:+IgnoreUnrecognizedVMOptions
  *                                 -XX:LoopUnrollLimit=250
- *                                 -XX:CompileCommand=printcompilation,compiler.loopopts.superword.TestAlignVectorFuzzer::*
+ *                                 compiler.loopopts.superword.TestAlignVectorFuzzer
+ */
+
+/*
+ * @test id=CompileOnly
+ * @bug 8253191
+ * @summary Fuzzing loops with different (random) init, limit, stride, scale etc. Do not force alignment.
+ * @modules java.base/jdk.internal.misc
+ * @library /test/lib
+ * @key randomness
+ * @run main/bootclasspath/othervm -XX:+IgnoreUnrecognizedVMOptions
+ *                                 -XX:LoopUnrollLimit=250
+ *                                 -XX:CompileCommand=compileonly,compiler.loopopts.superword.TestAlignVectorFuzzer::*
  *                                 compiler.loopopts.superword.TestAlignVectorFuzzer
  */
 
@@ -41,12 +52,10 @@
  * @summary Fuzzing loops with different (random) init, limit, stride, scale etc. Verify AlignVector.
  * @modules java.base/jdk.internal.misc
  * @library /test/lib
- * @requires vm.compiler2.enabled
  * @key randomness
  * @run main/bootclasspath/othervm -XX:+IgnoreUnrecognizedVMOptions
  *                                 -XX:+AlignVector -XX:+VerifyAlignVector
  *                                 -XX:LoopUnrollLimit=250
- *                                 -XX:CompileCommand=printcompilation,compiler.loopopts.superword.TestAlignVectorFuzzer::*
  *                                 compiler.loopopts.superword.TestAlignVectorFuzzer
  */
 
@@ -56,13 +65,10 @@
  * @summary Fuzzing loops with different (random) init, limit, stride, scale etc. Verify AlignVector.
  * @modules java.base/jdk.internal.misc
  * @library /test/lib
- * @requires vm.compiler2.enabled
- * @requires vm.bits == 64
  * @key randomness
  * @run main/bootclasspath/othervm -XX:+IgnoreUnrecognizedVMOptions
  *                                 -XX:+AlignVector -XX:+VerifyAlignVector
  *                                 -XX:LoopUnrollLimit=250
- *                                 -XX:CompileCommand=printcompilation,compiler.loopopts.superword.TestAlignVectorFuzzer::*
  *                                 -XX:ObjectAlignmentInBytes=16
  *                                 compiler.loopopts.superword.TestAlignVectorFuzzer
  */
@@ -73,12 +79,10 @@
  * @summary Fuzzing loops with different (random) init, limit, stride, scale etc. Verify AlignVector.
  * @modules java.base/jdk.internal.misc
  * @library /test/lib
- * @requires vm.compiler2.enabled
  * @key randomness
  * @run main/bootclasspath/othervm -XX:+IgnoreUnrecognizedVMOptions
  *                                 -XX:+AlignVector -XX:+VerifyAlignVector
  *                                 -XX:LoopUnrollLimit=250
- *                                 -XX:CompileCommand=printcompilation,compiler.loopopts.superword.TestAlignVectorFuzzer::*
  *                                 -XX:-TieredCompilation -Xbatch
  *                                 compiler.loopopts.superword.TestAlignVectorFuzzer
  */
@@ -556,23 +560,25 @@ public class TestAlignVectorFuzzer {
         tests.put("testUU_unsafe_BasIH", () -> { return testUU_unsafe_BasIH(aB.clone(), bB.clone(), cB.clone()); });
 
 
-        // Only run for 90% of the time, and subtract some margin. This ensures the shutdown has sufficient time,
+        // Only run for 40% of the time, and subtract some margin. This ensures the shutdown has sufficient time,
         // even for very slow runs.
-        long test_time_allowance = System.currentTimeMillis() +
-                                   (long)(Utils.adjustTimeout(Utils.DEFAULT_TEST_TIMEOUT) * 0.9) -
-                                   20_000;
-        long test_hard_timeout = System.currentTimeMillis() +
-                                Utils.adjustTimeout(Utils.DEFAULT_TEST_TIMEOUT);
+        System.out.println("Adjusted Timeout: " + Utils.adjustTimeout(Utils.DEFAULT_TEST_TIMEOUT));
+        long testTimeAllowanceDiff = (long)(Utils.adjustTimeout(Utils.DEFAULT_TEST_TIMEOUT) * 0.4) -
+                                     20_000;
+        System.out.println("Time Allowance:   " + testTimeAllowanceDiff);
+        long testTimeAllowance = System.currentTimeMillis() + testTimeAllowanceDiff;
+        long testHardTimeout   = System.currentTimeMillis() +
+                                 Utils.adjustTimeout(Utils.DEFAULT_TEST_TIMEOUT);
 
         for (int i = 1; i <= ITERATIONS_MAX; i++) {
             setRandomConstants();
             for (Map.Entry<String,TestFunction> entry : tests.entrySet()) {
                 String name = entry.getKey();
                 TestFunction test = entry.getValue();
-                long allowance = test_time_allowance - System.currentTimeMillis();
-                long until_timeout = test_hard_timeout - System.currentTimeMillis();
+                long allowance    = testTimeAllowance - System.currentTimeMillis();
+                long untilTimeout = testHardTimeout   - System.currentTimeMillis();
                 System.out.println("ITERATION " + i + " of " + ITERATIONS_MAX + ". Test " + name +
-                                   ", time allowance: " + allowance + ", until timeout: " + until_timeout);
+                                   ", time allowance: " + allowance + ", until timeout: " + untilTimeout);
 
                 // Compute gold value, probably deopt first if constants have changed.
                 Object[] gold = test.run();
@@ -583,18 +589,18 @@ public class TestAlignVectorFuzzer {
                     verify(name, gold, result);
                 }
 
-                if (System.currentTimeMillis() > test_time_allowance) {
-                    allowance = test_time_allowance - System.currentTimeMillis();
-                    until_timeout = test_hard_timeout - System.currentTimeMillis();
+                if (System.currentTimeMillis() > testTimeAllowance) {
+                    allowance    = testTimeAllowance - System.currentTimeMillis();
+                    untilTimeout = testHardTimeout   - System.currentTimeMillis();
                     System.out.println("TEST PASSED: hit maximal time allownance during iteration " + i +
-                                       ", time allowance: " + allowance + ", until timeout: " + until_timeout);
+                                       ", time allowance: " + allowance + ", until timeout: " + untilTimeout);
                     return;
                 }
             }
         }
-        long allowance = test_time_allowance - System.currentTimeMillis();
-        long until_timeout = test_hard_timeout - System.currentTimeMillis();
-        System.out.println("TEST PASSED, time allowance: " + allowance + ", until timeout: " + until_timeout);
+        long allowance    = testTimeAllowance - System.currentTimeMillis();
+        long untilTimeout = testHardTimeout   - System.currentTimeMillis();
+        System.out.println("TEST PASSED, time allowance: " + allowance + ", until timeout: " + untilTimeout);
     }
 
     // Test names:
@@ -1093,11 +1099,11 @@ public class TestAlignVectorFuzzer {
         int init   = init_con_or_var();
         int limit  = limit_con_or_var();
         int stride = stride_con();
-        int scale  = scale_con();
-        int offset = offset1_con_or_var();
+        long scale  = scale_con();
+        long offset = offset1_con_or_var();
 
         for (int i = init; i < limit; i += stride) {
-            int adr = UNSAFE.ARRAY_BYTE_BASE_OFFSET + offset + i * scale;
+            long adr = UNSAFE.ARRAY_BYTE_BASE_OFFSET + offset + i * scale;
             int v = UNSAFE.getIntUnaligned(a, adr);
             UNSAFE.putIntUnaligned(a, adr, v + 1);
         }
@@ -1108,19 +1114,19 @@ public class TestAlignVectorFuzzer {
         int init   = init_con_or_var();
         int limit  = limit_con_or_var();
         int stride = stride_con();
-        int scale  = scale_con();
-        int offset1 = offset1_con_or_var();
-        int offset2 = offset2_con_or_var();
-        int offset3 = offset3_con_or_var();
+        long scale  = scale_con();
+        long offset1 = offset1_con_or_var();
+        long offset2 = offset2_con_or_var();
+        long offset3 = offset3_con_or_var();
 
         int h1 = hand_unrolling1_con();
         int h2 = hand_unrolling2_con();
         int h3 = hand_unrolling3_con();
 
         for (int i = init; i < limit; i += stride) {
-            int adr1 = UNSAFE.ARRAY_BYTE_BASE_OFFSET + offset1 + i * scale;
-            int adr2 = UNSAFE.ARRAY_BYTE_BASE_OFFSET + offset2 + i * scale;
-            int adr3 = UNSAFE.ARRAY_BYTE_BASE_OFFSET + offset3 + i * scale;
+            long adr1 = UNSAFE.ARRAY_BYTE_BASE_OFFSET + offset1 + i * scale;
+            long adr2 = UNSAFE.ARRAY_BYTE_BASE_OFFSET + offset2 + i * scale;
+            long adr3 = UNSAFE.ARRAY_BYTE_BASE_OFFSET + offset3 + i * scale;
 
             if (h1 >=  1) { UNSAFE.putIntUnaligned(a, adr1 +  0*4, UNSAFE.getIntUnaligned(a, adr1 +  0*4) + 1); }
             if (h1 >=  2) { UNSAFE.putIntUnaligned(a, adr1 +  1*4, UNSAFE.getIntUnaligned(a, adr1 +  1*4) + 1); }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2026, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2020, 2023, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -23,7 +23,6 @@
  *
  */
 
-#include "precompiled.hpp"
 #include "asm/macroAssembler.inline.hpp"
 #include "code/codeBlob.hpp"
 #include "code/vmreg.inline.hpp"
@@ -241,7 +240,7 @@ static void store_barrier_buffer_add(MacroAssembler* masm,
   __ beqz(tmp2, slow_path);
 
   // Bump the pointer
-  __ sub(tmp2, tmp2, sizeof(ZStoreBarrierEntry));
+  __ subi(tmp2, tmp2, sizeof(ZStoreBarrierEntry));
   __ sd(tmp2, Address(tmp1, ZStoreBarrierBuffer::current_offset()));
 
   // Compute the buffer entry address
@@ -286,7 +285,7 @@ void ZBarrierSetAssembler::store_barrier_medium(MacroAssembler* masm,
     __ relocate(barrier_Relocation::spec(), [&] {
       __ li16u(rtmp1, barrier_Relocation::unpatched);
     }, ZBarrierRelocationFormatStoreGoodBits);
-    __ cmpxchg_weak(rtmp2, zr, rtmp1,
+    __ weak_cmpxchg(rtmp2, zr, rtmp1,
                     Assembler::int64,
                     Assembler::relaxed /* acquire */, Assembler::relaxed /* release */,
                     rtmp3);
@@ -603,6 +602,30 @@ void ZBarrierSetAssembler::try_resolve_jobject_in_native(MacroAssembler* masm,
   BLOCK_COMMENT("} ZBarrierSetAssembler::try_resolve_jobject_in_native");
 }
 
+void ZBarrierSetAssembler::try_peek_weak_handle_in_nmethod(MacroAssembler* masm, Register weak_handle, Register obj,
+                                                           Register tmp, Label& slow_path) {
+  BLOCK_COMMENT("ZBarrierSetAssembler::try_peek_weak_handle_in_nmethod {");
+
+  assert_different_registers(weak_handle, tmp, noreg);
+  assert_different_registers(obj, tmp, noreg);
+
+
+  // Peek weak handle using the standard implementation.
+  BarrierSetAssembler::try_peek_weak_handle_in_nmethod(masm, weak_handle, obj, tmp, slow_path);
+
+  // Check if the oop is bad, in which case we need to take the slow path.
+  __ relocate(barrier_Relocation::spec(), [&] {
+    __ li16u(tmp, barrier_Relocation::unpatched);
+  }, ZBarrierRelocationFormatMarkBadMask);
+  __ andr(tmp, obj, tmp);
+  __ bnez(tmp, slow_path);
+
+  // Oop is okay, so we uncolor it.
+  __ srli(obj, obj, ZPointerLoadShift);
+
+  BLOCK_COMMENT("} ZBarrierSetAssembler::try_peek_weak_handle_in_nmethod");
+}
+
 static uint16_t patch_barrier_relocation_value(int format) {
   switch (format) {
     case ZBarrierRelocationFormatLoadBadMask:
@@ -629,92 +652,33 @@ void ZBarrierSetAssembler::patch_barrier_relocation(address addr, int format) {
     case ZBarrierRelocationFormatMarkBadMask:
     case ZBarrierRelocationFormatStoreGoodBits:
     case ZBarrierRelocationFormatStoreBadMask:
-      assert(NativeInstruction::is_li16u_at(addr), "invalide zgc barrier");
+      assert(MacroAssembler::is_li16u_at(addr), "invalide zgc barrier");
       bytes = MacroAssembler::pd_patch_instruction_size(addr, (address)(uintptr_t)value);
       break;
     default:
       ShouldNotReachHere();
   }
 
-  // A full fence is generated before icache_flush by default in invalidate_word
-  ICache::invalidate_range(addr, bytes);
+  // If we are using UseCtxFencei no ICache invalidation is needed here.
+  // Instead every hart will preform an fence.i either by a Java thread
+  // (due to patching epoch will take it to slow path),
+  // or by the kernel when a Java thread is moved to a hart.
+  // The instruction streams changes must only happen before the disarm of
+  // the nmethod barrier. Where the disarm have a leading full two way fence.
+  // If this is performed during a safepoint, all Java threads will emit a fence.i
+  // before transitioning to 'Java', e.g. leaving native or the safepoint wait barrier.
+  if (!UseCtxFencei) {
+    // ICache invalidation is a serialization point.
+    // The above patching of instructions happens before the invalidation.
+    // Hence it have a leading full two way fence (wr, wr).
+    ICache::invalidate_range(addr, bytes);
+  }
 }
 
 #ifdef COMPILER2
 
-OptoReg::Name ZBarrierSetAssembler::refine_register(const Node* node, OptoReg::Name opto_reg) {
-  if (!OptoReg::is_reg(opto_reg)) {
-    return OptoReg::Bad;
-  }
-
-  const VMReg vm_reg = OptoReg::as_VMReg(opto_reg);
-  if (vm_reg->is_FloatRegister()) {
-    return opto_reg & ~1;
-  }
-
-  return opto_reg;
-}
-
 #undef __
 #define __ _masm->
-
-class ZSaveLiveRegisters {
-private:
-  MacroAssembler* const _masm;
-  RegSet                _gp_regs;
-  FloatRegSet           _fp_regs;
-  VectorRegSet          _vp_regs;
-
-public:
-  void initialize(ZBarrierStubC2* stub) {
-    // Record registers that needs to be saved/restored
-    RegMaskIterator rmi(stub->live());
-    while (rmi.has_next()) {
-      const OptoReg::Name opto_reg = rmi.next();
-      if (OptoReg::is_reg(opto_reg)) {
-        const VMReg vm_reg = OptoReg::as_VMReg(opto_reg);
-        if (vm_reg->is_Register()) {
-          _gp_regs += RegSet::of(vm_reg->as_Register());
-        } else if (vm_reg->is_FloatRegister()) {
-          _fp_regs += FloatRegSet::of(vm_reg->as_FloatRegister());
-        } else if (vm_reg->is_VectorRegister()) {
-          const VMReg vm_reg_base = OptoReg::as_VMReg(opto_reg & ~(VectorRegister::max_slots_per_register - 1));
-          _vp_regs += VectorRegSet::of(vm_reg_base->as_VectorRegister());
-        } else {
-          fatal("Unknown register type");
-        }
-      }
-    }
-
-    // Remove C-ABI SOE registers, tmp regs and _ref register that will be updated
-    if (stub->result() != noreg) {
-      _gp_regs -= RegSet::range(x18, x27) + RegSet::of(x2) + RegSet::of(x8, x9) + RegSet::of(x5, stub->result());
-    } else {
-      _gp_regs -= RegSet::range(x18, x27) + RegSet::of(x2, x5) + RegSet::of(x8, x9);
-    }
-  }
-
-  ZSaveLiveRegisters(MacroAssembler* masm, ZBarrierStubC2* stub)
-    : _masm(masm),
-      _gp_regs(),
-      _fp_regs(),
-      _vp_regs() {
-    // Figure out what registers to save/restore
-    initialize(stub);
-
-    // Save registers
-    __ push_reg(_gp_regs, sp);
-    __ push_fp(_fp_regs, sp);
-    __ push_v(_vp_regs, sp);
-  }
-
-  ~ZSaveLiveRegisters() {
-    // Restore registers
-    __ pop_v(_vp_regs, sp);
-    __ pop_fp(_fp_regs, sp);
-    __ pop_reg(_gp_regs, sp);
-  }
-};
 
 class ZSetupArguments {
 private:
@@ -773,6 +737,7 @@ public:
 #define __ masm->
 
 void ZBarrierSetAssembler::generate_c2_load_barrier_stub(MacroAssembler* masm, ZLoadBarrierStubC2* stub) const {
+  Assembler::InlineSkippedInstructionsCounter skipped_counter(masm);
   BLOCK_COMMENT("ZLoadBarrierStubC2");
 
   // Stub entry
@@ -781,10 +746,10 @@ void ZBarrierSetAssembler::generate_c2_load_barrier_stub(MacroAssembler* masm, Z
   }
 
   {
-    ZSaveLiveRegisters save_live_registers(masm, stub);
+    SaveLiveRegisters save_live_registers(masm, stub);
     ZSetupArguments setup_arguments(masm, stub);
-    __ mv(t0, stub->slow_path());
-    __ jalr(t0);
+    __ mv(t1, stub->slow_path());
+    __ jalr(t1);
   }
 
   // Stub exit
@@ -792,6 +757,7 @@ void ZBarrierSetAssembler::generate_c2_load_barrier_stub(MacroAssembler* masm, Z
 }
 
 void ZBarrierSetAssembler::generate_c2_store_barrier_stub(MacroAssembler* masm, ZStoreBarrierStubC2* stub) const {
+  Assembler::InlineSkippedInstructionsCounter skipped_counter(masm);
   BLOCK_COMMENT("ZStoreBarrierStubC2");
 
   // Stub entry
@@ -813,17 +779,18 @@ void ZBarrierSetAssembler::generate_c2_store_barrier_stub(MacroAssembler* masm, 
   __ bind(slow);
 
   {
-    ZSaveLiveRegisters save_live_registers(masm, stub);
+    SaveLiveRegisters save_live_registers(masm, stub);
     __ la(c_rarg0, stub->ref_addr());
 
     if (stub->is_native()) {
-      __ la(t0, RuntimeAddress(ZBarrierSetRuntime::store_barrier_on_native_oop_field_without_healing_addr()));
+      __ rt_call(ZBarrierSetRuntime::store_barrier_on_native_oop_field_without_healing_addr());
     } else if (stub->is_atomic()) {
-      __ la(t0, RuntimeAddress(ZBarrierSetRuntime::store_barrier_on_oop_field_with_healing_addr()));
+      __ rt_call(ZBarrierSetRuntime::store_barrier_on_oop_field_with_healing_addr());
+    } else if (stub->is_nokeepalive()) {
+      __ rt_call(ZBarrierSetRuntime::no_keepalive_store_barrier_on_oop_field_without_healing_addr());
     } else {
-      __ la(t0, RuntimeAddress(ZBarrierSetRuntime::store_barrier_on_oop_field_without_healing_addr()));
+      __ rt_call(ZBarrierSetRuntime::store_barrier_on_oop_field_without_healing_addr());
     }
-    __ jalr(t0);
   }
 
   // Stub exit
@@ -906,10 +873,10 @@ void ZBarrierSetAssembler::generate_c1_load_barrier_stub(LIR_Assembler* ce,
    // Save x10 unless it is the result or tmp register
    // Set up SP to accommdate parameters and maybe x10.
    if (ref != x10 && tmp != x10) {
-     __ sub(sp, sp, 32);
+     __ subi(sp, sp, 32);
      __ sd(x10, Address(sp, 16));
    } else {
-     __ sub(sp, sp, 16);
+     __ subi(sp, sp, 16);
    }
 
    // Setup arguments and call runtime stub
@@ -1021,7 +988,7 @@ void ZBarrierSetAssembler::generate_c1_store_barrier_stub(LIR_Assembler* ce,
 
   __ la(stub->new_zpointer()->as_register(), ce->as_Address(stub->ref_addr()->as_address_ptr()));
 
-  __ sub(sp, sp, 16);
+  __ subi(sp, sp, 16);
   //Setup arguments and call runtime stub
   assert(stub->new_zpointer()->is_valid(), "invariant");
   ce->store_parameter(stub->new_zpointer()->as_register(), 0);

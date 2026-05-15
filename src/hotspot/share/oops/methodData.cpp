@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +22,9 @@
  *
  */
 
-#include "precompiled.hpp"
+#include "cds/cdsConfig.hpp"
 #include "ci/ciMethodData.hpp"
+#include "classfile/systemDictionaryShared.hpp"
 #include "classfile/vmSymbols.hpp"
 #include "compiler/compilationPolicy.hpp"
 #include "compiler/compilerDefinitions.inline.hpp"
@@ -34,9 +35,10 @@
 #include "memory/metaspaceClosure.hpp"
 #include "memory/resourceArea.hpp"
 #include "oops/klass.inline.hpp"
+#include "oops/method.inline.hpp"
 #include "oops/methodData.inline.hpp"
 #include "prims/jvmtiRedefineClasses.hpp"
-#include "runtime/atomic.hpp"
+#include "runtime/atomicAccess.hpp"
 #include "runtime/deoptimization.hpp"
 #include "runtime/handles.inline.hpp"
 #include "runtime/orderAccess.hpp"
@@ -59,9 +61,14 @@ bool DataLayout::needs_array_len(u1 tag) {
 // Perform generic initialization of the data.  More specific
 // initialization occurs in overrides of ProfileData::post_initialize.
 void DataLayout::initialize(u1 tag, u2 bci, int cell_count) {
-  _header._bits = (intptr_t)0;
-  _header._struct._tag = tag;
-  _header._struct._bci = bci;
+  DataLayout temp;
+  temp._header._bits = (intptr_t)0;
+  temp._header._struct._tag = tag;
+  temp._header._struct._bci = bci;
+  // Write the header using a single intptr_t write.  This ensures that if the layout is
+  // reinitialized readers will never see the transient state where the header is 0.
+  _header = temp._header;
+
   for (int i = 0; i < cell_count; i++) {
     set_cell_at(i, (intptr_t)0);
   }
@@ -314,22 +321,63 @@ void VirtualCallTypeData::post_initialize(BytecodeStream* stream, MethodData* md
   }
 }
 
+static bool is_excluded(Klass* k) {
+#if INCLUDE_CDS
+  if (CDSConfig::is_at_aot_safepoint()) {
+    // Check for CDS exclusion only at CDS safe point.
+    if (k->is_instance_klass() && !InstanceKlass::cast(k)->is_loaded()) {
+      log_debug(aot, training)("Purged %s from MDO: unloaded class", k->name()->as_C_string());
+      return true;
+    } else {
+      bool excluded = SystemDictionaryShared::should_be_excluded(k) || !SystemDictionaryShared::is_builtin_loader(k->class_loader_data());
+      if (excluded) {
+        log_debug(aot, training)("Purged %s from MDO: excluded class", k->name()->as_C_string());
+      }
+      return excluded;
+    }
+  }
+#endif
+  return false;
+}
+
 void TypeStackSlotEntries::clean_weak_klass_links(bool always_clean) {
   for (int i = 0; i < _number_of_entries; i++) {
     intptr_t p = type(i);
     Klass* k = (Klass*)klass_part(p);
-    if (k != nullptr && (always_clean || !k->is_loader_alive())) {
-      set_type(i, with_status((Klass*)nullptr, p));
+    if (k != nullptr) {
+      if (!always_clean && k->is_instance_klass() && InstanceKlass::cast(k)->is_not_initialized()) {
+        continue; // skip not-yet-initialized classes // TODO: maybe clear the slot instead?
+      }
+      if (always_clean || !k->is_loader_present_and_alive() || is_excluded(k)) {
+        set_type(i, with_status((Klass*)nullptr, p));
+      }
     }
+  }
+}
+
+void TypeStackSlotEntries::metaspace_pointers_do(MetaspaceClosure* it) {
+  for (int i = 0; i < _number_of_entries; i++) {
+    Klass** k = (Klass**)type_adr(i); // tagged
+    it->push(k);
   }
 }
 
 void ReturnTypeEntry::clean_weak_klass_links(bool always_clean) {
   intptr_t p = type();
   Klass* k = (Klass*)klass_part(p);
-  if (k != nullptr && (always_clean || !k->is_loader_alive())) {
-    set_type(with_status((Klass*)nullptr, p));
+  if (k != nullptr) {
+    if (!always_clean && k->is_instance_klass() && InstanceKlass::cast(k)->is_not_initialized()) {
+      return; // skip not-yet-initialized classes // TODO: maybe clear the slot instead?
+    }
+    if (always_clean || !k->is_loader_present_and_alive() || is_excluded(k)) {
+      set_type(with_status((Klass*)nullptr, p));
+    }
   }
+}
+
+void ReturnTypeEntry::metaspace_pointers_do(MetaspaceClosure* it) {
+  Klass** k = (Klass**)type_adr(); // tagged
+  it->push(k);
 }
 
 bool TypeEntriesAtCall::return_profiling_enabled() {
@@ -407,9 +455,21 @@ void VirtualCallTypeData::print_data_on(outputStream* st, const char* extra) con
 void ReceiverTypeData::clean_weak_klass_links(bool always_clean) {
     for (uint row = 0; row < row_limit(); row++) {
     Klass* p = receiver(row);
-    if (p != nullptr && (always_clean || !p->is_loader_alive())) {
-      clear_row(row);
+    if (p != nullptr) {
+      if (!always_clean && p->is_instance_klass() && InstanceKlass::cast(p)->is_not_initialized()) {
+        continue; // skip not-yet-initialized classes // TODO: maybe clear the slot instead?
+      }
+      if (always_clean || !p->is_loader_present_and_alive() || is_excluded(p)) {
+        clear_row(row);
+      }
     }
+  }
+}
+
+void ReceiverTypeData::metaspace_pointers_do(MetaspaceClosure *it) {
+  for (uint row = 0; row < row_limit(); row++) {
+    Klass** recv = (Klass**)intptr_at_adr(receiver_cell_index(row));
+    it->push(recv);
   }
 }
 
@@ -607,8 +667,8 @@ void MultiBranchData::print_data_on(outputStream* st, const char* extra) const {
 
 void ArgInfoData::print_data_on(outputStream* st, const char* extra) const {
   print_shared(st, "ArgInfoData", extra);
-  int nargs = number_of_args();
-  for (int i = 0; i < nargs; i++) {
+  int args_size = size_of_args();
+  for (int i = 0; i < args_size; i++) {
     st->print("  0x%x", arg_modified(i));
   }
   st->cr();
@@ -639,6 +699,11 @@ void ParametersTypeData::print_data_on(outputStream* st, const char* extra) cons
   tab(st);
   _parameters.print_data_on(st);
   st->cr();
+}
+
+void SpeculativeTrapData::metaspace_pointers_do(MetaspaceClosure* it) {
+  Method** m = (Method**)intptr_at_adr(speculative_trap_method);
+  it->push(m);
 }
 
 void SpeculativeTrapData::print_data_on(outputStream* st, const char* extra) const {
@@ -847,7 +912,7 @@ bool FailedSpeculation::add_failed_speculation(nmethod* nm, FailedSpeculation** 
         }
         guarantee(is_aligned(fs, sizeof(FailedSpeculation*)), "FailedSpeculation objects must be pointer aligned");
       }
-      FailedSpeculation* old_fs = Atomic::cmpxchg(cursor, (FailedSpeculation*) nullptr, fs);
+      FailedSpeculation* old_fs = AtomicAccess::cmpxchg(cursor, (FailedSpeculation*) nullptr, fs);
       if (old_fs == nullptr) {
         // Successfully appended fs to end of the list
         return true;
@@ -1218,11 +1283,40 @@ void MethodData::post_initialize(BytecodeStream* stream) {
 MethodData::MethodData(const methodHandle& method)
   : _method(method()),
     // Holds Compile_lock
-    _extra_data_lock(Mutex::safepoint-2, "MDOExtraData_lock"),
     _compiler_counters(),
     _parameters_type_data_di(parameters_uninitialized) {
-  initialize();
+    _extra_data_lock = nullptr;
+    initialize();
 }
+
+#if INCLUDE_CDS
+MethodData::MethodData() {
+  // Used by cppVtables.cpp only
+  assert(CDSConfig::is_dumping_static_archive() || UseSharedSpaces, "only for CDS");
+}
+#endif
+
+// Reinitialize the storage of an existing MDO at a safepoint.  Doing it this way will ensure it's
+// not being accessed while the contents are being rewritten.
+class VM_ReinitializeMDO: public VM_Operation {
+ private:
+  MethodData* _mdo;
+ public:
+  VM_ReinitializeMDO(MethodData* mdo): _mdo(mdo) {}
+  VMOp_Type type() const                         { return VMOp_ReinitializeMDO; }
+  void doit() {
+    // The extra data is being zero'd, we'd like to acquire the extra_data_lock but it can't be held
+    // over a safepoint.  This means that we don't actually need to acquire the lock.
+    _mdo->initialize();
+  }
+  bool allow_nested_vm_operations() const        { return true; }
+};
+
+void MethodData::reinitialize() {
+  VM_ReinitializeMDO op(this);
+  VMThread::execute(&op);
+}
+
 
 void MethodData::initialize() {
   Thread* thread = Thread::current();
@@ -1230,7 +1324,6 @@ void MethodData::initialize() {
   ResourceMark rm(thread);
 
   init();
-  set_creation_mileage(mileage_of(method()));
 
   // Go through the bytecodes and allocate and initialize the
   // corresponding data cells.
@@ -1319,7 +1412,7 @@ void MethodData::init() {
   // Set per-method invoke- and backedge mask.
   double scale = 1.0;
   methodHandle mh(Thread::current(), _method);
-  CompilerOracle::has_option_value(mh, CompileCommand::CompileThresholdScaling, scale);
+  CompilerOracle::has_option_value(mh, CompileCommandEnum::CompileThresholdScaling, scale);
   _invoke_mask = (int)right_n_bits(CompilerConfig::scaled_freq_log(Tier0InvokeNotifyFreqLog, scale)) << InvocationCounter::count_shift;
   _backedge_mask = (int)right_n_bits(CompilerConfig::scaled_freq_log(Tier0BackedgeNotifyFreqLog, scale)) << InvocationCounter::count_shift;
 
@@ -1333,32 +1426,12 @@ void MethodData::init() {
   _failed_speculations = nullptr;
 #endif
 
-#if INCLUDE_RTM_OPT
-  _rtm_state = NoRTM; // No RTM lock eliding by default
-  if (UseRTMLocking &&
-      !CompilerOracle::has_option(mh, CompileCommand::NoRTMLockEliding)) {
-    if (CompilerOracle::has_option(mh, CompileCommand::UseRTMLockEliding) || !UseRTMDeopt) {
-      // Generate RTM lock eliding code without abort ratio calculation code.
-      _rtm_state = UseRTM;
-    } else if (UseRTMDeopt) {
-      // Generate RTM lock eliding code and include abort ratio calculation
-      // code if UseRTMDeopt is on.
-      _rtm_state = ProfileRTM;
-    }
-  }
-#endif
-
   // Initialize escape flags.
   clear_escape_info();
 }
 
-// Get a measure of how much mileage the method has on it.
-int MethodData::mileage_of(Method* method) {
-  return MAX2(method->invocation_count(), method->backedge_count());
-}
-
 bool MethodData::is_mature() const {
-  return CompilationPolicy::is_mature(_method);
+  return CompilationPolicy::is_mature(const_cast<MethodData*>(this));
 }
 
 // Translate a bci to its corresponding data index (di).
@@ -1379,6 +1452,8 @@ address MethodData::bci_to_dp(int bci) {
 
 // Translate a bci to its corresponding data, or null.
 ProfileData* MethodData::bci_to_data(int bci) {
+  check_extra_data_locked();
+
   DataLayout* data = data_layout_before(bci);
   for ( ; is_valid(data); data = next_data_layout(data)) {
     if (data->bci() == bci) {
@@ -1429,12 +1504,14 @@ DataLayout* MethodData::next_extra(DataLayout* dp) {
   return (DataLayout*)((address)dp + DataLayout::compute_size_in_bytes(nb_cells));
 }
 
-ProfileData* MethodData::bci_to_extra_data_helper(int bci, Method* m, DataLayout*& dp, bool concurrent) {
+ProfileData* MethodData::bci_to_extra_data_find(int bci, Method* m, DataLayout*& dp) {
+  check_extra_data_locked();
+
   DataLayout* end = args_data_limit();
 
   for (;; dp = next_extra(dp)) {
     assert(dp < end, "moved past end of extra data");
-    // No need for "Atomic::load_acquire" ops,
+    // No need for "AtomicAccess::load_acquire" ops,
     // since the data structure is monotonic.
     switch(dp->tag()) {
     case DataLayout::no_tag:
@@ -1450,14 +1527,9 @@ ProfileData* MethodData::bci_to_extra_data_helper(int bci, Method* m, DataLayout
     case DataLayout::speculative_trap_data_tag:
       if (m != nullptr) {
         SpeculativeTrapData* data = new SpeculativeTrapData(dp);
-        // data->method() may be null in case of a concurrent
-        // allocation. Maybe it's for the same method. Try to use that
-        // entry in that case.
         if (dp->bci() == bci) {
-          if (data->method() == nullptr) {
-            assert(concurrent, "impossible because no concurrent allocation");
-            return nullptr;
-          } else if (data->method() == m) {
+          assert(data->method() != nullptr, "method must be set");
+          if (data->method() == m) {
             return data;
           }
         }
@@ -1473,6 +1545,8 @@ ProfileData* MethodData::bci_to_extra_data_helper(int bci, Method* m, DataLayout
 
 // Translate a bci to its corresponding extra data, or null.
 ProfileData* MethodData::bci_to_extra_data(int bci, Method* m, bool create_if_missing) {
+  check_extra_data_locked();
+
   // This code assumes an entry for a SpeculativeTrapData is 2 cells
   assert(2*DataLayout::compute_size_in_bytes(BitData::static_cell_count()) ==
          DataLayout::compute_size_in_bytes(SpeculativeTrapData::static_cell_count()),
@@ -1486,23 +1560,14 @@ ProfileData* MethodData::bci_to_extra_data(int bci, Method* m, bool create_if_mi
   DataLayout* dp  = extra_data_base();
   DataLayout* end = args_data_limit();
 
-  // Allocation in the extra data space has to be atomic because not
-  // all entries have the same size and non atomic concurrent
-  // allocation would result in a corrupted extra data space.
-  ProfileData* result = bci_to_extra_data_helper(bci, m, dp, true);
-  if (result != nullptr) {
+  // Find if already exists
+  ProfileData* result = bci_to_extra_data_find(bci, m, dp);
+  if (result != nullptr || dp >= end) {
     return result;
   }
 
-  if (create_if_missing && dp < end) {
-    MutexLocker ml(&_extra_data_lock);
-    // Check again now that we have the lock. Another thread may
-    // have added extra data entries.
-    ProfileData* result = bci_to_extra_data_helper(bci, m, dp, false);
-    if (result != nullptr || dp >= end) {
-      return result;
-    }
-
+  if (create_if_missing) {
+    // Not found -> Allocate
     assert(dp->tag() == DataLayout::no_tag || (dp->tag() == DataLayout::speculative_trap_data_tag && m != nullptr), "should be free");
     assert(next_extra(dp)->tag() == DataLayout::no_tag || next_extra(dp)->tag() == DataLayout::arg_info_data_tag, "should be free or arg info");
     u1 tag = m == nullptr ? DataLayout::bit_data_tag : DataLayout::speculative_trap_data_tag;
@@ -1554,6 +1619,9 @@ void MethodData::print_value_on(outputStream* st) const {
 }
 
 void MethodData::print_data_on(outputStream* st) const {
+  Mutex* lock = const_cast<MethodData*>(this)->extra_data_lock();
+  ConditionalMutexLocker ml(lock, !lock->owned_by_self(),
+                            Mutex::_no_safepoint_check_flag);
   ResourceMark rm;
   ProfileData* data = first_data();
   if (_parameters_type_data_di != no_parameters) {
@@ -1564,12 +1632,13 @@ void MethodData::print_data_on(outputStream* st) const {
     st->fill_to(6);
     data->print_data_on(st, this);
   }
+
   st->print_cr("--- Extra data:");
   DataLayout* dp    = extra_data_base();
   DataLayout* end   = args_data_limit();
   for (;; dp = next_extra(dp)) {
     assert(dp < end, "moved past end of extra data");
-    // No need for "Atomic::load_acquire" ops,
+    // No need for "AtomicAccess::load_acquire" ops,
     // since the data structure is monotonic.
     switch(dp->tag()) {
     case DataLayout::no_tag:
@@ -1724,11 +1793,31 @@ bool MethodData::profile_parameters_for_method(const methodHandle& m) {
 }
 
 void MethodData::metaspace_pointers_do(MetaspaceClosure* it) {
-  log_trace(cds)("Iter(MethodData): %p", this);
+  log_trace(aot, training)("Iter(MethodData): %p for %p %s", this, _method, _method->name_and_sig_as_C_string());
   it->push(&_method);
+  if (_parameters_type_data_di != no_parameters) {
+    parameters_type_data()->metaspace_pointers_do(it);
+  }
+  for (ProfileData* data = first_data(); is_valid(data); data = next_data(data)) {
+    data->metaspace_pointers_do(it);
+  }
+  for (DataLayout* dp = extra_data_base();
+                   dp < extra_data_limit();
+                   dp = MethodData::next_extra(dp)) {
+    if (dp->tag() == DataLayout::speculative_trap_data_tag) {
+      ResourceMark rm;
+      SpeculativeTrapData* data = new SpeculativeTrapData(dp);
+      data->metaspace_pointers_do(it);
+    } else if (dp->tag() == DataLayout::no_tag ||
+               dp->tag() == DataLayout::arg_info_data_tag) {
+      break;
+    }
+  }
 }
 
 void MethodData::clean_extra_data_helper(DataLayout* dp, int shift, bool reset) {
+  check_extra_data_locked();
+
   if (shift == 0) {
     return;
   }
@@ -1755,6 +1844,9 @@ class CleanExtraDataKlassClosure : public CleanExtraDataClosure {
 public:
   CleanExtraDataKlassClosure(bool always_clean) : _always_clean(always_clean) {}
   bool is_live(Method* m) {
+    if (!_always_clean && m->method_holder()->is_instance_klass() && InstanceKlass::cast(m->method_holder())->is_not_initialized()) {
+      return true; // TODO: treat as unloaded instead?
+    }
     return !(_always_clean) && m->method_holder()->is_loader_alive();
   }
 };
@@ -1766,10 +1858,26 @@ public:
   bool is_live(Method* m) { return !m->is_old(); }
 };
 
+Mutex* MethodData::extra_data_lock() {
+  Mutex* lock = AtomicAccess::load_acquire(&_extra_data_lock);
+  if (lock == nullptr) {
+    // This lock could be acquired while we are holding DumpTimeTable_lock/nosafepoint
+    lock = new Mutex(Mutex::nosafepoint-1, "MDOExtraData_lock");
+    Mutex* old = AtomicAccess::cmpxchg(&_extra_data_lock, (Mutex*)nullptr, lock);
+    if (old != nullptr) {
+      // Another thread created the lock before us. Use that lock instead.
+      delete lock;
+      return old;
+    }
+  }
+  return lock;
+}
 
 // Remove SpeculativeTrapData entries that reference an unloaded or
 // redefined method
 void MethodData::clean_extra_data(CleanExtraDataClosure* cl) {
+  check_extra_data_locked();
+
   DataLayout* dp  = extra_data_base();
   DataLayout* end = args_data_limit();
 
@@ -1780,7 +1888,7 @@ void MethodData::clean_extra_data(CleanExtraDataClosure* cl) {
       SpeculativeTrapData* data = new SpeculativeTrapData(dp);
       Method* m = data->method();
       assert(m != nullptr, "should have a method");
-      if (!cl->is_live(m)) {
+      if (is_excluded(m->method_holder()) || !cl->is_live(m)) {
         // "shift" accumulates the number of cells for dead
         // SpeculativeTrapData entries that have been seen so
         // far. Following entries must be shifted left by that many
@@ -1814,6 +1922,8 @@ void MethodData::clean_extra_data(CleanExtraDataClosure* cl) {
 // Verify there's no unloaded or redefined method referenced by a
 // SpeculativeTrapData entry
 void MethodData::verify_extra_data_clean(CleanExtraDataClosure* cl) {
+  check_extra_data_locked();
+
 #ifdef ASSERT
   DataLayout* dp  = extra_data_base();
   DataLayout* end = args_data_limit();
@@ -1851,6 +1961,10 @@ void MethodData::clean_method_data(bool always_clean) {
   }
 
   CleanExtraDataKlassClosure cl(always_clean);
+
+  // Lock to modify extra data, and prevent Safepoint from breaking the lock
+  MutexLocker ml(extra_data_lock(), Mutex::_no_safepoint_check_flag);
+
   clean_extra_data(&cl);
   verify_extra_data_clean(&cl);
 }
@@ -1860,6 +1974,10 @@ void MethodData::clean_method_data(bool always_clean) {
 void MethodData::clean_weak_method_links() {
   ResourceMark rm;
   CleanExtraDataMethodClosure cl;
+
+  // Lock to modify extra data, and prevent Safepoint from breaking the lock
+  MutexLocker ml(extra_data_lock(), Mutex::_no_safepoint_check_flag);
+
   clean_extra_data(&cl);
   verify_extra_data_clean(&cl);
 }
@@ -1873,3 +1991,29 @@ void MethodData::release_C_heap_structures() {
   FailedSpeculation::free_failed_speculations(get_failed_speculations_address());
 #endif
 }
+
+#if INCLUDE_CDS
+void MethodData::remove_unshareable_info() {
+  _extra_data_lock = nullptr;
+#if INCLUDE_JVMCI
+  _failed_speculations = nullptr;
+#endif
+}
+
+void MethodData::restore_unshareable_info(TRAPS) {
+  //_extra_data_lock = new Mutex(Mutex::nosafepoint, "MDOExtraData_lock");
+}
+#endif // INCLUDE_CDS
+
+#ifdef ASSERT
+void MethodData::check_extra_data_locked() const {
+    // Cast const away, just to be able to verify the lock
+    // Usually we only want non-const accesses on the lock,
+    // so this here is an exception.
+    MethodData* self = (MethodData*)this;
+    assert(self->extra_data_lock()->owned_by_self() || CDSConfig::is_dumping_archive(), "must have lock");
+    assert(!Thread::current()->is_Java_thread() ||
+           JavaThread::current()->is_in_no_safepoint_scope(),
+           "JavaThread must have NoSafepointVerifier inside lock scope");
+}
+#endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,6 @@
  *
  */
 
-#include "precompiled.hpp"
 #include "classfile/classLoaderDataGraph.hpp"
 #include "classfile/javaClasses.inline.hpp"
 #include "classfile/symbolTable.hpp"
@@ -37,13 +36,13 @@
 #include "oops/access.inline.hpp"
 #include "oops/arrayOop.hpp"
 #include "oops/constantPool.inline.hpp"
+#include "oops/fieldStreams.inline.hpp"
 #include "oops/instanceMirrorKlass.hpp"
 #include "oops/klass.inline.hpp"
 #include "oops/objArrayKlass.hpp"
 #include "oops/objArrayOop.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "oops/typeArrayOop.inline.hpp"
-#include "prims/jvmtiEventController.hpp"
 #include "prims/jvmtiEventController.inline.hpp"
 #include "prims/jvmtiExport.hpp"
 #include "prims/jvmtiImpl.hpp"
@@ -58,17 +57,17 @@
 #include "runtime/javaCalls.hpp"
 #include "runtime/javaThread.inline.hpp"
 #include "runtime/jniHandles.inline.hpp"
+#include "runtime/mountUnmountDisabler.hpp"
 #include "runtime/mutex.hpp"
 #include "runtime/mutexLocker.hpp"
-#include "runtime/reflectionUtils.hpp"
 #include "runtime/safepoint.hpp"
-#include "runtime/timerTrace.hpp"
 #include "runtime/threadSMR.hpp"
+#include "runtime/timerTrace.hpp"
 #include "runtime/vframe.hpp"
-#include "runtime/vmThread.hpp"
 #include "runtime/vmOperations.hpp"
-#include "utilities/objectBitSet.inline.hpp"
+#include "runtime/vmThread.hpp"
 #include "utilities/macros.hpp"
+#include "utilities/objectBitSet.inline.hpp"
 
 typedef ObjectBitSet<mtServiceability> JVMTIBitSet;
 
@@ -137,20 +136,6 @@ bool JvmtiTagMap::is_empty() {
   return hashmap()->is_empty();
 }
 
-// This checks for posting before operations that use
-// this tagmap table.
-void JvmtiTagMap::check_hashmap(GrowableArray<jlong>* objects) {
-  assert(is_locked(), "checking");
-
-  if (is_empty()) { return; }
-
-  if (_needs_cleaning &&
-      objects != nullptr &&
-      env()->is_enabled(JVMTI_EVENT_OBJECT_FREE)) {
-    remove_dead_entries_locked(objects);
-  }
-}
-
 // This checks for posting and is called from the heap walks.
 void JvmtiTagMap::check_hashmaps_for_heapwalk(GrowableArray<jlong>* objects) {
   assert(SafepointSynchronize::is_at_safepoint(), "called from safepoints");
@@ -163,7 +148,7 @@ void JvmtiTagMap::check_hashmaps_for_heapwalk(GrowableArray<jlong>* objects) {
     if (tag_map != nullptr) {
       // The ZDriver may be walking the hashmaps concurrently so this lock is needed.
       MutexLocker ml(tag_map->lock(), Mutex::_no_safepoint_check_flag);
-      tag_map->check_hashmap(objects);
+      tag_map->remove_dead_entries_locked(objects);
     }
   }
 }
@@ -330,11 +315,6 @@ class TwoOopCallbackWrapper : public CallbackWrapper {
 void JvmtiTagMap::set_tag(jobject object, jlong tag) {
   MutexLocker ml(lock(), Mutex::_no_safepoint_check_flag);
 
-  // SetTag should not post events because the JavaThread has to
-  // transition to native for the callback and this cannot stop for
-  // safepoints with the hashmap lock held.
-  check_hashmap(nullptr);  /* don't collect dead objects */
-
   // resolve the object
   oop o = JNIHandles::resolve_non_null(object);
 
@@ -354,11 +334,6 @@ void JvmtiTagMap::set_tag(jobject object, jlong tag) {
 // get the tag for an object
 jlong JvmtiTagMap::get_tag(jobject object) {
   MutexLocker ml(lock(), Mutex::_no_safepoint_check_flag);
-
-  // GetTag should not post events because the JavaThread has to
-  // transition to native for the callback and this cannot stop for
-  // safepoints with the hashmap lock held.
-  check_hashmap(nullptr); /* don't collect dead objects */
 
   // resolve the object
   oop o = JNIHandles::resolve_non_null(object);
@@ -397,6 +372,9 @@ class ClassFieldMap: public CHeapObj<mtInternal> {
   // constructor
   ClassFieldMap();
 
+  // calculates number of fields in all interfaces
+  static int interfaces_field_count(InstanceKlass* ik);
+
   // add a field
   void add(int index, char type, int offset);
 
@@ -424,6 +402,16 @@ ClassFieldMap::~ClassFieldMap() {
   delete _fields;
 }
 
+int ClassFieldMap::interfaces_field_count(InstanceKlass* ik) {
+  const Array<InstanceKlass*>* interfaces = ik->transitive_interfaces();
+  int count = 0;
+  for (int i = 0; i < interfaces->length(); i++) {
+    count += interfaces->at(i)->java_fields_count();
+
+  }
+  return count;
+}
+
 void ClassFieldMap::add(int index, char type, int offset) {
   ClassFieldDescriptor* field = new ClassFieldDescriptor(index, type, offset);
   _fields->append(field);
@@ -431,48 +419,57 @@ void ClassFieldMap::add(int index, char type, int offset) {
 
 // Returns a heap allocated ClassFieldMap to describe the static fields
 // of the given class.
-//
 ClassFieldMap* ClassFieldMap::create_map_of_static_fields(Klass* k) {
   InstanceKlass* ik = InstanceKlass::cast(k);
 
   // create the field map
   ClassFieldMap* field_map = new ClassFieldMap();
 
-  FilteredFieldStream f(ik, false, false);
-  int max_field_index = f.field_count()-1;
+  // Static fields of interfaces and superclasses are reported as references from the interfaces/superclasses.
+  // Need to calculate start index of this class fields: number of fields in all interfaces and superclasses.
+  int index = interfaces_field_count(ik);
+  for (InstanceKlass* super_klass = ik->super(); super_klass != nullptr; super_klass = super_klass->super()) {
+    index += super_klass->java_fields_count();
+  }
 
-  int index = 0;
-  for (FilteredFieldStream fld(ik, true, true); !fld.eos(); fld.next(), index++) {
+  for (JavaFieldStream fld(ik); !fld.done(); fld.next(), index++) {
     // ignore instance fields
     if (!fld.access_flags().is_static()) {
       continue;
     }
-    field_map->add(max_field_index - index, fld.signature()->char_at(0), fld.offset());
+    field_map->add(index, fld.signature()->char_at(0), fld.offset());
   }
+
   return field_map;
 }
 
 // Returns a heap allocated ClassFieldMap to describe the instance fields
 // of the given class. All instance fields are included (this means public
-// and private fields declared in superclasses and superinterfaces too).
-//
+// and private fields declared in superclasses too).
 ClassFieldMap* ClassFieldMap::create_map_of_instance_fields(oop obj) {
   InstanceKlass* ik = InstanceKlass::cast(obj->klass());
 
   // create the field map
   ClassFieldMap* field_map = new ClassFieldMap();
 
-  FilteredFieldStream f(ik, false, false);
+  // fields of the superclasses are reported first, so need to know total field number to calculate field indices
+  int total_field_number = interfaces_field_count(ik);
+  for (InstanceKlass* klass = ik; klass != nullptr; klass = klass->super()) {
+    total_field_number += klass->java_fields_count();
+  }
 
-  int max_field_index = f.field_count()-1;
-
-  int index = 0;
-  for (FilteredFieldStream fld(ik, false, false); !fld.eos(); fld.next(), index++) {
-    // ignore static fields
-    if (fld.access_flags().is_static()) {
-      continue;
+  for (InstanceKlass* klass = ik; klass != nullptr; klass = klass->super()) {
+    JavaFieldStream fld(klass);
+    int start_index = total_field_number - klass->java_fields_count();
+    for (int index = 0; !fld.done(); fld.next(), index++) {
+      // ignore static fields
+      if (fld.access_flags().is_static()) {
+        continue;
+      }
+      field_map->add(start_index + index, fld.signature()->char_at(0), fld.offset());
     }
-    field_map->add(max_field_index - index, fld.signature()->char_at(0), fld.offset());
+    // update total_field_number for superclass (decrease by the field count in the current class)
+    total_field_number = start_index;
   }
 
   return field_map;
@@ -695,7 +692,7 @@ static jint invoke_string_value_callback(jvmtiStringPrimitiveValueCallback cb,
                    user_data);
 
   if (is_latin1 && s_len > 0) {
-    FREE_C_HEAP_ARRAY(jchar, value);
+    FREE_C_HEAP_ARRAY(value);
   }
   return res;
 }
@@ -921,6 +918,7 @@ class IterateOverHeapObjectClosure: public ObjectClosure {
 
 // invoked for each object in the heap
 void IterateOverHeapObjectClosure::do_object(oop o) {
+  assert(o != nullptr, "Heap iteration should never produce null!");
   // check if iteration has been halted
   if (is_iteration_aborted()) return;
 
@@ -930,8 +928,8 @@ void IterateOverHeapObjectClosure::do_object(oop o) {
   }
 
   // skip if object is a dormant shared object whose mirror hasn't been loaded
-  if (o != nullptr && o->klass()->java_mirror() == nullptr) {
-    log_debug(cds, heap)("skipped dormant archived object " INTPTR_FORMAT " (%s)", p2i(o),
+  if (o->klass()->java_mirror() == nullptr) {
+    log_debug(aot, heap)("skipped dormant archived object " INTPTR_FORMAT " (%s)", p2i(o),
                          o->klass()->external_name());
     return;
   }
@@ -1009,6 +1007,7 @@ class IterateThroughHeapObjectClosure: public ObjectClosure {
 
 // invoked for each object in the heap
 void IterateThroughHeapObjectClosure::do_object(oop obj) {
+  assert(obj != nullptr, "Heap iteration should never produce null!");
   // check if iteration has been halted
   if (is_iteration_aborted()) return;
 
@@ -1016,8 +1015,8 @@ void IterateThroughHeapObjectClosure::do_object(oop obj) {
   if (is_filtered_by_klass_filter(obj, klass())) return;
 
   // skip if object is a dormant shared object whose mirror hasn't been loaded
-  if (obj != nullptr &&   obj->klass()->java_mirror() == nullptr) {
-    log_debug(cds, heap)("skipped dormant archived object " INTPTR_FORMAT " (%s)", p2i(obj),
+  if (obj->klass()->java_mirror() == nullptr) {
+    log_debug(aot, heap)("skipped dormant archived object " INTPTR_FORMAT " (%s)", p2i(obj),
                          obj->klass()->external_name());
     return;
   }
@@ -1181,8 +1180,10 @@ void JvmtiTagMap::flush_object_free_events() {
   assert_not_at_safepoint();
   if (env()->is_enabled(JVMTI_EVENT_OBJECT_FREE)) {
     {
+      // The other thread can block for safepoints during event callbacks, so ensure we
+      // are safepoint-safe while waiting.
+      ThreadBlockInVM tbivm(JavaThread::current());
       MonitorLocker ml(lock(), Mutex::_no_safepoint_check_flag);
-      // If another thread is posting events, let it finish
       while (_posting_events) {
         ml.wait();
       }
@@ -2168,6 +2169,39 @@ class SimpleRootsClosure : public OopClosure {
   virtual void do_oop(narrowOop* obj_p) { ShouldNotReachHere(); }
 };
 
+// A supporting closure used to process ClassLoaderData roots.
+class CLDRootsClosure: public OopClosure {
+private:
+  bool _continue;
+public:
+  CLDRootsClosure(): _continue(true) {}
+
+  inline bool stopped() {
+    return !_continue;
+  }
+
+  void do_oop(oop* obj_p) {
+    if (stopped()) {
+      return;
+    }
+
+    oop o = NativeAccess<AS_NO_KEEPALIVE>::oop_load(obj_p);
+    // ignore null
+    if (o == nullptr) {
+      return;
+    }
+
+    jvmtiHeapReferenceKind kind = JVMTI_HEAP_REFERENCE_OTHER;
+    if (o->klass() == vmClasses::Class_klass()) {
+      kind = JVMTI_HEAP_REFERENCE_SYSTEM_CLASS;
+    }
+
+    // invoke the callback
+    _continue = CallbackInvoker::report_simple_root(kind, o);
+  }
+  virtual void do_oop(narrowOop* obj_p) { ShouldNotReachHere(); }
+};
+
 // A supporting closure used to process JNI locals
 class JNILocalRootsClosure : public OopClosure {
  private:
@@ -2282,10 +2316,11 @@ bool StackRefCollector::report_native_stack_refs(jmethodID method) {
   _blk->set_context(_thread_tag, _tid, _depth, method);
   if (_is_top_frame) {
     // JNI locals for the top frame.
-    assert(_java_thread != nullptr, "sanity");
-    _java_thread->active_handles()->oops_do(_blk);
-    if (_blk->stopped()) {
-      return false;
+    if (_java_thread != nullptr) {
+      _java_thread->active_handles()->oops_do(_blk);
+      if (_blk->stopped()) {
+        return false;
+      }
     }
   } else {
     if (_last_entry_frame != nullptr) {
@@ -2572,10 +2607,10 @@ inline bool VM_HeapWalkOperation::iterate_over_class(oop java_class) {
     oop mirror = klass->java_mirror();
 
     // super (only if something more interesting than java.lang.Object)
-    InstanceKlass* java_super = ik->java_super();
-    if (java_super != nullptr && java_super != vmClasses::Object_klass()) {
-      oop super = java_super->java_mirror();
-      if (!CallbackInvoker::report_superclass_reference(mirror, super)) {
+    InstanceKlass* super_klass = ik->super();
+    if (super_klass != nullptr && super_klass != vmClasses::Object_klass()) {
+      oop super_oop = super_klass->java_mirror();
+      if (!CallbackInvoker::report_superclass_reference(mirror, super_oop)) {
         return false;
       }
     }
@@ -2753,10 +2788,10 @@ inline bool VM_HeapWalkOperation::collect_simple_roots() {
   }
 
   // Preloaded classes and loader from the system dictionary
-  blk.set_kind(JVMTI_HEAP_REFERENCE_SYSTEM_CLASS);
-  CLDToOopClosure cld_closure(&blk, false);
+  CLDRootsClosure cld_roots_closure;
+  CLDToOopClosure cld_closure(&cld_roots_closure, ClassLoaderData::_claim_none);
   ClassLoaderDataGraph::always_strong_cld_do(&cld_closure);
-  if (blk.stopped()) {
+  if (cld_roots_closure.stopped()) {
     return false;
   }
 
@@ -2972,7 +3007,7 @@ void JvmtiTagMap::iterate_over_reachable_objects(jvmtiHeapRootCallback heap_root
                                                  jvmtiObjectReferenceCallback object_ref_callback,
                                                  const void* user_data) {
   // VTMS transitions must be disabled before the EscapeBarrier.
-  JvmtiVTMSTransitionDisabler disabler;
+  MountUnmountDisabler disabler;
 
   JavaThread* jt = JavaThread::current();
   EscapeBarrier eb(true, jt);
@@ -3000,7 +3035,7 @@ void JvmtiTagMap::iterate_over_objects_reachable_from_object(jobject object,
   Arena dead_object_arena(mtServiceability);
   GrowableArray<jlong> dead_objects(&dead_object_arena, 10, 0, 0);
 
-  JvmtiVTMSTransitionDisabler disabler;
+  MountUnmountDisabler disabler;
 
   {
     MutexLocker ml(Heap_lock);
@@ -3020,7 +3055,7 @@ void JvmtiTagMap::follow_references(jint heap_filter,
                                     const void* user_data)
 {
   // VTMS transitions must be disabled before the EscapeBarrier.
-  JvmtiVTMSTransitionDisabler disabler;
+  MountUnmountDisabler disabler;
 
   oop obj = JNIHandles::resolve(object);
   JavaThread* jt = JavaThread::current();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -57,9 +57,9 @@ class DeoptimizationScope {
   DeoptimizationScope();
   ~DeoptimizationScope();
   // Mark a method, if already marked as dependent.
-  void mark(CompiledMethod* cm, bool inc_recompile_counts = true);
+  void mark(nmethod* nm, bool inc_recompile_counts = true);
   // Record this as a dependent method.
-  void dependent(CompiledMethod* cm);
+  void dependent(nmethod* nm);
 
   // Execute the deoptimization.
   // Make the nmethods not entrant, stackwalks and patch return pcs and sets post call nops.
@@ -98,6 +98,7 @@ class Deoptimization : AllStatic {
 #endif
 
     Reason_profile_predicate,     // compiler generated predicate moved from frequent branch in a loop failed
+    Reason_auto_vectorization_check, // compiler generated (speculative) auto vectorization checks failed
 
     // recorded per method
     Reason_unloaded,              // unloaded class or constant pool entry
@@ -113,14 +114,14 @@ class Deoptimization : AllStatic {
     Reason_speculate_class_check, // saw unexpected object class from type speculation
     Reason_speculate_null_check,  // saw unexpected null from type speculation
     Reason_speculate_null_assert, // saw unexpected null from type speculation
-    Reason_rtm_state_change,      // rtm state change detected
     Reason_unstable_if,           // a branch predicted always false was taken
     Reason_unstable_fused_if,     // fused two ifs that had each one untaken branch. One is now taken.
     Reason_receiver_constraint,   // receiver subtype check failed
+    Reason_not_compiled_exception_handler, // missing compiled exception handler
+    Reason_short_running_long_loop,    // profile reports loop runs for small number of iterations
 #if INCLUDE_JVMCI
-    Reason_aliasing,              // optimistic assumption about aliasing failed
+    Reason_aliasing = Reason_short_running_long_loop, // optimistic assumption about aliasing failed
     Reason_transfer_to_interpreter, // explicit transferToInterpreter()
-    Reason_not_compiled_exception_handler,
     Reason_unresolved,
     Reason_jsr_mismatch,
 #endif
@@ -183,8 +184,8 @@ class Deoptimization : AllStatic {
   // Deoptimizes a frame lazily. Deopt happens on return to the frame.
   static void deoptimize(JavaThread* thread, frame fr, DeoptReason reason = Reason_constraint);
 
+  static address deoptimize_for_missing_exception_handler(nmethod* nm, bool make_not_entrant);
 #if INCLUDE_JVMCI
-  static address deoptimize_for_missing_exception_handler(CompiledMethod* cm);
   static oop get_cached_box(AutoBoxObjectValue* bv, frame* fr, RegisterMap* reg_map, bool& cache_init_error, TRAPS);
 #endif
 
@@ -354,7 +355,7 @@ class Deoptimization : AllStatic {
   }
   static int trap_request_debug_id(int trap_request) {
     if (trap_request < 0) {
-      return ((~(trap_request) >> _debug_id_shift) & right_n_bits(_debug_id_bits));
+      return (~(trap_request) >> _debug_id_shift) & right_n_bits<int>(_debug_id_bits);
     } else {
       // standard action for unloaded CP entry
       return 0;

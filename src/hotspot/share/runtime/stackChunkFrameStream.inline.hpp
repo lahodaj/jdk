@@ -1,4 +1,5 @@
-/* Copyright (c) 2019, 2022, Oracle and/or its affiliates. All rights reserved.
+/*
+ * Copyright (c) 2019, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,10 +31,10 @@
 #include "compiler/oopMap.hpp"
 #include "interpreter/interpreter.hpp"
 #include "logging/log.hpp"
+#include "oops/instanceStackChunkKlass.inline.hpp"
 #include "oops/method.hpp"
 #include "oops/oop.hpp"
 #include "oops/stackChunkOop.inline.hpp"
-#include "oops/instanceStackChunkKlass.inline.hpp"
 #include "runtime/frame.inline.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/devirtualizer.inline.hpp"
@@ -105,12 +106,12 @@ StackChunkFrameStream<frame_kind>::StackChunkFrameStream(stackChunkOop chunk, co
 
 template <ChunkFrames frame_kind>
 inline bool StackChunkFrameStream<frame_kind>::is_stub() const {
-  return cb() != nullptr && (_cb->is_safepoint_stub() || _cb->is_runtime_stub());
+  return cb() != nullptr && _cb->is_runtime_stub();
 }
 
 template <ChunkFrames frame_kind>
 inline bool StackChunkFrameStream<frame_kind>::is_compiled() const {
-  return cb() != nullptr && _cb->is_compiled();
+  return cb() != nullptr && _cb->is_nmethod();
 }
 
 template <>
@@ -188,14 +189,22 @@ inline int StackChunkFrameStream<frame_kind>::stack_argsize() const {
     return 0;
   }
   assert(cb() != nullptr, "");
-  assert(cb()->is_compiled(), "");
-  assert(cb()->as_compiled_method()->method() != nullptr, "");
-  return (cb()->as_compiled_method()->method()->num_stack_arg_slots() * VMRegImpl::stack_slot_size) >> LogBytesPerWord;
+  assert(cb()->is_nmethod(), "");
+  assert(cb()->as_nmethod()->method() != nullptr, "");
+  return (cb()->as_nmethod()->num_stack_arg_slots() * VMRegImpl::stack_slot_size) >> LogBytesPerWord;
 }
 
 template <ChunkFrames frame_kind>
-inline int StackChunkFrameStream<frame_kind>::num_oops() const {
-  return is_interpreted() ? interpreter_frame_num_oops() : oopmap()->num_oops();
+template <typename RegisterMapT>
+inline int StackChunkFrameStream<frame_kind>::num_oops(RegisterMapT* map) const {
+  if (is_interpreted()) {
+    return interpreter_frame_num_oops(map);
+  } else if (is_compiled()) {
+    return oopmap()->num_oops();
+  } else {
+    assert(is_stub(), "invariant");
+    return 0;
+  }
 }
 
 template <ChunkFrames frame_kind>
@@ -207,7 +216,7 @@ template <ChunkFrames frame_kind>
 template <typename RegisterMapT>
 inline void StackChunkFrameStream<frame_kind>::next(RegisterMapT* map, bool stop) {
   update_reg_map(map);
-  bool safepoint = is_stub();
+  bool is_runtime_stub = is_stub();
   if (frame_kind == ChunkFrames::Mixed) {
     if (is_interpreted()) {
       next_for_interpreter_frame();
@@ -231,8 +240,9 @@ inline void StackChunkFrameStream<frame_kind>::next(RegisterMapT* map, bool stop
 
   get_cb();
   update_reg_map_pd(map);
-  if (safepoint && cb() != nullptr) { // there's no post-call nop and no fast oopmap lookup
-    _oopmap = cb()->oop_map_for_return_address(pc());
+  if (is_runtime_stub && cb() != nullptr) { // there's no post-call nop and no fast oopmap lookup
+    // caller could have been deoptimized so use orig_pc()
+    _oopmap = cb()->oop_map_for_return_address(orig_pc());
   }
 }
 
@@ -265,7 +275,7 @@ inline void StackChunkFrameStream<frame_kind>::get_oopmap() const {
 template <ChunkFrames frame_kind>
 inline void StackChunkFrameStream<frame_kind>::get_oopmap(address pc, int oopmap_slot) const {
   assert(cb() != nullptr, "");
-  assert(!is_compiled() || !cb()->as_compiled_method()->is_deopt_pc(pc), "");
+  assert(!is_compiled() || !cb()->as_nmethod()->is_deopt_pc(pc), "");
   if (oopmap_slot >= 0) {
     assert(oopmap_slot >= 0, "");
     assert(cb()->oop_map_for_slot(oopmap_slot, pc) != nullptr, "");
@@ -299,9 +309,8 @@ inline void StackChunkFrameStream<ChunkFrames::Mixed>::update_reg_map(RegisterMa
 template<>
 template<>
 inline void StackChunkFrameStream<ChunkFrames::CompiledOnly>::update_reg_map(RegisterMap* map) {
-  assert(map->in_cont(), "");
-  assert(map->stack_chunk()() == _chunk, "");
-  if (map->update_map()) {
+  assert(!map->in_cont() || map->stack_chunk() == _chunk, "");
+  if (map->update_map() && is_stub()) {
     frame f = to_frame();
     oopmap()->update_register_map(&f, map); // we have callee-save registers in this case
   }
@@ -317,13 +326,13 @@ inline address StackChunkFrameStream<frame_kind>::orig_pc() const {
   if (is_interpreted() || is_stub()) {
     return pc1;
   }
-  CompiledMethod* cm = cb()->as_compiled_method();
-  if (cm->is_deopt_pc(pc1)) {
-    pc1 = *(address*)((address)unextended_sp() + cm->orig_pc_offset());
+  nmethod* nm = cb()->as_nmethod();
+  if (nm->is_deopt_pc(pc1)) {
+    pc1 = *(address*)((address)unextended_sp() + nm->orig_pc_offset());
   }
 
   assert(pc1 != nullptr, "");
-  assert(!cm->is_deopt_pc(pc1), "");
+  assert(!nm->is_deopt_pc(pc1), "");
   assert(_cb == CodeCache::find_blob_fast(pc1), "");
 
   return pc1;
@@ -344,7 +353,7 @@ void StackChunkFrameStream<frame_kind>::handle_deopted() const {
   address pc1 = pc();
   int oopmap_slot = CodeCache::find_oopmap_slot_fast(pc1);
   if (oopmap_slot < 0) { // UNLIKELY; we could have marked frames for deoptimization in thaw_chunk
-    if (cb()->as_compiled_method()->is_deopt_pc(pc1)) {
+    if (cb()->as_nmethod()->is_deopt_pc(pc1)) {
       pc1 = orig_pc();
       oopmap_slot = CodeCache::find_oopmap_slot_fast(pc1);
     }
@@ -357,7 +366,7 @@ template <class OopClosureType, class RegisterMapT>
 inline void StackChunkFrameStream<frame_kind>::iterate_oops(OopClosureType* closure, const RegisterMapT* map) const {
   if (is_interpreted()) {
     frame f = to_frame();
-    f.oops_interpreted_do(closure, nullptr, true);
+    f.oops_interpreted_do(closure, map, true);
   } else {
     DEBUG_ONLY(int oops = 0;)
     for (OopMapStream oms(oopmap()); !oms.is_done(); oms.next()) {

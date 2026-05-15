@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -310,8 +310,8 @@ public interface ThreadReference extends ObjectReference {
      * for which this thread is currently waiting.
      * The thread can be waiting for a monitor through entry into a
      * synchronized method, the synchronized statement, or
-     * {@link Object#wait}.  The {@link #status} method can be used
-     * to differentiate between the first two cases and the third.
+     * {@link Object#wait} waiting to re-enter the monitor
+     * after being notified, interrupted, or timed-out.
      * <p>
      * Not all target virtual machines support this operation.
      * Use {@link VirtualMachine#canGetCurrentContendedMonitor()}
@@ -402,8 +402,8 @@ public interface ThreadReference extends ObjectReference {
      * @throws java.lang.IllegalArgumentException if <CODE>frame</CODE>
      * is not on this thread's call stack.
      *
-     * @throws OpaqueFrameException if this thread is a suspended virtual thread and the
-     * target VM was unable to pop the frames.
+     * @throws OpaqueFrameException if the target VM is unable to pop this frame
+     * (e.g. a virtual thread is suspended, but not at an event).
      *
      * @throws NativeMethodException if one of the frames that would be
      * popped is that of a native method or if the frame previous to
@@ -484,8 +484,8 @@ public interface ThreadReference extends ObjectReference {
      * @throws IncompatibleThreadStateException if this
      * thread is not suspended.
      *
-     * @throws OpaqueFrameException if this thread is a suspended virtual thread and the
-     * target VM is unable to force the method to return.
+     * @throws OpaqueFrameException if the target VM is unable to force the method to return
+     * (e.g. a virtual thread is suspended, but not at an event).
      *
      * @throws NativeMethodException if the frame to be returned from
      * is that of a native method.

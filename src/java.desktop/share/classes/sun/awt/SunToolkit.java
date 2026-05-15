@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -79,7 +79,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
-import java.security.AccessController;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Locale;
@@ -99,9 +98,6 @@ import sun.awt.image.MultiResolutionToolkitImage;
 import sun.awt.image.ToolkitImage;
 import sun.awt.image.URLImageSource;
 import sun.font.FontDesignMetrics;
-import sun.net.util.URLUtil;
-import sun.security.action.GetBooleanAction;
-import sun.security.action.GetPropertyAction;
 import sun.util.logging.PlatformLogger;
 
 import static java.awt.RenderingHints.KEY_TEXT_ANTIALIASING;
@@ -122,14 +118,12 @@ public abstract class SunToolkit extends Toolkit
         initStatic();
     }
 
-    @SuppressWarnings("removal")
     private static void initStatic() {
-        if (AccessController.doPrivileged(new GetBooleanAction("sun.awt.nativedebug"))) {
+        if (Boolean.getBoolean("sun.awt.nativedebug")) {
             DebugSettings.init();
         }
         touchKeyboardAutoShowIsEnabled = Boolean.parseBoolean(
-            GetPropertyAction.privilegedGetProperty(
-                "awt.touchKeyboardAutoShowIsEnabled", "true"));
+            System.getProperty("awt.touchKeyboardAutoShowIsEnabled", "true"));
     }
 
     /**
@@ -138,10 +132,6 @@ public abstract class SunToolkit extends Toolkit
      * value for Toolkit.addAWTEventListener.
      */
     public static final int GRAB_EVENT_MASK = 0x80000000;
-
-    /* The key to put()/get() the PostEventQueue into/from the AppContext.
-     */
-    private static final String POST_EVENT_QUEUE_KEY = "PostEventQueue";
 
     /**
      * Number of buttons.
@@ -162,20 +152,17 @@ public abstract class SunToolkit extends Toolkit
      */
     public static final int MAX_BUTTONS_SUPPORTED = 20;
 
-    /**
-     * Creates and initializes EventQueue instance for the specified
-     * AppContext.
-     * Note that event queue must be created from createNewAppContext()
-     * only in order to ensure that EventQueue constructor obtains
-     * the correct AppContext.
-     * @param appContext AppContext to associate with the event queue
-     */
-    private static void initEQ(AppContext appContext) {
-        EventQueue eventQueue = new EventQueue();
-        appContext.put(AppContext.EVENT_QUEUE_KEY, eventQueue);
+    public static volatile EventQueue currentEventQueue;
+    private static volatile PostEventQueue postEventQueue;
 
-        PostEventQueue postEventQueue = new PostEventQueue(eventQueue);
-        appContext.put(POST_EVENT_QUEUE_KEY, postEventQueue);
+    /**
+     * Creates and initializes EventQueue instance.
+     */
+    private static synchronized void initEQ() {
+        if (currentEventQueue == null) {
+            currentEventQueue = new EventQueue();
+            postEventQueue = new PostEventQueue(currentEventQueue);
+        }
     }
 
     public SunToolkit() {
@@ -231,9 +218,8 @@ public abstract class SunToolkit extends Toolkit
      *     }
      */
 
-    @SuppressWarnings("removal")
     private static final ReentrantLock AWT_LOCK = new ReentrantLock(
-            AccessController.doPrivileged(new GetBooleanAction("awt.lock.fair")));
+            Boolean.getBoolean("awt.lock.fair"));
     private static final Condition AWT_LOCK_COND = AWT_LOCK.newCondition();
 
     public static final void awtLock() {
@@ -274,8 +260,7 @@ public abstract class SunToolkit extends Toolkit
 
     /*
      * Create a new AppContext, along with its EventQueue, for a
-     * new ThreadGroup.  Browser code, for example, would use this
-     * method to create an AppContext & EventQueue for an Applet.
+     * new ThreadGroup.
      */
     public static AppContext createNewAppContext() {
         ThreadGroup threadGroup = Thread.currentThread().getThreadGroup();
@@ -287,8 +272,7 @@ public abstract class SunToolkit extends Toolkit
         // the calls to AppContext.getAppContext() from EventQueue ctor
         // return correct values
         AppContext appContext = new AppContext(threadGroup);
-        initEQ(appContext);
-
+        initEQ();
         return appContext;
     }
 
@@ -341,9 +325,6 @@ public abstract class SunToolkit extends Toolkit
         if (target instanceof Component) {
             AWTAccessor.getComponentAccessor().
                 setAppContext((Component)target, context);
-        } else if (target instanceof MenuComponent) {
-            AWTAccessor.getMenuComponentAccessor().
-                setAppContext((MenuComponent)target, context);
         } else {
             return false;
         }
@@ -359,8 +340,7 @@ public abstract class SunToolkit extends Toolkit
             return AWTAccessor.getComponentAccessor().
                        getAppContext((Component)target);
         } else if (target instanceof MenuComponent) {
-            return AWTAccessor.getMenuComponentAccessor().
-                       getAppContext((MenuComponent)target);
+            return AppContext.getAppContext();
         } else {
             return null;
         }
@@ -422,6 +402,11 @@ public abstract class SunToolkit extends Toolkit
         cont.setFocusTraversalPolicy(defaultPolicy);
     }
 
+    /* This method should be removed at the same time as targetToAppContext() */
+    public static void insertTargetMapping(Object target) {
+        insertTargetMapping(target, AppContext.getAppContext());
+    }
+
     /*
      * Insert a mapping from target to AppContext, for later retrieval
      * via targetToAppContext() above.
@@ -432,6 +417,17 @@ public abstract class SunToolkit extends Toolkit
             // instead.
             appContextMap.put(target, appContext);
         }
+    }
+
+    public static void postEvent(AWTEvent event) {
+       /* Adding AppContext is temporary to help migrate away from using app contexts
+        * It is used by code which has already been subject to that migration.
+        * However until that is complete, there is a single main app context we
+        * can retrieve to use which would be the same as if the code had
+        * not been migrated.
+        * The overload which accepts the AppContext will eventually be replaced by this.
+        */
+        postEvent(AppContext.getAppContext(), event);
     }
 
     /*
@@ -464,12 +460,6 @@ public abstract class SunToolkit extends Toolkit
         // otherwise have to be modified to precisely identify
         // system-generated events.
         setSystemGenerated(event);
-        AppContext eventContext = targetToAppContext(event.getSource());
-        if (eventContext != null && !eventContext.equals(appContext)) {
-            throw new RuntimeException("Event posted on wrong app context : " + event);
-        }
-        PostEventQueue postEventQueue =
-            (PostEventQueue)appContext.get(POST_EVENT_QUEUE_KEY);
         if (postEventQueue != null) {
             postEventQueue.postEvent(event);
         }
@@ -494,18 +484,6 @@ public abstract class SunToolkit extends Toolkit
      * EventQueue yet.
      */
     public static void flushPendingEvents()  {
-        AppContext appContext = AppContext.getAppContext();
-        flushPendingEvents(appContext);
-    }
-
-    /*
-     * Flush the PostEventQueue for the right AppContext.
-     * The default flushPendingEvents only flushes the thread-local context,
-     * which is not always correct, c.f. 3746956
-     */
-    public static void flushPendingEvents(AppContext appContext) {
-        PostEventQueue postEventQueue =
-                (PostEventQueue)appContext.get(POST_EVENT_QUEUE_KEY);
         if (postEventQueue != null) {
             postEventQueue.flush();
         }
@@ -525,7 +503,6 @@ public abstract class SunToolkit extends Toolkit
      * Fixed 5064013: the InvocationEvent time should be equals
      * the time of the ActionEvent
      */
-    @SuppressWarnings("serial")
     public static void executeOnEventHandlerThread(Object target,
                                                    Runnable runnable,
                                                    final long when) {
@@ -546,6 +523,10 @@ public abstract class SunToolkit extends Toolkit
     public static void executeOnEventHandlerThread(PeerEvent peerEvent) {
         postEvent(targetToAppContext(peerEvent.getSource()), peerEvent);
     }
+
+     public static void invokeLater(Runnable dispatcher) {
+         invokeLaterOnAppContext(AppContext.getAppContext(), dispatcher);
+     }
 
     /*
      * Execute a chunk of code on the Java event handler thread. The
@@ -591,20 +572,6 @@ public abstract class SunToolkit extends Toolkit
         if (eventThrowable != null) {
             throw new InvocationTargetException(eventThrowable);
         }
-    }
-
-    /*
-     * Returns true if the calling thread is the event dispatch thread
-     * contained within AppContext which associated with the given target.
-     * Use this call to ensure that a given task is being executed
-     * (or not being) on the event dispatch thread for the given target.
-     */
-    public static boolean isDispatchThreadForAppContext(Object target) {
-        AppContext appContext = targetToAppContext(target);
-        EventQueue eq = (EventQueue)appContext.get(AppContext.EVENT_QUEUE_KEY);
-
-        AWTAccessor.EventQueueAccessor accessor = AWTAccessor.getEventQueueAccessor();
-        return accessor.isDispatchThreadImpl(eq);
     }
 
     @Override
@@ -673,18 +640,16 @@ public abstract class SunToolkit extends Toolkit
      * Returns the value of "sun.awt.noerasebackground" property. Default
      * value is {@code false}.
      */
-    @SuppressWarnings("removal")
     public static boolean getSunAwtNoerasebackground() {
-        return AccessController.doPrivileged(new GetBooleanAction("sun.awt.noerasebackground"));
+        return Boolean.getBoolean("sun.awt.noerasebackground");
     }
 
     /**
      * Returns the value of "sun.awt.erasebackgroundonresize" property. Default
      * value is {@code false}.
      */
-    @SuppressWarnings("removal")
     public static boolean getSunAwtErasebackgroundonresize() {
-        return AccessController.doPrivileged(new GetBooleanAction("sun.awt.erasebackgroundonresize"));
+        return Boolean.getBoolean("sun.awt.erasebackgroundonresize");
     }
 
 
@@ -695,7 +660,6 @@ public abstract class SunToolkit extends Toolkit
     static final SoftCache urlImgCache = new SoftCache();
 
     static Image getImageFromHash(Toolkit tk, URL url) {
-        checkPermissions(url);
         synchronized (urlImgCache) {
             String key = url.toString();
             Image img = (Image)urlImgCache.get(key);
@@ -712,7 +676,6 @@ public abstract class SunToolkit extends Toolkit
 
     static Image getImageFromHash(Toolkit tk,
                                                String filename) {
-        checkPermissions(filename);
         synchronized (fileImgCache) {
             Image img = (Image)fileImgCache.get(filename);
             if (img == null) {
@@ -768,13 +731,11 @@ public abstract class SunToolkit extends Toolkit
 
     @Override
     public Image createImage(String filename) {
-        checkPermissions(filename);
         return createImage(new FileImageSource(filename));
     }
 
     @Override
     public Image createImage(URL url) {
-        checkPermissions(url);
         return createImage(new URLImageSource(url));
     }
 
@@ -882,7 +843,6 @@ public abstract class SunToolkit extends Toolkit
 
     protected static boolean imageExists(String filename) {
         if (filename != null) {
-            checkPermissions(filename);
             return new File(filename).exists();
         }
         return false;
@@ -891,7 +851,6 @@ public abstract class SunToolkit extends Toolkit
     @SuppressWarnings("try")
     protected static boolean imageExists(URL url) {
         if (url != null) {
-            checkPermissions(url);
             try (InputStream is = url.openStream()) {
                 return true;
             }catch(IOException e){
@@ -899,30 +858,6 @@ public abstract class SunToolkit extends Toolkit
             }
         }
         return false;
-    }
-
-    private static void checkPermissions(String filename) {
-        @SuppressWarnings("removal")
-        SecurityManager security = System.getSecurityManager();
-        if (security != null) {
-            security.checkRead(filename);
-        }
-    }
-
-    private static void checkPermissions(URL url) {
-        @SuppressWarnings("removal")
-        SecurityManager sm = System.getSecurityManager();
-        if (sm != null) {
-            try {
-                java.security.Permission perm =
-                    URLUtil.getConnectPermission(url);
-                if (perm != null) {
-                    sm.checkPermission(perm);
-                }
-            } catch (java.io.IOException ioe) {
-                sm.checkConnect(url.getHost(), url.getPort());
-            }
-        }
     }
 
     /**
@@ -1059,15 +994,9 @@ public abstract class SunToolkit extends Toolkit
         return getSystemEventQueueImplPP();
     }
 
-    // Package private implementation
-    static EventQueue getSystemEventQueueImplPP() {
-        return getSystemEventQueueImplPP(AppContext.getAppContext());
-    }
-
-    public static EventQueue getSystemEventQueueImplPP(AppContext appContext) {
-        EventQueue theEventQueue =
-            (EventQueue)appContext.get(AppContext.EVENT_QUEUE_KEY);
-        return theEventQueue;
+    public static EventQueue getSystemEventQueueImplPP() {
+        initEQ();
+        return currentEventQueue;
     }
 
     /**
@@ -1111,22 +1040,9 @@ public abstract class SunToolkit extends Toolkit
 
     /**
      * Returns whether popup is allowed to be shown above the task bar.
-     * This is a default implementation of this method, which checks
-     * corresponding security permission.
      */
     public boolean canPopupOverlapTaskBar() {
-        boolean result = true;
-        try {
-            @SuppressWarnings("removal")
-            SecurityManager sm = System.getSecurityManager();
-            if (sm != null) {
-                sm.checkPermission(AWTPermissions.SET_WINDOW_ALWAYS_ON_TOP_PERMISSION);
-            }
-        } catch (SecurityException se) {
-            // There is no permission to show popups over the task bar
-            result = false;
-        }
-        return result;
+        return true;
     }
 
     /**
@@ -1158,15 +1074,12 @@ public abstract class SunToolkit extends Toolkit
     /**
      * Returns the locale in which the runtime was started.
      */
-    @SuppressWarnings("removal")
     public static Locale getStartupLocale() {
         if (startupLocale == null) {
             String language, region, country, variant;
-            language = AccessController.doPrivileged(
-                            new GetPropertyAction("user.language", "en"));
+            language = System.getProperty("user.language", "en");
             // for compatibility, check for old user.region property
-            region = AccessController.doPrivileged(
-                            new GetPropertyAction("user.region"));
+            region = System.getProperty("user.region");
             if (region != null) {
                 // region can be of form country, country_variant, or _variant
                 int i = region.indexOf('_');
@@ -1178,10 +1091,8 @@ public abstract class SunToolkit extends Toolkit
                     variant = "";
                 }
             } else {
-                country = AccessController.doPrivileged(
-                                new GetPropertyAction("user.country", ""));
-                variant = AccessController.doPrivileged(
-                                new GetPropertyAction("user.variant", ""));
+                country = System.getProperty("user.country", "");
+                variant = System.getProperty("user.variant", "");
             }
             startupLocale = Locale.of(language, country, variant);
         }
@@ -1202,9 +1113,7 @@ public abstract class SunToolkit extends Toolkit
      * @return {@code true}, if XEmbed is needed, {@code false} otherwise
      */
     public static boolean needsXEmbed() {
-        @SuppressWarnings("removal")
-        String noxembed = AccessController.
-            doPrivileged(new GetPropertyAction("sun.awt.noxembed", "false"));
+        String noxembed = System.getProperty("sun.awt.noxembed", "false");
         if ("true".equals(noxembed)) {
             return false;
         }
@@ -1236,9 +1145,8 @@ public abstract class SunToolkit extends Toolkit
      * developer.  If true, Toolkit should return an
      * XEmbed-server-enabled CanvasPeer instead of the ordinary CanvasPeer.
      */
-    @SuppressWarnings("removal")
     protected final boolean isXEmbedServerRequested() {
-        return AccessController.doPrivileged(new GetBooleanAction("sun.awt.xembedserver"));
+        return Boolean.getBoolean("sun.awt.xembedserver");
     }
 
     /**
@@ -1569,7 +1477,6 @@ public abstract class SunToolkit extends Toolkit
      * Should return {@code true} if more processing is
      * necessary, {@code false} otherwise.
      */
-    @SuppressWarnings("serial")
     private final boolean waitForIdle(final long end) {
         if (timeout(end) <= 0) {
             return false;
@@ -1697,9 +1604,6 @@ public abstract class SunToolkit extends Toolkit
      * But GTK currently has an additional test based on locale which is
      * not applied by Metal. So mixing GTK in a few locales with Metal
      * would mean the last one wins.
-     * This could be stored per-app context which would work
-     * for different applets, but wouldn't help for a single application
-     * using GTK and some other L&F concurrently.
      * But it is expected this will be addressed within GTK and the font
      * system so is a temporary and somewhat unlikely harmless corner case.
      */
@@ -1758,16 +1662,13 @@ public abstract class SunToolkit extends Toolkit
      * to be inapplicable in that case. In that headless case although
      * this method will return "true" the toolkit will return a null map.
      */
-    @SuppressWarnings("removal")
     private static boolean useSystemAAFontSettings() {
         if (!checkedSystemAAFontSettings) {
             useSystemAAFontSettings = true; /* initially set this true */
             String systemAAFonts = null;
             Toolkit tk = Toolkit.getDefaultToolkit();
             if (tk instanceof SunToolkit) {
-                systemAAFonts =
-                    AccessController.doPrivileged(
-                         new GetPropertyAction("awt.useSystemAAFontSettings"));
+                systemAAFonts = System.getProperty("awt.useSystemAAFontSettings");
             }
             if (systemAAFonts != null) {
                 useSystemAAFontSettings = Boolean.parseBoolean(systemAAFonts);
@@ -1861,11 +1762,9 @@ public abstract class SunToolkit extends Toolkit
      * Returns the value of "sun.awt.disableMixing" property. Default
      * value is {@code false}.
      */
-    @SuppressWarnings("removal")
     public static synchronized boolean getSunAwtDisableMixing() {
         if (sunAwtDisableMixing == null) {
-            sunAwtDisableMixing = AccessController.doPrivileged(
-                                      new GetBooleanAction("sun.awt.disableMixing"));
+            sunAwtDisableMixing = Boolean.getBoolean("sun.awt.disableMixing");
         }
         return sunAwtDisableMixing.booleanValue();
     }
@@ -2077,7 +1976,7 @@ public abstract class SunToolkit extends Toolkit
 
 
 /*
- * PostEventQueue is a Thread that runs in the same AppContext as the
+ * PostEventQueue is a Thread tied to the
  * Java EventQueue.  It is a queue of AWTEvents to be posted to the
  * Java EventQueue.  The toolkit Thread (AWT-Windows/AWT-Motif) posts
  * events to this queue, which then calls EventQueue.postEvent().

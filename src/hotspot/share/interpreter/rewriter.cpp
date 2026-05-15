@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,9 +22,8 @@
  *
  */
 
-#include "precompiled.hpp"
+#include "cds/aotMetaspace.hpp"
 #include "cds/cdsConfig.hpp"
-#include "cds/metaspaceShared.hpp"
 #include "classfile/vmClasses.hpp"
 #include "interpreter/bytecodes.hpp"
 #include "interpreter/bytecodeStream.hpp"
@@ -125,7 +124,7 @@ void Rewriter::make_constant_pool_cache(TRAPS) {
                                         THREAD);
 #if INCLUDE_CDS
   if (!HAS_PENDING_EXCEPTION && CDSConfig::is_dumping_archive()) {
-    if (_pool->pool_holder()->is_shared()) {
+    if (_pool->pool_holder()->in_aot_cache()) {
       assert(CDSConfig::is_dumping_dynamic_archive(), "must be");
       // We are linking a shared class from the base archive. This
       // class won't be written into the dynamic archive, so there's no
@@ -305,15 +304,14 @@ void Rewriter::rewrite_invokedynamic(address bcp, int offset, bool reverse) {
     // must have a five-byte instruction format.  (Of course, other JVM
     // implementations can use the bytes for other purposes.)
     // Note: We use native_u4 format exclusively for 4-byte indexes.
-    Bytes::put_native_u4(p, ConstantPool::encode_invokedynamic_index(_invokedynamic_index));
+    Bytes::put_native_u4(p, (u2)_invokedynamic_index);
     _invokedynamic_index++;
 
     // Collect invokedynamic information before creating ResolvedInvokeDynamicInfo array
     _initialized_indy_entries.push(ResolvedIndyEntry((u2)resolved_index, (u2)cp_index));
   } else {
     // Should do nothing since we are not patching this bytecode
-    int cache_index = ConstantPool::decode_invokedynamic_index(
-                        Bytes::get_native_u4(p));
+    int cache_index = Bytes::get_native_u4(p);
     int cp_index = _initialized_indy_entries.at(cache_index).constant_pool_index();
     assert(_pool->tag_at(cp_index).is_invoke_dynamic(), "wrong index");
     // zero out 4 bytes
@@ -531,7 +529,7 @@ void Rewriter::rewrite_bytecodes(TRAPS) {
   // determine index maps for Method* rewriting
   compute_index_maps();
 
-  if (RegisterFinalizersAtInit && _klass->name() == vmSymbols::java_lang_Object()) {
+  if (_klass->name() == vmSymbols::java_lang_Object()) {
     bool did_rewrite = false;
     int i = _methods->length();
     while (i-- > 0) {
@@ -569,8 +567,8 @@ void Rewriter::rewrite_bytecodes(TRAPS) {
 
 void Rewriter::rewrite(InstanceKlass* klass, TRAPS) {
 #if INCLUDE_CDS
-  if (klass->is_shared()) {
-    assert(!klass->is_rewritten(), "rewritten shared classes cannot be rewritten again");
+  if (klass->in_aot_cache()) {
+    assert(!klass->is_rewritten(), "rewritten classes in the AOT cache cannot be rewritten again");
   }
 #endif // INCLUDE_CDS
   ResourceMark rm(THREAD);

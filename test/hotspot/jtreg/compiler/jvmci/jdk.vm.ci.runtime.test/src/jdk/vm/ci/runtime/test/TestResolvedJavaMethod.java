@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,7 +32,6 @@
  * @clean jdk.internal.vm.test.AnnotationTestInput$Missing
  * @compile ../../../../../../../../../../../jdk/jdk/internal/vm/AnnotationEncodingDecoding/alt/MemberDeleted.java
  *          ../../../../../../../../../../../jdk/jdk/internal/vm/AnnotationEncodingDecoding/alt/MemberTypeChanged.java
- * @enablePreview
  * @modules jdk.internal.vm.ci/jdk.vm.ci.meta
  *          jdk.internal.vm.ci/jdk.vm.ci.runtime
  *          jdk.internal.vm.ci/jdk.vm.ci.common
@@ -41,7 +40,7 @@
  *          java.base/jdk.internal.misc
  *          java.base/jdk.internal.vm
  *          java.base/sun.reflect.annotation
- * @run junit/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableJVMCI -XX:-UseJVMCICompiler jdk.vm.ci.runtime.test.TestResolvedJavaMethod
+ * @run junit/othervm/timeout=960 -XX:+UnlockExperimentalVMOptions -XX:+EnableJVMCI -XX:-UseJVMCICompiler jdk.vm.ci.runtime.test.TestResolvedJavaMethod
  */
 
 package jdk.vm.ci.runtime.test;
@@ -95,6 +94,8 @@ import java.lang.classfile.attribute.CodeAttribute;
 
 import jdk.vm.ci.meta.ConstantPool;
 import jdk.vm.ci.meta.ExceptionHandler;
+import jdk.vm.ci.meta.Local;
+import jdk.vm.ci.meta.LocalVariableTable;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaMethod.Parameter;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -425,6 +426,19 @@ public class TestResolvedJavaMethod extends MethodUniverse {
     }
 
     @Test
+    public void isDeclaredTest() {
+        for (Map.Entry<Method, ResolvedJavaMethod> e : methods.entrySet()) {
+            ResolvedJavaMethod m = e.getValue();
+            boolean expectedDeclared = Arrays.stream(m.getDeclaringClass().getDeclaredMethods()).anyMatch(i -> i.equals(m));
+            assertEquals(expectedDeclared, m.isDeclared());
+        }
+        for (Map.Entry<Constructor<?>, ResolvedJavaMethod> e : constructors.entrySet()) {
+            ResolvedJavaMethod m = e.getValue();
+            assertFalse(m.isDeclared());
+        }
+    }
+
+    @Test
     public void hasReceiverTest() {
         for (Map.Entry<Method, ResolvedJavaMethod> e : methods.entrySet()) {
             ResolvedJavaMethod m = e.getValue();
@@ -471,6 +485,24 @@ public class TestResolvedJavaMethod extends MethodUniverse {
                 assertFalse(m.isJavaLangObjectInit());
             }
         }
+    }
+
+    @Test
+    public void isScopedTest() throws NoSuchMethodException, ClassNotFoundException {
+        // Must use reflection as ScopedMemoryAccess$Scoped is package-private
+        Class<? extends Annotation> scopedAnnotationClass = Class.forName("jdk.internal.misc.ScopedMemoryAccess$Scoped").asSubclass(Annotation.class);
+        boolean scopedMethodFound = false;
+        for (Map.Entry<Method, ResolvedJavaMethod> e : methods.entrySet()) {
+            ResolvedJavaMethod m = e.getValue();
+            Method key = e.getKey();
+            boolean expect = key.isAnnotationPresent(scopedAnnotationClass);
+            boolean actual = m.isScoped();
+            assertEquals(m.toString(), expect, actual);
+            if (expect) {
+                scopedMethodFound = true;
+            }
+        }
+        assertTrue("At least one scoped method must be present", scopedMethodFound);
     }
 
     abstract static class UnlinkedType {
@@ -676,7 +708,7 @@ public class TestResolvedJavaMethod extends MethodUniverse {
             Map<String, ResolvedJavaMethod> methodMap = buildMethodMap(type);
             ClassModel cf = readClassfile(c);
             for (MethodModel cm : cf.methods()) {
-                cm.findAttribute(Attributes.CODE).ifPresent(codeAttr -> {
+                cm.findAttribute(Attributes.code()).ifPresent(codeAttr -> {
                     String key = cm.methodName().stringValue() + ":" + cm.methodType().stringValue();
                     HotSpotResolvedJavaMethod m = (HotSpotResolvedJavaMethod) Objects.requireNonNull(methodMap.get(key));
                     boolean isMethodWithManyArgs = c == getClass() && m.getName().equals("methodWithManyArgs");
@@ -734,6 +766,24 @@ public class TestResolvedJavaMethod extends MethodUniverse {
         Assert.assertTrue(processedMethodWithManyArgs[0]);
     }
 
+    @Test
+    public void getLocalVariableTableTest() {
+        for (ResolvedJavaMethod m : methods.values()) {
+            LocalVariableTable table = m.getLocalVariableTable();
+            if (table == null) {
+                continue;
+            }
+            for (Local l : table.getLocals()) {
+                if (l.getStartBCI() < 0) {
+                    throw new AssertionError(m.format("%H.%n(%p)") + " local " + l.getName() + " starts at " + l.getStartBCI());
+                }
+                if (l.getEndBCI() >= m.getCodeSize()) {
+                    throw new AssertionError(m.format("%H.%n(%p)") + " (" + m.getCodeSize() + "bytes) local " + l.getName() + " ends at " + l.getEndBCI());
+                }
+            }
+        }
+    }
+
     private Method findTestMethod(Method apiMethod) {
         String testName = apiMethod.getName() + "Test";
         for (Method m : getClass().getDeclaredMethods()) {
@@ -756,7 +806,6 @@ public class TestResolvedJavaMethod extends MethodUniverse {
         "canBeInlined",
         "shouldBeInlined",
         "getLineNumberTable",
-        "getLocalVariableTable",
         "isInVirtualMethodTable",
         "toParameterTypes",
         "getParameterAnnotation",

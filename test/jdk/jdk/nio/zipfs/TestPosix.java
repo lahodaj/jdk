@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019, 2024, SAP SE. All rights reserved.
+ * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,16 +30,13 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.*;
 import java.nio.file.attribute.*;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.spi.ToolProvider;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -54,19 +52,22 @@ import static java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE;
 import static java.nio.file.attribute.PosixFilePermission.OWNER_READ;
 import static java.nio.file.attribute.PosixFilePermission.OWNER_WRITE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-/**
+/*
  * @test
- * @bug 8213031 8273935
+ * @bug 8213031 8273935 8324635
  * @summary Test POSIX ZIP file operations.
  * @modules jdk.zipfs
  *          jdk.jartool
  * @run junit TestPosix
- * @run junit/othervm/java.security.policy=test.policy.posix TestPosix
+ * @run junit/othervm TestPosix
  */
 public class TestPosix {
     private static final ToolProvider JAR_TOOL = ToolProvider.findFirst("jar")
@@ -100,6 +101,8 @@ public class TestPosix {
     // FS open options
     private static final Map<String, Object> ENV_DEFAULT = Collections.<String, Object>emptyMap();
     private static final Map<String, Object> ENV_POSIX = Map.of("enablePosixFileAttributes", true);
+    private static final Map<String, Object> ENV_READ_ONLY = Map.of("accessMode", "readOnly");
+    private static final Map<String, Object> ENV_POSIX_READ_ONLY = Map.of("enablePosixFileAttributes", true, "accessMode", "readOnly");
 
     // misc
     private static final CopyOption[] COPY_ATTRIBUTES = {StandardCopyOption.COPY_ATTRIBUTES};
@@ -219,35 +222,28 @@ public class TestPosix {
 
     private static String expectedDefaultOwner(Path zf) {
         try {
-            try {
-                PrivilegedExceptionAction<String> pa = ()->Files.getOwner(zf).getName();
-                return AccessController.doPrivileged(pa);
-            } catch (UnsupportedOperationException e) {
-                // if we can't get the owner of the file, we fall back to system property user.name
-                PrivilegedAction<String> pa = ()->System.getProperty("user.name");
-                return AccessController.doPrivileged(pa);
-            }
-        } catch (PrivilegedActionException | SecurityException e) {
+            return Files.getOwner(zf).getName();
+        } catch (UnsupportedOperationException e) {
+            // if we can't get the owner of the file, we fall back to system property user.name
+            return System.getProperty("user.name");
+        } catch (IOException e) {
             System.out.println("Caught " + e.getClass().getName() + "(" + e.getMessage() +
-                ") when running a privileged operation to get the default owner.");
+                    ") when getting the default owner.");
             return null;
         }
     }
 
     private static String expectedDefaultGroup(Path zf, String defaultOwner) {
         try {
-            try {
-                PosixFileAttributeView zfpv = Files.getFileAttributeView(zf, PosixFileAttributeView.class);
-                if (zfpv == null) {
-                    return defaultOwner;
-                }
-                PrivilegedExceptionAction<String> pa = ()->zfpv.readAttributes().group().getName();
-                return AccessController.doPrivileged(pa);
-            } catch (UnsupportedOperationException e) {
+            PosixFileAttributeView zfpv = Files.getFileAttributeView(zf, PosixFileAttributeView.class);
+            if (zfpv == null) {
                 return defaultOwner;
             }
-        } catch (PrivilegedActionException | SecurityException e) {
-            System.out.println("Caught an exception when running a privileged operation to get the default group.");
+            return zfpv.readAttributes().group().getName();
+        } catch (UnsupportedOperationException e) {
+            return defaultOwner;
+        } catch (IOException e) {
+            System.out.println("Caught an exception when getting the default group.");
             e.printStackTrace();
             return null;
         }
@@ -291,7 +287,8 @@ public class TestPosix {
         return fs;
     }
 
-    private FileSystem createEmptyZipFile(Path zpath, Map<String, Object> env) throws IOException {
+    // The caller is responsible for closing the FileSystem returned by this method
+    private FileSystem createEmptyZipFileSystem(Path zpath, Map<String, Object> env) throws IOException {
         if (Files.exists(zpath)) {
             System.out.println("Deleting old " + zpath + "...");
             Files.delete(zpath);
@@ -408,6 +405,37 @@ public class TestPosix {
         doCheckEntries(path, expected);
     }
 
+    private void checkReadOnlyFileSystem(FileSystem fs) throws IOException {
+        assertTrue(fs.isReadOnly(), "File system should be read-only");
+        Path root = fs.getPath("/");
+
+        // Rather than calling something like "addOwnerRead(root)", we walk all
+        // files to ensure that all operations fail, not some arbitrary first one.
+        Set<PosixFilePermission> badPerms = Set.of(OTHERS_EXECUTE, OTHERS_WRITE);
+        FileTime anyTime = FileTime.from(Instant.now());
+        try (Stream<Path> paths = Files.walk(root)) {
+            paths.forEach(p -> {
+                assertFalse(Files.isWritable(p), "File should not be writable: " + p);
+                assertSame(fs, p.getFileSystem());
+                assertThrows(
+                        AccessDeniedException.class,
+                        () -> fs.provider().checkAccess(p, AccessMode.WRITE));
+                assertThrows(
+                        ReadOnlyFileSystemException.class,
+                        () -> fs.provider().setAttribute(p, "zip:permissions", badPerms));
+
+                // These fail because there is not corresponding File for a zip path (they will
+                // currently fail for read-write ZIP file systems too, but we sanity-check here).
+                assertThrows(UnsupportedOperationException.class,
+                        () -> Files.setLastModifiedTime(p, anyTime));
+                assertThrows(UnsupportedOperationException.class,
+                        () -> Files.setAttribute(p, "zip:permissions", badPerms));
+                assertThrows(UnsupportedOperationException.class,
+                        () -> Files.setPosixFilePermissions(p, badPerms));
+            });
+        }
+    }
+
     private boolean throwsUOE(Executor e) throws IOException {
         try {
             e.doIt();
@@ -451,6 +479,25 @@ public class TestPosix {
     }
 
     /**
+     * As {@code testDefault()} but with {@code "accessMode"="readOnly"}.
+     */
+    @Test
+    public void testDefaultReadOnly() throws IOException {
+        // create zip file using zipfs with default option
+        createTestZipFile(ZIP_FILE, ENV_DEFAULT).close();
+        // check entries on zipfs with read-only options
+        try (FileSystem zip = FileSystems.newFileSystem(ZIP_FILE, ENV_READ_ONLY)) {
+            checkEntries(zip, checkExpects.permsInZip);
+            checkReadOnlyFileSystem(zip);
+        }
+        // check entries on zipfs with posix and read-only options
+        try (FileSystem zip = FileSystems.newFileSystem(ZIP_FILE, ENV_POSIX_READ_ONLY)) {
+            checkEntries(zip, checkExpects.permsPosix);
+            checkReadOnlyFileSystem(zip);
+        }
+    }
+
+    /**
      * This tests whether the entries in a zip file created w/
      * Posix support are correct.
      *
@@ -471,6 +518,25 @@ public class TestPosix {
     }
 
     /**
+     * As {@code testPosix()} but with {@code "accessMode"="readOnly"}.
+     */
+    @Test
+    public void testPosixReadOnly() throws IOException {
+        // create zip file using zipfs with posix option
+        createTestZipFile(ZIP_FILE, ENV_POSIX).close();
+        // check entries on zipfs with read-only options
+        try (FileSystem zip = FileSystems.newFileSystem(ZIP_FILE, ENV_READ_ONLY)) {
+            checkEntries(zip, checkExpects.permsInZip);
+            checkReadOnlyFileSystem(zip);
+        }
+        // check entries on zipfs with posix and read-only options
+        try (FileSystem zip = FileSystems.newFileSystem(ZIP_FILE, ENV_POSIX_READ_ONLY)) {
+            checkEntries(zip, checkExpects.permsPosix);
+            checkReadOnlyFileSystem(zip);
+        }
+    }
+
+    /**
      * This tests whether the entries in a zip file copied from another
      * are correct.
      *
@@ -480,7 +546,7 @@ public class TestPosix {
     public void testCopy() throws IOException {
         // copy zip to zip with default options
         try (FileSystem zipIn = createTestZipFile(ZIP_FILE, ENV_DEFAULT);
-             FileSystem zipOut = createEmptyZipFile(ZIP_FILE_COPY, ENV_DEFAULT)) {
+             FileSystem zipOut = createEmptyZipFileSystem(ZIP_FILE_COPY, ENV_DEFAULT)) {
             Path from = zipIn.getPath("/");
             Files.walkFileTree(from, new CopyVisitor(from, zipOut.getPath("/")));
         }
@@ -516,7 +582,7 @@ public class TestPosix {
 
         // the target zip file is opened with Posix support
         // but we expect no permission data to be copied using the default copy method
-        try (FileSystem tgtZip = createEmptyZipFile(ZIP_FILE_COPY, ENV_POSIX)) {
+        try (FileSystem tgtZip = createEmptyZipFileSystem(ZIP_FILE_COPY, ENV_POSIX)) {
             Files.walkFileTree(UNZIP_DIR, new CopyVisitor(UNZIP_DIR, tgtZip.getPath("/")));
         }
 
@@ -559,7 +625,7 @@ public class TestPosix {
         // permissions should have been propagated to file system
         checkEntries(UNZIP_DIR, checkExpects.permsPosix);
 
-        try (FileSystem tgtZip = createEmptyZipFile(ZIP_FILE_COPY, ENV_POSIX)) {
+        try (FileSystem tgtZip = createEmptyZipFileSystem(ZIP_FILE_COPY, ENV_POSIX)) {
             // Make some files owner readable to be able to copy them into the zipfs
             addOwnerRead(UNZIP_DIR);
 
@@ -690,7 +756,7 @@ public class TestPosix {
         delTree(UNZIP_DIR);
         Files.createDirectory(UNZIP_DIR);
         File targetDir = UNZIP_DIR.toFile();
-        try (JarFile jf = new JarFile(ZIP_FILE.toFile())) {
+        try (JarFile jf = new JarFile(JAR_FILE.toFile())) {
             Enumeration<? extends JarEntry> zenum = jf.entries();
             while (zenum.hasMoreElements()) {
                 JarEntry ze = zenum.nextElement();
@@ -719,7 +785,7 @@ public class TestPosix {
     }
 
     /**
-     * Verify that calling Files.setPosixPermissions with the current
+     * Verify that calling Files.setPosixFilePermissions with the current
      * permission set does not change the 'external file attributes' field.
      *
      * @throws IOException if an unexpected IOException occurs
@@ -731,6 +797,52 @@ public class TestPosix {
             // Set permissions to their current value
             Files.setPosixFilePermissions(path, Files.getPosixFilePermissions(path));
         });
+    }
+
+    /**
+     * Verify that calling Files.setPosixFilePermissions on an MS-DOS entry
+     * results in only the expected permission bits being set
+     *
+     * @throws IOException if an unexpected IOException occurs
+     */
+    @Test
+    public void setPermissionsShouldConvertToUnix() throws IOException {
+        // The default environment creates MS-DOS entries, with zero 'external file attributes'
+        try (FileSystem fs = createEmptyZipFileSystem(ZIP_FILE, ENV_DEFAULT)) {
+            Path path = fs.getPath("hello.txt");
+            Files.createFile(path);
+        }
+        // The CEN header is now as follows:
+        //
+        //   004A CENTRAL HEADER #1     02014B50
+        //   004E Created Zip Spec      14 '2.0'
+        //   004F Created OS            00 'MS-DOS'
+        //   0050 Extract Zip Spec      14 '2.0'
+        //   0051 Extract OS            00 'MS-DOS'
+        //   [...]
+        //   0070 Ext File Attributes   00000000
+
+        // Sanity check that all 'external file attributes' bits are all zero
+        verifyExternalFileAttribute(Files.readAllBytes(ZIP_FILE), "0");
+
+        // Convert to a UNIX entry by calling Files.setPosixFilePermissions
+        try (FileSystem fs = FileSystems.newFileSystem(ZIP_FILE, ENV_POSIX)) {
+            Path path = fs.getPath("hello.txt");
+            Files.setPosixFilePermissions(path, EnumSet.of(OWNER_READ));
+        }
+
+        // The CEN header should now be as follows:
+        //
+        // 004A CENTRAL HEADER #1     02014B50
+        // 004E Created Zip Spec      14 '2.0'
+        // 004F Created OS            03 'Unix'
+        // 0050 Extract Zip Spec      14 '2.0'
+        // 0051 Extract OS            00 'MS-DOS'
+        // [...]
+        // 0070 Ext File Attributes   01000000
+
+        // The first of the nine trailing permission bits should be set
+        verifyExternalFileAttribute(Files.readAllBytes(ZIP_FILE), "100000000");
     }
 
     /**

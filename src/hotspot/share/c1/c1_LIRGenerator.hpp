@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,9 +28,7 @@
 #include "c1/c1_Decorators.hpp"
 #include "c1/c1_Instruction.hpp"
 #include "c1/c1_LIR.hpp"
-#include "ci/ciMethodData.hpp"
 #include "gc/shared/barrierSet.hpp"
-#include "jfr/support/jfrIntrinsics.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/sizes.hpp"
 
@@ -166,7 +164,9 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
   PhiResolverState  _resolver_state;
   BlockBegin*   _block;
   int           _virtual_register_number;
+#ifdef ASSERT
   Values        _instruction_for_operand;
+#endif
   BitMap2D      _vreg_flags; // flags which can be set on a per-vreg basis
   LIR_List*     _lir;
 
@@ -223,15 +223,16 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
     assert(!opr->is_register() || opr->is_virtual(), "should never set result to a physical register");
     x->set_operand(opr);
     assert(opr == x->operand(), "must be");
+#ifdef ASSERT
     if (opr->is_virtual()) {
       _instruction_for_operand.at_put_grow(opr->vreg_number(), x, nullptr);
     }
+#endif
   }
   void  set_no_result(Value x)                     { assert(!x->has_uses(), "can't have use"); x->clear_operand(); }
 
   friend class LIRItem;
 
-  LIR_Opr round_item(LIR_Opr opr);
   LIR_Opr force_to_spill(LIR_Opr value, BasicType t);
 
   PhiResolverState& resolver_state() { return _resolver_state; }
@@ -252,8 +253,6 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
 
   void do_RegisterFinalizer(Intrinsic* x);
   void do_isInstance(Intrinsic* x);
-  void do_isPrimitive(Intrinsic* x);
-  void do_getModifiers(Intrinsic* x);
   void do_getClass(Intrinsic* x);
   void do_getObjectSize(Intrinsic* x);
   void do_currentCarrierThread(Intrinsic* x);
@@ -267,7 +266,7 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
   void do_CompareAndSwap(Intrinsic* x, ValueType* type);
   void do_PreconditionsCheckIndex(Intrinsic* x, BasicType type);
   void do_FPIntrinsics(Intrinsic* x);
-  void do_Reference_get(Intrinsic* x);
+  void do_Reference_get0(Intrinsic* x);
   void do_update_CRC32(Intrinsic* x);
   void do_update_CRC32C(Intrinsic* x);
   void do_vectorizedMismatch(Intrinsic* x);
@@ -331,8 +330,9 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
 
   // volatile field operations are never patchable because a klass
   // must be loaded to know it's volatile which means that the offset
-  // it always known as well.
+  // is always known as well.
   void volatile_field_store(LIR_Opr value, LIR_Address* address, CodeEmitInfo* info);
+  // volatile_field_load provides trailing membar semantics
   void volatile_field_load(LIR_Address* address, LIR_Opr result, CodeEmitInfo* info);
 
   void put_Object_unsafe(LIR_Opr src, LIR_Opr offset, LIR_Opr data, BasicType type, bool is_volatile);
@@ -507,9 +507,10 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
     , _barrier_set(BarrierSet::barrier_set()->barrier_set_c1()) {
   }
 
+#ifdef ASSERT
   // for virtual registers, maps them back to Phi's or Local's
-  Instruction* instruction_for_opr(LIR_Opr opr);
   Instruction* instruction_for_vreg(int reg_num);
+#endif
 
   void set_vreg_flag   (int vreg_num, VregFlag f);
   bool is_vreg_flag_set(int vreg_num, VregFlag f);
@@ -532,6 +533,9 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
   LIR_Opr syncLockOpr();
   LIR_Opr syncTempOpr();
   LIR_Opr atomicLockOpr();
+
+  // Intrinsic for Class::isInstance
+  address isInstance_entry();
 
   // returns a register suitable for saving the thread in a
   // call_runtime_leaf if one is needed.
@@ -575,7 +579,6 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
   virtual void do_Base           (Base*            x);
   virtual void do_OsrEntry       (OsrEntry*        x);
   virtual void do_ExceptionObject(ExceptionObject* x);
-  virtual void do_RoundFP        (RoundFP*         x);
   virtual void do_UnsafeGet      (UnsafeGet*       x);
   virtual void do_UnsafePut      (UnsafePut*       x);
   virtual void do_UnsafeGetAndSet(UnsafeGetAndSet* x);
