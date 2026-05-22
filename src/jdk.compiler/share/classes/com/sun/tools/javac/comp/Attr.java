@@ -1565,7 +1565,7 @@ public class Attr extends JCTree.Visitor {
     }
 
     public void visitEnhancedVariableDeclaration(JCEnhancedVariableDeclaration tree) {
-        attribExpr(tree.expr, env);
+        attribExpr(tree.expr, env, expressionTargetTypeFromPattern(tree.pattern));
         attribExpr(tree.pattern, env, tree.expr.type);
 
         matchBindings.bindingsWhenTrue.forEach(env.info.scope::enter);
@@ -1744,7 +1744,15 @@ public class Attr extends JCTree.Visitor {
                               JCExpression selector,
                               List<JCCase> cases,
                               BiConsumer<JCCase, Env<AttrContext>> attribCase) {
-        Type seltype = attribExpr(selector, env);
+        Type targetType;
+
+        if (cases.nonEmpty() && cases.tail.isEmpty() && cases.head.labels.nonEmpty() && cases.head.labels.tail.isEmpty() && cases.head.labels.head instanceof JCPatternCaseLabel patternLabel) {
+            targetType = expressionTargetTypeFromPattern(patternLabel.pat);
+        } else {
+            targetType = Type.noType;
+        }
+
+        Type seltype = attribExpr(selector, env, targetType);
         Type seltypeUnboxed = types.unboxedTypeOrType(seltype);
 
         Env<AttrContext> switchEnv =
@@ -4184,7 +4192,8 @@ public class Attr extends JCTree.Visitor {
     }
 
     public void visitTypeTest(JCInstanceOf tree) {
-        Type exprtype = attribExpr(tree.expr, env);
+        Type targetType = expressionTargetTypeFromPattern(tree.pattern);
+        Type exprtype = attribExpr(tree.expr, env, targetType);
         if (exprtype.isPrimitive()) {
             preview.checkSourceLevel(tree.expr.pos(), Feature.PRIMITIVE_PATTERNS);
         } else {
@@ -5647,6 +5656,17 @@ public class Attr extends JCTree.Visitor {
         } finally {
             chk.setLint(prevLint);
         }
+    }
+
+    private Type expressionTargetTypeFromPattern(JCTree pattern) {
+        if (pattern instanceof JCRecordPattern record) {
+            Type recordType = deferredAttr.attribSpeculative(record.deconstructor, env, unknownTypeInfo).type;
+            if (!recordType.isRaw() || recordType.tsym.getTypeParameters().isEmpty()) {
+                return recordType;
+            }
+        }
+
+        return Type.noType;
     }
 
     /** Finish the attribution of a class. */
