@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -64,6 +64,21 @@ public class BiDirectionalInferenceTest {
                 .outdir(base)
                 .run()
                 .writeAll();
+        new JavacTask(tb)
+                .options("-XDshould-stop.at=FLOW")
+                .sources("""
+                         class C {
+                             interface I<T> {}
+                             record Box(String val) implements I<String>{}
+                             static <T> I<T> empty() { return null; }
+                             boolean b() {
+                                 return empty() instanceof Box(String s) && s.isEmpty();
+                             }
+                         }
+                         """)
+                .outdir(base)
+                .run()
+                .writeAll();
     }
 
     @Test
@@ -113,19 +128,3 @@ public class BiDirectionalInferenceTest {
         Files.createDirectories(base);
     }
 }
-//TODO: non-parameteric record extending parameteric interface?
-//        new JavacTask(tb)
-//                .options("-XDshould-stop.at=FLOW")
-//                .sources("""
-//                         class C {
-//                             interface I<T> {}
-//                             record Box(String val) implements I<String>{}
-//                             static <T> I<T> empty() { return null; }
-//                             boolean b() {
-//                                 return empty() instanceof Box(String s) && s.isEmpty();
-//                             }
-//                         }
-//                         """)
-//                .outdir(base)
-//                .run()
-//                .writeAll();

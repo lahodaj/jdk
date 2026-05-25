@@ -1565,7 +1565,7 @@ public class Attr extends JCTree.Visitor {
     }
 
     public void visitEnhancedVariableDeclaration(JCEnhancedVariableDeclaration tree) {
-        attribExpr(tree.expr, env, expressionTargetTypeFromPattern(tree.pattern));
+        attribExpr(tree.expr, env, expressionTargetTypeFromPattern(tree.pattern, tree.expr));
         attribExpr(tree.pattern, env, tree.expr.type);
 
         matchBindings.bindingsWhenTrue.forEach(env.info.scope::enter);
@@ -1747,7 +1747,7 @@ public class Attr extends JCTree.Visitor {
         Type targetType;
 
         if (cases.nonEmpty() && cases.tail.isEmpty() && cases.head.labels.nonEmpty() && cases.head.labels.tail.isEmpty() && cases.head.labels.head instanceof JCPatternCaseLabel patternLabel) {
-            targetType = expressionTargetTypeFromPattern(patternLabel.pat);
+            targetType = expressionTargetTypeFromPattern(patternLabel.pat, selector);
         } else {
             targetType = Type.noType;
         }
@@ -4192,7 +4192,7 @@ public class Attr extends JCTree.Visitor {
     }
 
     public void visitTypeTest(JCInstanceOf tree) {
-        Type targetType = expressionTargetTypeFromPattern(tree.pattern);
+        Type targetType = expressionTargetTypeFromPattern(tree.pattern, tree.expr);
         Type exprtype = attribExpr(tree.expr, env, targetType);
         if (exprtype.isPrimitive()) {
             preview.checkSourceLevel(tree.expr.pos(), Feature.PRIMITIVE_PATTERNS);
@@ -5658,11 +5658,14 @@ public class Attr extends JCTree.Visitor {
         }
     }
 
-    private Type expressionTargetTypeFromPattern(JCTree pattern) {
+    private Type expressionTargetTypeFromPattern(JCTree pattern, JCExpression selector) {
         if (pattern instanceof JCRecordPattern record) {
             Type recordType = deferredAttr.attribSpeculative(record.deconstructor, env, unknownTypeInfo).type;
+
             if (!recordType.isRaw() || recordType.tsym.getTypeParameters().isEmpty()) {
-                return recordType;
+                Type selectorType = deferredAttr.attribSpeculative(selector, env, unknownExprInfo).type;
+
+                return types.asSuper(recordType, selectorType.tsym);
             }
         }
 
