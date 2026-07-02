@@ -167,7 +167,7 @@ public class Gen extends JCTree.Visitor {
     List<LocalItem> stackBeforeSwitchExpression;
     LocalItem switchResult;
     PatternMatchingCatchConfiguration patternMatchingCatchConfiguration =
-            new PatternMatchingCatchConfiguration(Set.of(), null, null, null);
+            new PatternMatchingCatchConfiguration(Set.of(), Set.of(), null, null, null);
 
     /** Cache the symbol to reflect the qualifying type.
      *  key: corresponding type
@@ -727,7 +727,7 @@ public class Gen extends JCTree.Visitor {
                     chk.completionError(_tree.pos(), ex);
                     code.state.stacksize = 1;
                 }
-                CondItem result = items.makeCondItem(goto_,
+                CondItem result = items.makeCondItem(switchExpressionTrueChain != null ? goto_ : dontgoto,
                                                      switchExpressionTrueChain,
                                                      switchExpressionFalseChain);
                 if (markBranches) result.tree = _tree;
@@ -1096,6 +1096,7 @@ public class Gen extends JCTree.Visitor {
         try {
             patternMatchingCatchConfiguration =
                     new PatternMatchingCatchConfiguration(tree.patternMatchingCatch.calls2Handle(),
+                                                          tree.patternMatchingCatch.safetyCasts(),
                                                          new ListBuffer<int[]>(),
                                                          tree.patternMatchingCatch.handler(),
                                                          code.state.dup());
@@ -2298,7 +2299,13 @@ public class Gen extends JCTree.Visitor {
         if (!tree.clazz.type.isPrimitive() &&
            !types.isSameType(tree.expr.type, tree.clazz.type) &&
            types.asSuper(tree.expr.type, tree.clazz.type.tsym) == null) {
-            code.emitop2(checkcast, checkDimension(tree.pos(), tree.clazz.type), PoolWriter::putClass);
+            if (patternMatchingCatchConfiguration.safetyCasts().contains(tree)) {
+                int start = code.curCP();
+                code.emitop2(checkcast, checkDimension(tree.pos(), tree.clazz.type), PoolWriter::putClass);
+                patternMatchingCatchConfiguration.ranges().add(new int[] {start, code.curCP()});
+            } else {
+                code.emitop2(checkcast, checkDimension(tree.pos(), tree.clazz.type), PoolWriter::putClass);
+            }
         }
     }
 
@@ -2586,11 +2593,13 @@ public class Gen extends JCTree.Visitor {
     }
 
     record PatternMatchingCatchConfiguration(Set<JCMethodInvocation> invocations,
+                                             Set<JCTypeCast> safetyCasts,
                                             ListBuffer<int[]> ranges,
                                             JCCatch handler,
                                             State startState) {
         public PatternMatchingCatchConfiguration restart(State newState) {
             return new PatternMatchingCatchConfiguration(invocations(),
+                                                         safetyCasts(),
                                                         new ListBuffer<int[]>(),
                                                         handler(),
                                                         newState);

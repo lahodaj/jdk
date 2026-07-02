@@ -104,6 +104,7 @@ import com.sun.tools.javac.tree.JCTree.JCRecordPattern;
 import com.sun.tools.javac.tree.JCTree.JCStatement;
 import com.sun.tools.javac.tree.JCTree.JCSwitchExpression;
 import com.sun.tools.javac.tree.JCTree.JCTry;
+import com.sun.tools.javac.tree.JCTree.JCTypeCast;
 import com.sun.tools.javac.tree.JCTree.LetExpr;
 import com.sun.tools.javac.tree.TreeInfo;
 import com.sun.tools.javac.tree.TreeScanner;
@@ -181,6 +182,7 @@ public class TransPatterns extends TreeTranslator {
     private VarSymbol currentValue = null;
     private Map<RecordComponent, MethodSymbol> component2Proxy = null;
     private Set<JCMethodInvocation> deconstructorCalls;
+    private Set<JCTree.JCTypeCast> safetyCasts;
     private int variableIndex = 0;
 
     @SuppressWarnings("this-escape")
@@ -1197,16 +1199,19 @@ public class TransPatterns extends TreeTranslator {
         MethodSymbol prevMethodSym = currentMethodSym;
         int prevVariableIndex = variableIndex;
         Set<JCMethodInvocation> prevDeconstructorCalls = deconstructorCalls;
+        Set<JCTypeCast> prevSafetyCasts = safetyCasts;
         try {
             currentMethodSym = tree.sym;
             variableIndex = 0;
             deconstructorCalls = null;
+            safetyCasts = null;
             super.visitMethodDef(tree);
             preparePatternMatchingCatchIfNeeded(tree.body);
         } finally {
             variableIndex = prevVariableIndex;
             currentMethodSym = prevMethodSym;
             deconstructorCalls = prevDeconstructorCalls;
+            safetyCasts = prevSafetyCasts;
         }
     }
 
@@ -1384,7 +1389,7 @@ public class TransPatterns extends TreeTranslator {
     }
 
     private void preparePatternMatchingCatchIfNeeded(JCBlock tree) {
-        if (deconstructorCalls != null) {
+        if (deconstructorCalls != null || safetyCasts != null) {
             VarSymbol ctch = new VarSymbol(Flags.SYNTHETIC,
                     names.fromString("catch" + variableIndex++ + target.syntheticNameChar()),
                     syms.throwableType,
@@ -1399,7 +1404,9 @@ public class TransPatterns extends TreeTranslator {
                                                                                             List.nil()),
                                                                                   make.Ident(ctch)))))));
             tree.patternMatchingCatch =
-                    new PatternMatchingCatch(patternMatchingCatch, deconstructorCalls);
+                    new PatternMatchingCatch(patternMatchingCatch,
+                                             deconstructorCalls != null ? deconstructorCalls : Set.of(),
+                                             safetyCasts != null ? safetyCasts : Set.of());
             deconstructorCalls = null;
         }
     }
@@ -1457,8 +1464,12 @@ public class TransPatterns extends TreeTranslator {
             //cast not needed
             return expr;
         }
-        JCExpression result = make.at(expr.pos()).TypeCast(make.Type(target), expr);
+        JCTypeCast result = make.at(expr.pos()).TypeCast(make.Type(target), expr);
         result.type = target;
+        if (safetyCasts == null) {
+            safetyCasts = Collections.newSetFromMap(new IdentityHashMap<>());
+        }
+        safetyCasts.add(result);
         return result;
     }
 

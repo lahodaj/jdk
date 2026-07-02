@@ -1178,7 +1178,9 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
             return BLOCK;
         }
 
-        public record PatternMatchingCatch(JCCatch handler, Set<JCMethodInvocation> calls2Handle) {}
+        public record PatternMatchingCatch(JCCatch handler,
+                                           Set<JCMethodInvocation> calls2Handle,
+                                           Set<JCTypeCast> safetyCasts) {}
     }
 
     /**
