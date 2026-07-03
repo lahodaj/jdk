@@ -311,7 +311,7 @@ public class TransPatterns extends TreeTranslator {
 
         if (bindingVar != null && !bindingVar.isUnnamedVariable()) {
             JCAssign fakeInit = (JCAssign)make.at(TreeInfo.getStartPos(tree)).Assign(
-                    make.Ident(bindingVar), convert(make.Ident(currentValue).setType(currentValue.erasure(types)), castTargetType)).setType(bindingVar.erasure(types));
+                    make.Ident(bindingVar), convert(make.Ident(currentValue).setType(currentValue.erasure(types)), castTargetType, false)).setType(bindingVar.erasure(types));
             LetExpr nestedLE = make.LetExpr(List.of(make.Exec(fakeInit)),
                                             make.Literal(true));
             nestedLE.needsCond = true;
@@ -376,14 +376,14 @@ public class TransPatterns extends TreeTranslator {
                                             types.boxedTypeOrType(types.erasure(nestedBinding.type)));
             }
             JCMethodInvocation componentAccessor =
-                    make.at(recordPattern.pos()).App(make.Select(convert(make.Ident(recordBinding), recordBinding.type),
+                    make.at(recordPattern.pos()).App(make.Select(convert(make.Ident(recordBinding), recordBinding.type, false),
                              component.accessor)).setType(types.erasure(component.accessor.getReturnType()));
             if (deconstructorCalls == null) {
                 deconstructorCalls = Collections.newSetFromMap(new IdentityHashMap<>());
             }
             deconstructorCalls.add(componentAccessor);
             JCExpression accessedComponentValue =
-                    convert(componentAccessor, componentType);
+                    convert(componentAccessor, componentType, true);
             JCInstanceOf firstLevelCheck = (JCInstanceOf) make.TypeTest(accessedComponentValue, nestedBinding).setType(syms.booleanType);
             //TODO: verify deep/complex nesting with nulls
             firstLevelCheck.allowNull = allowNull;
@@ -1459,17 +1459,19 @@ public class TransPatterns extends TreeTranslator {
         return tree;
     }
 
-    JCExpression convert(JCExpression expr, Type target) {
+    JCExpression convert(JCExpression expr, Type target, boolean wrapCCE) {
         if (types.isSubtype(expr.type, target)) {
             //cast not needed
             return expr;
         }
         JCTypeCast result = make.at(expr.pos()).TypeCast(make.Type(target), expr);
         result.type = target;
-        if (safetyCasts == null) {
-            safetyCasts = Collections.newSetFromMap(new IdentityHashMap<>());
+        if (wrapCCE) {
+            if (safetyCasts == null) {
+                safetyCasts = Collections.newSetFromMap(new IdentityHashMap<>());
+            }
+            safetyCasts.add(result);
         }
-        safetyCasts.add(result);
         return result;
     }
 

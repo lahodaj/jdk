@@ -48,7 +48,7 @@ public class TypedDeconstructionPatternExc {
         try {
             tested.apply((Pair<String, Integer>) (Object) new Pair<Integer, Integer>(1, 1));
             fail("Expected an exception, but none happened!");
-        } catch (ClassCastException ex) {
+        } catch (MatchException ex) {
             System.err.println("expected exception:");
             ex.printStackTrace();
         }
@@ -92,7 +92,7 @@ public class TypedDeconstructionPatternExc {
                     case Pair<String, Integer>(String s, Integer i) -> s.length() + i;
                     case Object o -> -1;
                 };
-            } catch (ClassCastException ex) {
+            } catch (MatchException ex) {
                 //OK
                 break TEST;
             } catch (Throwable t) {
@@ -135,7 +135,7 @@ public class TypedDeconstructionPatternExc {
         try {
             testBoxed(new Box((Pair<String, Integer>) (Object) new Pair<Integer, Integer>(1, 1)));
             fail("Expected an exception, but none happened!");
-        } catch (ClassCastException ex) {
+        } catch (MatchException ex) {
             System.err.println("expected exception:");
             ex.printStackTrace();
         }
