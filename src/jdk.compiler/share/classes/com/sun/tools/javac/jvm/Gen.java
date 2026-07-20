@@ -25,6 +25,17 @@
 
 package com.sun.tools.javac.jvm;
 
+import com.sun.source.tree.BinaryTree;
+import com.sun.source.tree.BreakTree;
+import com.sun.source.tree.ContinueTree;
+import com.sun.source.tree.IdentifierTree;
+import com.sun.source.tree.MemberSelectTree;
+import com.sun.source.tree.NewClassTree;
+import com.sun.source.tree.SwitchExpressionTree;
+import com.sun.source.tree.SwitchTree;
+import com.sun.source.tree.UnaryTree;
+import com.sun.source.tree.VariableTree;
+import com.sun.source.tree.YieldTree;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -54,6 +65,8 @@ import static com.sun.tools.javac.jvm.ByteCodes.*;
 import static com.sun.tools.javac.jvm.CRTFlags.*;
 import static com.sun.tools.javac.main.Option.*;
 import static com.sun.tools.javac.tree.JCTree.Tag.*;
+import java.util.ArrayList;
+import java.util.function.Consumer;
 
 /** This pass maps flat Java (i.e. without inner classes) to bytecodes.
  *
@@ -491,7 +504,7 @@ public class Gen extends JCTree.Visitor {
             initTAlist = initTAs.toList();
         }
         for (JCTree t : methodDefs) {
-            normalizeMethod((JCMethodDecl)t, initCode.toList(), initBlocks.toList(), initTAlist);
+            normalizeMethod((JCMethodDecl)t, new AttributedTreeCopier(make).copy(initCode.toList()), initBlocks.toList(), initTAlist);
         }
         localProxyVarsGen.allFieldNormalized(classDecl.sym);
         // If there are class initializers, create a <clinit> method
@@ -2671,6 +2684,131 @@ public class Gen extends JCTree.Visitor {
                                                         new ListBuffer<int[]>(),
                                                         handler(),
                                                         newState);
+        }
+    }
+
+    private static class AttributedTreeCopier extends TreeCopier<Void> {
+
+        private final TreeMaker M;
+        private final Map<JCTree, java.util.List<Consumer<JCTree>>> originalTarget2TargetSetter = new HashMap<>();
+
+        public AttributedTreeCopier(TreeMaker M) {
+            super(M);
+            this.M = M;
+        }
+
+        @Override
+        public <T extends JCTree> T copy(T tree, Void p) {
+            if (tree instanceof LetExpr le) {
+                LetExpr r = M.LetExpr(copy(le.defs), copy(le.expr));
+
+                r.type = le.type;
+                r.needsCond = le.needsCond;
+                //TODO: should also copy (upcomming) needsLineNumber
+
+                @SuppressWarnings("unchecked")
+                T castResult = (T) r;
+
+                return castResult;
+            }
+
+            T r = super.copy(tree, p);
+
+            if (tree != null) {
+                r.type = tree.type;
+                originalTarget2TargetSetter.getOrDefault(tree, java.util.List.of()).forEach(s -> s.accept(r));
+            }
+
+            return r;
+        }
+
+        @Override
+        public JCTree visitIdentifier(IdentifierTree node, Void p) {
+            JCIdent r = (JCIdent) super.visitIdentifier(node, p);
+
+            r.sym = ((JCIdent) node).sym;
+            return r;
+        }
+
+        @Override
+        public JCTree visitMemberSelect(MemberSelectTree node, Void p) {
+            JCFieldAccess r = (JCFieldAccess) super.visitMemberSelect(node, p);
+
+            r.sym = ((JCFieldAccess) node).sym;
+            return r;
+        }
+
+        @Override
+        public JCTree visitNewClass(NewClassTree node, Void p) {
+            JCNewClass r = (JCNewClass) super.visitNewClass(node, p);
+
+            r.constructor = ((JCNewClass) node).constructor;
+            r.constructorType = ((JCNewClass) node).constructorType;
+            return r;
+        }
+
+        @Override
+        public JCTree visitVariable(VariableTree node, Void p) {
+            JCVariableDecl r = (JCVariableDecl) super.visitVariable(node, p);
+
+            r.sym = ((JCVariableDecl) node).sym;
+            return r;
+        }
+
+        @Override
+        public JCTree visitBinary(BinaryTree node, Void p) {
+            JCBinary r = (JCBinary) super.visitBinary(node, p);
+
+            r.operator = ((JCBinary) node).operator;
+            return r;
+        }
+
+        @Override
+        public JCTree visitUnary(UnaryTree node, Void p) {
+            JCUnary r = (JCUnary) super.visitUnary(node, p);
+
+            r.operator = ((JCUnary) node).operator;
+            return r;
+        }
+
+        @Override
+        public JCTree visitContinue(ContinueTree node, Void p) {
+            JCContinue r = (JCContinue) super.visitContinue(node, p);
+            originalTarget2TargetSetter.computeIfAbsent(((JCContinue) node).target, _ -> new ArrayList<>())
+                    .add(newTarget -> r.target = newTarget);
+            return r;
+        }
+
+        @Override
+        public JCTree visitBreak(BreakTree node, Void p) {
+            JCBreak r = (JCBreak) super.visitBreak(node, p);
+            originalTarget2TargetSetter.computeIfAbsent(((JCBreak) node).target, _ -> new ArrayList<>())
+                    .add(newTarget -> r.target = newTarget);
+            return r;
+        }
+
+        @Override
+        public JCTree visitYield(YieldTree node, Void p) {
+            JCYield r = (JCYield) super.visitYield(node, p);
+            originalTarget2TargetSetter.computeIfAbsent(((JCYield) node).target, _ -> new ArrayList<>())
+                    .add(newTarget -> r.target = newTarget);
+            return r;
+        }
+
+        @Override
+        public JCTree visitSwitchExpression(SwitchExpressionTree node, Void p) {
+            JCSwitchExpression r = (JCSwitchExpression) super.visitSwitchExpression(node, p);
+
+            r.patternSwitch = ((JCSwitchExpression) node).patternSwitch;
+            return r;
+        }
+
+        @Override
+        public JCTree visitSwitch(SwitchTree node, Void p) {
+            JCSwitch r = (JCSwitch) super.visitSwitch(node, p);
+
+            r.patternSwitch = ((JCSwitch) node).patternSwitch;
+            return r;
         }
     }
 }
