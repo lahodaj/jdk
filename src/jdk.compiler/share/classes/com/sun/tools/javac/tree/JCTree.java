@@ -1153,6 +1153,7 @@ public abstract class JCTree implements Tree, Cloneable, DiagnosticPosition {
          * invocations, and the additional catch block that wraps the exceptions.
          */
         public PatternMatchingCatch patternMatchingCatch;
+        public int prefixCount;
         protected JCBlock(long flags, List<JCStatement> stats) {
             this.stats = stats;
             this.flags = flags;

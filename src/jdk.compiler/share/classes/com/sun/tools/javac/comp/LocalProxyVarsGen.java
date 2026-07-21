@@ -25,14 +25,13 @@
 
 package com.sun.tools.javac.comp;
 
+import com.sun.tools.javac.code.Flags;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
 import com.sun.tools.javac.code.Symbol;
-import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import com.sun.tools.javac.code.Symbol.VarSymbol;
 import com.sun.tools.javac.code.Symtab;
 import com.sun.tools.javac.code.Type;
@@ -42,7 +41,6 @@ import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
 import com.sun.tools.javac.tree.JCTree.JCVariableDecl;
 import com.sun.tools.javac.tree.TreeMaker;
 import com.sun.tools.javac.tree.TreeTranslator;
-import com.sun.tools.javac.util.Assert;
 import com.sun.tools.javac.util.Context;
 import com.sun.tools.javac.util.ListBuffer;
 import com.sun.tools.javac.util.Name;
@@ -56,10 +54,13 @@ import static com.sun.tools.javac.code.TypeTag.BOT;
 
 import com.sun.tools.javac.jvm.Target;
 import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.tree.JCTree.JCAssign;
 import com.sun.tools.javac.tree.JCTree.JCStatement;
 import com.sun.tools.javac.tree.TreeInfo;
+import com.sun.tools.javac.tree.TreeScanner;
 import com.sun.tools.javac.util.List;
 import com.sun.tools.javac.util.Options;
+import java.util.HashSet;
 
 /** This phase adds local variable proxies for fields that are read during the
  *  early construction phase (prologue)
@@ -89,7 +90,6 @@ public class LocalProxyVarsGen {
     private final Symtab syms;
     private final Target target;
     private TreeMaker make;
-    private final Map<Symbol, Set<Symbol>> fieldsReadInPrologue = new HashMap<>();
     private final Map<JCMethodDecl, Map<JCTree, JCTree>> rollback = new HashMap<>();
 
     private final boolean noLocalProxyVars;
@@ -106,38 +106,49 @@ public class LocalProxyVarsGen {
         noLocalProxyVars = options.isSet("noLocalProxyVars");
     }
 
-    public void addFieldReadInPrologue(Symbol owner, Symbol sym) {
-        Assert.checkNonNull(sym, "parameter 'sym' is null");
-        Set<Symbol> fieldSet = fieldsReadInPrologue.getOrDefault(owner, new LinkedHashSet<>());
-        fieldSet.add(sym);
-        fieldsReadInPrologue.put(owner, fieldSet);
-    }
-
     public void patchConstructor(JCMethodDecl tree, TreeMaker make) {
-        /* if some fields have initializers those probably were added using the enclosing class as their map key
-         * we need to recover those now and add them to this constructor
-         */
-        Set<Symbol> earlyReads = null;
-        if (fieldsReadInPrologue.get(tree.sym.owner) != null) {
-            earlyReads = fieldsReadInPrologue.get(tree.sym.owner);
+        if (noLocalProxyVars) {
+            return ;
         }
-        if (fieldsReadInPrologue.get(tree.sym) != null) {
-            Set<Symbol> constructorEarlyReads = fieldsReadInPrologue.remove(tree.sym);
-            if (constructorEarlyReads != null) {
-                if (earlyReads == null) {
-                    earlyReads = constructorEarlyReads;
-                } else {
-                    earlyReads.addAll(constructorEarlyReads);
+
+        Set<Symbol> earlyReads = new HashSet<>();
+
+        new TreeScanner() {
+            private JCTree parent;
+            private JCTree current;
+            private boolean prologue = true;
+            @Override
+            public void scan(JCTree node) {
+                if (!prologue || node == null) {
+                    return ;
+                }
+                JCTree prevCurrent = current;
+                JCTree prevParent = parent;
+                try {
+                    parent = current;
+                    current = node;
+                    if (!(parent instanceof JCAssign assign && assign.lhs == current) && TreeInfo.symbol(node) instanceof VarSymbol var && var.owner == tree.sym.owner && var.name != names._this && (var.isStrictInstance() || (var.flags() & Flags.OUTER_THIS_FIELD) != 0)) {
+                        earlyReads.add(var);
+                    }
+                    super.scan(node);
+                } finally {
+                    current = prevCurrent;
+                    parent = prevParent;
                 }
             }
-        }
-        if (earlyReads != null && !noLocalProxyVars) {
+
+            @Override
+            public void visitExec(JCTree.JCExpressionStatement tree) {
+                if (TreeInfo.isSuperCall(tree)) {
+                    prologue = false;
+                } else {
+                    super.visitExec(tree);
+                }
+            }
+        }.scan(tree.body);
+        if (!earlyReads.isEmpty()) {
             addLocalProxiesFor(tree, earlyReads, make);
         }
-    }
-
-    public void classGenerated(ClassSymbol csym) {
-        fieldsReadInPrologue.remove(csym);
     }
 
     void addLocalProxiesFor(JCMethodDecl constructor, Set<Symbol> fields, TreeMaker make) {

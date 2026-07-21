@@ -4052,11 +4052,6 @@ public class Resolve {
         } else {
             // Read early ref, this is only allowed under JEP 401, and requires special codegen support
             preview.checkSourceLevel(pos, Feature.VALUE_CLASSES);
-            if (context.ctorPrologue()) {
-                // Track the early read for codegen
-                Symbol owner = env.enclMethod != null ? env.enclMethod.sym : env.enclClass.sym;
-                localProxyVarsGen.addFieldReadInPrologue(owner, field);
-            }
         }
         return true;
     }

@@ -560,8 +560,14 @@ public class Gen extends JCTree.Visitor {
             if (initCode.nonEmpty() || initBlocks.nonEmpty()) {
                 if (allowValueClasses &&
                         (md.sym.owner.isValueClass() || ((md.sym.owner.flags_field & RECORD) != 0))) {
-                    rewriteEarlyInitializersIfNeeded(md, initCode);
-                    md.body.stats = initCode.appendList(md.body.stats);
+                    ListBuffer<JCStatement> newStats = new ListBuffer<>();
+                    for (JCStatement s : md.body.stats) {
+                        if (newStats.size() == md.body.prefixCount) {
+                            newStats.appendList(initCode);
+                        }
+                        newStats.append(s);
+                    }
+                    md.body.stats = newStats.toList();
                     TreeInfo.mapSuperCalls(md.body, supercall -> make.Block(0, initBlocks.prepend(supercall)));
                 } else {
                     TreeInfo.mapSuperCalls(md.body, supercall -> make.Block(0, initCode.prepend(supercall)));
@@ -571,34 +577,6 @@ public class Gen extends JCTree.Visitor {
 
             if (md.body.bracePos == Position.NOPOS)
                 md.body.bracePos = TreeInfo.endPos(md.body.stats.last());
-        }
-    }
-
-    /**
-     * Some early field initializer might contain references to synthetic Lower symbols,
-     * such as 'this$0' or local var proxies. Since these are effectively "early reads",
-     * we need to replace such reference with a reference to the corresponding
-     * (synthetic) constructor parameter.
-     */
-    void rewriteEarlyInitializersIfNeeded(JCMethodDecl md, List<JCStatement> initCode) {
-        class EarlyInitializerVisitor extends TreeScanner {
-            @Override
-            public void visitIdent(JCIdent tree) {
-                if ((tree.sym.flags() & OUTER_THIS_FIELD) != 0) {
-                    tree.sym = md.sym.extraParams.head;
-                } else if ((tree.sym.flags() & LOCAL_CAPTURE_FIELD) != 0) {
-                    Symbol capturedSym = tree.sym.baseSymbol();
-                    tree.sym = md.sym.capturedLocals.stream()
-                            .filter(l -> l.baseSymbol() == capturedSym)
-                            .findAny().orElseThrow();
-                }
-            }
-        }
-        if (md.sym.capturedLocals.nonEmpty() || md.sym.extraParams.nonEmpty()) {
-            EarlyInitializerVisitor initializerVisitor = new EarlyInitializerVisitor();
-            for (JCStatement init : initCode) {
-                initializerVisitor.scan(init);
-            }
         }
     }
 
@@ -2572,7 +2550,6 @@ public class Gen extends JCTree.Visitor {
                 }
             }
             cdef.defs = List.nil(); // discard trees
-            localProxyVarsGen.classGenerated(c);
             return nerrs == 0;
         } finally {
             // note: this method does NOT support recursion.

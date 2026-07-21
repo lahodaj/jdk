@@ -2241,8 +2241,9 @@ public class Lower extends TreeTranslator {
                 if (TreeInfo.isConstructor(def)) {
                     JCMethodDecl mdef = (JCMethodDecl)def;
                     if (TreeInfo.hasConstructorCall(mdef, names._super)) {
-                        List<JCStatement> initializer = List.of(initOuterThis(mdef.body.pos, mdef.params.head.sym, storesThis)) ;
-                        TreeInfo.mapSuperCalls(mdef.body, supercall -> make.Block(0, initializer.append(supercall)));
+                        JCStatement initializer = initOuterThis(mdef.body.pos, mdef.params.head.sym, storesThis);
+                        mdef.body.stats = mdef.body.stats.prepend(initializer);
+                        mdef.body.prefixCount++;
                     }
                 }
             }
@@ -2745,7 +2746,8 @@ public class Lower extends TreeTranslator {
             // Prepend initializers in front of super() call
             if (added.nonEmpty()) {
                 List<JCStatement> initializers = added.toList();
-                TreeInfo.mapSuperCalls(tree.body, supercall -> make.Block(0, initializers.append(supercall)));
+                tree.body.stats = tree.body.stats.prependList(initializers);
+                tree.body.prefixCount += initializers.size();
             }
 
             // pop local variables from proxy stack
