@@ -746,7 +746,7 @@ public class Gen extends JCTree.Visitor {
                     chk.completionError(_tree.pos(), ex);
                     code.state.stacksize = 1;
                 }
-                CondItem result = items.makeCondItem(switchExpressionTrueChain != null ? goto_ : dontgoto,
+                CondItem result = items.makeCondItem(goto_,
                                                      switchExpressionTrueChain,
                                                      switchExpressionFalseChain);
                 if (markBranches) result.tree = _tree;
