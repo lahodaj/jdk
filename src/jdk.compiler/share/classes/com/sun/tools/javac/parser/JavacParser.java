@@ -5043,8 +5043,7 @@ public class JavacParser implements Parser {
                     isValueModifier = true;
                     break;
                 case IDENTIFIER: // value record R || value value
-                    if (next.name() == names.record || next.name() == names.value
-                            || (mode & EXPR) != 0)
+                    if (next.name() == names.record || next.name() == names.value)
                         isValueModifier = true;
                     break;
             }

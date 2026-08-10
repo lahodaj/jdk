@@ -26,7 +26,7 @@
  *
  * @test
  * @bug 8287136 8292630 8279368 8287136 8287770 8279840 8279672 8292753 8287763 8279901 8287767 8293183 8293120
- *      8329345 8341061 8340984 8334484
+ *      8329345 8341061 8340984 8334484 8390052
  * @summary Negative compilation tests, and positive compilation (smoke) tests for Value Objects
  * @enablePreview
  * @library /lib/combo /tools/lib
@@ -266,6 +266,33 @@ class ValueObjectCompilationTests extends CompilationTestCase {
                 }
                 """
         );
+        //JDK-8390052:
+        //value is still an acceptable name for "old" source levels:
+        String[] prevOptions = getCompileOptions();
+        try {
+            setCompileOptions("--release", System.getProperty("java.specification.version")); //disable --enable-preview
+            assertOK(
+                    """
+                    class Test {
+                      static class value {}
+                      interface P<T> {
+                        T p();
+                      }
+
+                      value f() {
+                        return
+                            new P<value>() {
+                              public value p() {
+                                return null;
+                              }
+                            }.p();
+                      }
+                    }
+                    """
+            );
+        } finally {
+            setCompileOptions(prevOptions);
+        }
     }
 
     private static final List<TestData> semanticsViolations = List.of(
