@@ -969,57 +969,61 @@ public class Gen extends JCTree.Visitor {
                 // Create a new code structure and initialize it.
                 int startpcCrt = initCode(tree, env, fatcode);
 
-                genStat(tree.body, env);
+                try {
+                    genStat(tree.body, env);
 
-                if (code.state.stacksize != 0) {
-                    log.error(tree.body.pos(), Errors.StackSimError(tree.sym));
-                    throw new AssertionError();
-                }
-
-                // If last statement could complete normally, insert a
-                // return at the end.
-                if (code.isAlive()) {
-                    code.statBegin(TreeInfo.endPos(tree.body));
-                    if (env.enclMethod == null ||
-                        env.enclMethod.sym.type.getReturnType().hasTag(VOID)) {
-                        code.emitop0(return_);
-                    } else {
-                        // sometime dead code seems alive (4415991);
-                        // generate a small loop instead
-                        int startpc = code.entryPoint();
-                        CondItem c = items.makeCondItem(goto_);
-                        code.resolve(c.jumpTrue(), startpc);
+                    if (code.state.stacksize != 0) {
+                        log.error(tree.body.pos(), Errors.StackSimError(tree.sym));
+                        throw new AssertionError();
                     }
+
+                    // If last statement could complete normally, insert a
+                    // return at the end.
+                    if (code.isAlive()) {
+                        code.statBegin(TreeInfo.endPos(tree.body));
+                        if (env.enclMethod == null ||
+                            env.enclMethod.sym.type.getReturnType().hasTag(VOID)) {
+                            code.emitop0(return_);
+                        } else {
+                            // sometime dead code seems alive (4415991);
+                            // generate a small loop instead
+                            int startpc = code.entryPoint();
+                            CondItem c = items.makeCondItem(goto_);
+                            code.resolve(c.jumpTrue(), startpc);
+                        }
+                    }
+                    if (genCrt)
+                        code.crt.put(tree.body,
+                                     CRT_BLOCK,
+                                     startpcCrt,
+                                     code.curCP());
+
+                    code.endScopes(0);
+
+                    // If we exceeded limits, panic
+                    if (code.checkLimits(tree.pos(), log)) {
+                        nerrs++;
+                        return;
+                    }
+
+                    // If we generated short code but got a long jump, do it again
+                    // with fatCode = true.
+                    if (!fatcode && code.fatcode) genMethod(tree, env, true);
+
+                    // Clean up
+                    if(stackMap == StackMapFormat.JSR202) {
+                        code.lastFrame = null;
+                        code.frameBeforeLast = null;
+                    }
+
+                    // Compress exception table
+                    code.compressCatchTable();
+
+                    // Fill in type annotation positions for exception parameters
+                    code.fillExceptionParameterPositions();
+                } catch (AbortGenerate _) {
+                    //ignore, an error has already been reported
                 }
-                if (genCrt)
-                    code.crt.put(tree.body,
-                                 CRT_BLOCK,
-                                 startpcCrt,
-                                 code.curCP());
-
-                code.endScopes(0);
-
-                // If we exceeded limits, panic
-                if (code.checkLimits(tree.pos(), log)) {
-                    nerrs++;
-                    return;
-                }
-
-                // If we generated short code but got a long jump, do it again
-                // with fatCode = true.
-                if (!fatcode && code.fatcode) genMethod(tree, env, true);
-
-                // Clean up
-                if(stackMap == StackMapFormat.JSR202) {
-                    code.lastFrame = null;
-                    code.frameBeforeLast = null;
-                }
-
-                // Compress exception table
-                code.compressCatchTable();
-
-                // Fill in type annotation positions for exception parameters
-                code.fillExceptionParameterPositions();
             }
             if (meth.isConstructor()) {
                 localProxyVarsGen.unpatchConstructor(tree, make);
@@ -1790,6 +1794,7 @@ public class Gen extends JCTree.Visitor {
             } else {
                 log.error(pos, Errors.LimitCodeTooLargeForTryStmt);
                 nerrs++;
+                throw new AbortGenerate();
             }
         }
 
@@ -2641,5 +2646,9 @@ public class Gen extends JCTree.Visitor {
                                                         handler(),
                                                         newState);
         }
+    }
+
+    private static final class AbortGenerate extends Abort {
+        private static final long serialVersionUID = 0;
     }
 }
