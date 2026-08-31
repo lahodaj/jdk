@@ -4254,14 +4254,23 @@ public class Attr extends JCTree.Visitor {
             ident.sym = enumConstant;
             ident.type = enumConstant.type;
         } else {
-            attribExpr(tree.expr, env, resultInfo.pt);
-            if (tree.expr instanceof JCFieldAccess access && access.name == names._class) {
+            Type actualType = attribExpr(tree.expr, env);
+            if (actualType.constValue() instanceof Number constant) {
+                if (resultInfo.pt.isNumeric() && !types.isUnconditionallyExactValueBased(actualType, types.unboxedTypeOrType(resultInfo.pt))) {
+                    chk.basicHandler.report(tree.pos(),
+                        diags.fragment(Fragments.ValueOutOfRange(constant.toString(), resultInfo.pt)));
+                }
+            } else if (tree.expr instanceof JCFieldAccess access && access.name == names._class) {
                 //TODO: what is the correct type for String.class??? Class<String> won't pass the cast test(?)
                 tree.expr.type = new ClassType(Type.noType,
                                                List.of(new WildcardType(syms.objectType,
                                                                         BoundKind.UNBOUND,
                                                                         syms.boundClass)),
                                                syms.classType.tsym);
+            } else if (actualType.constValue() == null &&
+                       !(TreeInfo.symbolFor(tree.expr) instanceof VarSymbol sym && sym.isEnum())) {
+                chk.basicHandler.report(tree.pos(),
+                    diags.fragment(Fragments.ConstExprReq));
             }
             chk.checkConstantPatternStructure(env, tree);
         }

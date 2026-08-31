@@ -443,4 +443,59 @@ public class CP {
                 """,
                 "0", "0", "1", "1", "2", "2", "3", "3");
     }
+
+    @Test
+    public void testApplicability1() throws Exception {
+        compileTest("""
+                    public record R(int i) {
+                        public void test(R r) {
+                            switch (r) {
+                                case R(-Long.MAX_VALUE) -> {} //error
+                                case R(-1L) -> {} //no error
+                                default -> {}
+                            }
+                        }
+                    }
+                    """,
+                    "R.java:4:20: compiler.err.prob.found.req: (compiler.misc.value.out.of.range: -9223372036854775807, int)",
+                    "- compiler.note.preview.filename: R.java, DEFAULT",
+                    "- compiler.note.preview.recompile",
+                    "1 error");
+    }
+
+    @Test
+    public void testApplicability2() throws Exception {
+        compileTest("""
+                    public record R(int i) {
+                        public void test(R r) {
+                            switch (r) {
+                                case R("") -> {} //error, not convertible
+                                default -> {}
+                            }
+                        }
+                    }
+                    """,
+                    "R.java:4:20: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: int, java.lang.String)",
+                    "- compiler.note.preview.filename: R.java, DEFAULT",
+                    "- compiler.note.preview.recompile",
+                    "1 error");
+    }
+
+    @Test
+    public void testApplicability3() throws Exception {
+        compileTest("""
+                    public record R(int i) {
+                        public void test(R r, Integer c) {
+                            switch (r) {
+                                case R(c) -> {} //error, not constant
+                                default -> {}
+                            }
+                        }
+                    }
+                    """,
+                    "R.java:4:20: compiler.err.prob.found.req: (compiler.misc.const.expr.req)",
+                    "- compiler.note.preview.filename: R.java, DEFAULT",
+                    "- compiler.note.preview.recompile",
+                    "1 error");
+    }
 }
