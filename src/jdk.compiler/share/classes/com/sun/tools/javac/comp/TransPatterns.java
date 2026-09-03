@@ -261,10 +261,17 @@ public class TransPatterns extends TreeTranslator {
                 Type principalType = types.erasure(TreeInfo.primaryPatternType((pattern)));
                 JCExpression resultExpression = (JCExpression) this.<JCTree>translate(pattern);
                 if (!tree.allowNull || !types.isSubtype(currentValue.type, principalType)) {
-                    resultExpression =
-                            makeBinary(Tag.AND,
-                                       makeTypeTest(make.Ident(currentValue), make.Type(principalType)),
-                                       resultExpression);
+                    if (principalType.hasTag(BOT)) {
+                        resultExpression =
+                                makeBinary(Tag.AND,
+                                           makeBinary(Tag.EQ, make.Ident(currentValue), makeNull()),
+                                           resultExpression);
+                    } else {
+                        resultExpression =
+                                makeBinary(Tag.AND,
+                                           makeTypeTest(make.Ident(currentValue), make.Type(principalType)),
+                                           resultExpression);
+                    }
                 }
                 if (extraConditions != null) {
                     extraConditions = translate(extraConditions);
@@ -315,10 +322,6 @@ public class TransPatterns extends TreeTranslator {
     public void visitConstantPattern(JCConstantPattern tree) {
         if (tree.type.isPrimitive()) {
             JCExpression instance = make.Ident(currentValue);
-
-            if (!instance.type.isPrimitive()) {
-                instance = make.TypeCast(tree.type.baseType(), instance);
-            }
 
             OperatorSymbol eq = operators.resolveBinary(tree.pos(), Tag.EQ, instance.type, tree.type);
             TypeSymbol param = eq.type.getParameterTypes().get(0).tsym;

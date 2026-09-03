@@ -44,10 +44,13 @@ import toolbox.Task.Expect;
 import toolbox.Task.OutputKind;
 import toolbox.ToolBox;
 
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 
 public class CP {
-    private ToolBox tb;
+    private final ToolBox tb;
+    private Path base;
 
     public CP() {
         tb = new ToolBox();
@@ -100,7 +103,7 @@ public class CP {
                         if (!(o instanceof R(Float.NaN))) {
                             throw new AssertionError("1");
                         }
-                        if (o instanceof R(0)) {
+                        if (o instanceof R(0f)) {
                             throw new AssertionError("2");
                         }
                         System.out.println("correct");
@@ -119,7 +122,7 @@ public class CP {
                         if (!(o instanceof R(Double.NaN))) {
                             throw new AssertionError("1");
                         }
-                        if (o instanceof R(0)) {
+                        if (o instanceof R(0d)) {
                             throw new AssertionError("2");
                         }
                         System.out.println("correct");
@@ -130,7 +133,6 @@ public class CP {
     }
 
     private void runTest(String code, String... expected) throws Exception {
-        Path base = Paths.get(".");
         Path src = base.resolve("src");
 
         tb.writeJavaFiles(src, code);
@@ -166,7 +168,6 @@ public class CP {
     }
 
     private void compileTest(String code, String... expected) throws Exception {
-        Path base = Paths.get(".");
         Path src = base.resolve("src");
 
         tb.writeJavaFiles(src, code);
@@ -185,6 +186,8 @@ public class CP {
                     .options("--enable-preview", "--release", System.getProperty("java.specification.version"),
                              "-Xlint:constants",
                              "-XDrawDiagnostics")
+//                             "-Xlint:constants"/*,
+//                             "-XDrawDiagnostics"*/)
                     .outdir(classes)
                     .files(tb.findJavaFiles(src))
                     .run(expectedAsList.stream().anyMatch(l -> l.contains("error")) ? Expect.FAIL
@@ -200,7 +203,6 @@ public class CP {
 
     @Test
     public void testSourceLevelCheck() throws Exception {
-        Path base = Paths.get(".");
         Path src = base.resolve("src");
 
         Path classes = base.resolve("classes");
@@ -281,7 +283,8 @@ public class CP {
 
     @Test
     public void testConstantCast() throws Exception {
-        runTest("""
+        compileTest(
+                """
                 public record R(Number val) {
                     static void main() {
                         Object o = new R(1);
@@ -298,12 +301,20 @@ public class CP {
                     }
                 }
                 """,
-                "correct");
+                """
+                R.java:4:28: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: java.lang.Number, int)
+                R.java:7:30: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: java.lang.Number, int)
+                R.java:10:28: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: java.lang.Number, long)
+                - compiler.note.preview.filename: R.java, DEFAULT
+                - compiler.note.preview.recompile
+                3 errors
+                """.split("\n"));
     }
 
     @Test
     public void testConstantCastSwitch() throws Exception {
-        runTest("""
+        compileTest(
+                """
                 public record R(Number val) {
                     static void main() {
                         Object o = new R(1);
@@ -316,12 +327,20 @@ public class CP {
                     }
                 }
                 """,
-                "correct");
+                """
+                R.java:5:20: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: java.lang.Number, int)
+                R.java:6:20: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: java.lang.Number, long)
+                R.java:7:20: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: java.lang.Number, int)
+                - compiler.note.preview.filename: R.java, DEFAULT
+                - compiler.note.preview.recompile
+                3 errors
+                """.split("\n"));
     }
 
     @Test
     public void testTopLevelConstant() throws Exception {
-        runTest("""
+        compileTest(
+                """
                 public record R(Number val) {
                     static void main() {
                         Object o = 1;
@@ -334,13 +353,20 @@ public class CP {
                     }
                 }
                 """,
-                "correct");
+                """
+                R.java:5:18: compiler.err.constant.label.not.compatible: int, java.lang.Object
+                R.java:6:18: compiler.err.constant.label.not.compatible: long, java.lang.Object
+                R.java:7:18: compiler.err.constant.label.not.compatible: int, java.lang.Object
+                - compiler.note.preview.filename: R.java, DEFAULT
+                - compiler.note.preview.recompile
+                3 errors
+                """.split("\n"));
     }
 
     @Test
     public void testEnumConstant1() throws Exception {
         runTest("""
-                public record R(Object o) {
+                public record R(E o) {
                     static void main() {
                         Object o = new R(E.A);
                         switch (o) {
@@ -359,7 +385,8 @@ public class CP {
 
     @Test
     public void testClassConstant() throws Exception {
-        runTest("""
+        compileTest(
+                """
                 public record R(Object o) {
                     static void main() {
                         Object o = new R(String.class);
@@ -371,7 +398,13 @@ public class CP {
                     }
                 }
                 """,
-                "correct");
+                """
+                R.java:5:20: compiler.err.prob.found.req: (compiler.misc.const.expr.req)
+                R.java:6:20: compiler.err.prob.found.req: (compiler.misc.const.expr.req)
+                - compiler.note.preview.filename: R.java, DEFAULT
+                - compiler.note.preview.recompile
+                2 errors
+                """.split("\n"));
     }
 
     @Test
@@ -389,8 +422,8 @@ public class CP {
                         }
                     }
                     """,
-                    "R.java:5:20: compiler.err.constant.pattern.simple.expression.only",
-                    "R.java:6:20: compiler.err.constant.pattern.simple.expression.only",
+                    "R.java:5:22: compiler.err.constant.pattern.simple.expression.only",
+                    "R.java:6:25: compiler.err.constant.pattern.simple.expression.only",
                     "R.java:7:20: compiler.err.constant.pattern.simple.expression.only",
                     "- compiler.note.preview.filename: R.java, DEFAULT",
                     "- compiler.note.preview.recompile",
@@ -408,11 +441,9 @@ public class CP {
                         }
                     }
                     """,
-                    "R.java:5:18: compiler.warn.constant.pattern.simple.expression.only",
-                    "R.java:6:18: compiler.warn.constant.pattern.simple.expression.only",
+                    "R.java:5:20: compiler.warn.constant.pattern.simple.expression.only",
+                    "R.java:6:23: compiler.warn.constant.pattern.simple.expression.only",
                     "R.java:7:18: compiler.warn.constant.pattern.simple.expression.only",
-                    "- compiler.note.preview.filename: R.java, DEFAULT",
-                    "- compiler.note.preview.recompile",
                     "3 warnings");
     }
 
@@ -423,7 +454,7 @@ public class CP {
                     static void main() {
                         for (int i = 0; i < 4; i++) {
                             int r;
-                            switch ((Object) i) {
+                            switch (i) {
                                 case 0 + 0 -> r = 0;
                                 case true ? 1 : 0 -> r = 1;
                                 case (int) 2 -> r = 2;
@@ -451,16 +482,18 @@ public class CP {
                         public void test(R r) {
                             switch (r) {
                                 case R(-Long.MAX_VALUE) -> {} //error
-                                case R(-1L) -> {} //no error
+                                case R(-1L) -> {} //error
+                                case R(-1) -> {} //no error
                                 default -> {}
                             }
                         }
                     }
                     """,
-                    "R.java:4:20: compiler.err.prob.found.req: (compiler.misc.value.out.of.range: -9223372036854775807, int)",
+                    "R.java:4:20: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: int, long)",
+                    "R.java:5:20: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: int, long)",
                     "- compiler.note.preview.filename: R.java, DEFAULT",
                     "- compiler.note.preview.recompile",
-                    "1 error");
+                    "2 errors");
     }
 
     @Test
@@ -497,5 +530,140 @@ public class CP {
                     "- compiler.note.preview.filename: R.java, DEFAULT",
                     "- compiler.note.preview.recompile",
                     "1 error");
+    }
+
+    @Test
+    public void testApplicabilityBigSample() throws Exception {
+        compileTest("""
+                    record Box<T>(T content){}
+                    record Box_Float(Float content){}
+                    record Box_float(float content){}
+                    record Box_Long(Long content){}
+                    record Box_long(long content){}
+                    record Box_Double(Double content){}
+                    record Box_double(double content){}
+                    record Box_Boolean(Boolean content){}
+                    record Box_boolean(boolean content){}
+                    record Box_Integer(Integer content){}
+                    record Box_int(int content){}
+                    record Box_Byte(Byte content){}
+                    record Box_byte(byte content){}
+                    record Box_Number(Number content){}
+                    record Box_String(String content){}
+                    record Box_E(E content){}
+                    record Box_Foo(Foo content){}
+                    record Box_Object(Object content){}
+                    enum E{ A, B, C }
+                    enum F{ A, B, C }
+                    class Foo {}
+                    
+                    static void test(Object o) {
+                        switch (o) {
+                            case Box_Float(42) -> {}             // Error! 42 is not applicable at Float
+                            case Box_float(42) -> {}             // Error! 42 is not applicable at Float
+                            case Box_Float(1e1f) -> {}           // Ok
+                            case Box_float(1e1f) -> {}           // Ok
+                            case Box_Long(Long.MAX_VALUE) -> {}  // Ok
+                            case Box_long(Long.MAX_VALUE) -> {}  // Ok
+                            case Box_Long(0) -> {}  // Error! 0 (int) is not applicable at Long
+                            case Box_long(0) -> {}  // Error! 0 (int) is not applicable at long
+                            case Box_Long(0L) -> {}  // Ok
+                            case Box_long(0L) -> {}  // Ok
+                            case Box_Double(2.) -> {}            // Ok
+                            case Box_double(2.) -> {}            // Ok
+                            case Box_Double(42) -> {}            // Error! 42 is not applicable at Double
+                            case Box_double(42) -> {}            // Error! 42 is not applicable at double
+                            case Box_Boolean(true) -> {}         // Ok
+                            case Box_boolean(true) -> {}         // Ok
+                            case Box_Boolean(0) -> {}         // Error! 0 (int) is not applicable at Boolean
+                            case Box_boolean(0) -> {}         // Error! 0 (int) is not applicable at Boolean
+                            case Box_Boolean('0') -> {}         // Error! '0' is not applicable at Boolean
+                            case Box_boolean('0') -> {}         // Error! '0' is not applicable at Boolean
+                            case Box_Integer(42) -> {}           // Ok
+                            case Box_int(42) -> {}           // Ok
+                            case Box_Byte(42) -> {}              // Ok. 42 is assignment compatible with Byte
+                            case Box_byte(42) -> {}              // Ok. 42 is assignment compatible with Byte
+                            case Box_Byte(128) -> {}             // Error! 128 is not assignment compatible with Byte
+                            case Box_byte(128) -> {}             // Error! 128 is not assignment compatible with Byte
+                            case Box_Number(128) -> {}           // Error! 128 (int) is not applicable at Number
+                            case Box_Number(128L) -> {}           // Error! 128 (long) is not applicable at Number
+                            case Box_Number(128f) -> {}           // Error! 128 (float) is not applicable at Number
+                            case Box_Number(128d) -> {}           // Error! 128 (double) is not applicable at Number
+                            case Box_String("hello") -> {}       // Ok
+                            case Box_E(E.A) -> {}                // Ok
+                            case Box_E(F.A) -> {}                // Error! wrong type
+                            case Box_Object(E.A) -> {}           // Ok
+                            // null
+                            case Box_E(null) -> {}               // Ok
+                            case Box_Integer(null) -> {}         // Ok
+                            case Box_String(null) -> {}          // Ok
+                            case Box_Long(null) -> {}            // Ok
+                            case Box_long(null) -> {}            // Error! not reference
+                            case Box_Foo(null) -> {}             // Ok
+                            case Box_Object(null) -> {}          // Ok
+                            default -> {}
+                        }
+                    }
+                    void main() {}
+                    """,
+                    """
+                    Box.java:25:24: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: java.lang.Float, int)
+                    Box.java:26:24: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: float, int)
+                    Box.java:31:23: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: java.lang.Long, int)
+                    Box.java:32:23: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: long, int)
+                    Box.java:37:25: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: java.lang.Double, int)
+                    Box.java:38:25: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: double, int)
+                    Box.java:41:26: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: java.lang.Boolean, int)
+                    Box.java:42:26: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: boolean, int)
+                    Box.java:43:26: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: java.lang.Boolean, char)
+                    Box.java:44:26: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: boolean, char)
+                    Box.java:49:23: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: java.lang.Byte, int)
+                    Box.java:50:23: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: byte, int)
+                    Box.java:51:25: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: java.lang.Number, int)
+                    Box.java:52:25: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: java.lang.Number, long)
+                    Box.java:53:25: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: java.lang.Number, float)
+                    Box.java:54:25: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: java.lang.Number, double)
+                    Box.java:57:20: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: Box.E, Box.F)
+                    Box.java:64:23: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: long, compiler.misc.type.null)
+                    - compiler.note.preview.filename: Box.java, DEFAULT
+                    - compiler.note.preview.recompile
+                    18 errors
+                    """.split("\n"));
+    }
+
+    @Test
+    public void testNullHandling() throws Exception {
+        runTest("""
+                public record R(String str, Object obj) {
+                    static void test(R r) {
+                        switch (r) {
+                            case R(null, null) -> System.out.println("null, null");
+                            case R(var str, null) -> System.out.println(str + ", null");
+                            case R(null, var obj) -> System.out.println("null, " + obj);
+                            case R(var str, var obj) -> System.out.println(str + ", " + obj);
+                            default -> System.out.println("wrong");
+                        }
+                    }
+                    static void main() {
+                        test(new R(null, null));
+                        test(new R("str", null));
+                        test(new R(null, 1));
+                        test(new R("str", 1));
+                    }
+                }
+                """,
+                "null, null",
+                "str, null",
+                "null, 1",
+                "str, 1");
+    }
+
+    //TODO: no .class
+    //TODO: better tests .equals semantics for Float/Double?
+    //TODO: no constant patterns in instanceof(!)
+
+    @BeforeEach
+    void setPath(TestInfo info) {
+        base = Path.of(info.getTestMethod().orElseThrow().getName());
     }
 }

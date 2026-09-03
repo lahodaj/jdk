@@ -995,7 +995,7 @@ public class JavacParser implements Parser {
         mods = mods != null ? mods : optFinal(0);
         boolean constantPattern = mods.flags == 0 && mods.annotations.isEmpty() && parsedType == null &&
                                   token.kind != RPAREN &&
-                                  analyzePattern(0) == PatternResult.EXPRESSION;
+                                  analyzePattern(0, /*TODO: allowVar is a proxy for nested, rename?*/allowVar) == PatternResult.EXPRESSION;
 
         if (constantPattern) {
             checkSourceLevel(Feature.CONSTANT_PATTERNS);
@@ -3317,19 +3317,7 @@ public class JavacParser implements Parser {
                 cases.appendList(switchBlockStatementGroup());
                 break;
             case RBRACE: case EOF:
-                List<JCCase> result = cases.toList();
-                boolean isEnhancedSwitch = result.stream().anyMatch(c -> c.labels.stream().anyMatch(l -> l.hasTag(PATTERNCASELABEL))); //TODO + constant null(!)
-                if (isEnhancedSwitch && allowConstantPatterns) {
-                    //XXX: should probably do this always, as we can't check the selector type here anyway(???)
-                    for (JCCase c : result) {
-                        for (List<JCCaseLabel> labels = c.labels; labels.nonEmpty(); labels = labels.tail) {
-                            if (labels.head instanceof JCConstantCaseLabel ccl && !TreeInfo.isNullCaseLabel(labels.head)) {
-                                labels.head = F.at(labels.head).PatternCaseLabel(F.at(labels.head).ConstantPattern(ccl.expr));
-                            }
-                        }
-                    }
-                }
-                return result;
+                return cases.toList();
             default:
                 nextToken(); // to ensure progress
                 syntaxError(pos, Errors.Expected3(CASE, DEFAULT, RBRACE));
@@ -3421,10 +3409,9 @@ public class JavacParser implements Parser {
             nextToken();
             label = toP(F.at(patternPos).DefaultCaseLabel());
         } else {
-            //TODO: constants should be parsed as constant patterns - either all, or at least some
             JCModifiers mods = optFinal(0);
             boolean pattern = mods.flags != 0 || mods.annotations.nonEmpty() ||
-                              analyzePattern(0) == PatternResult.PATTERN;
+                              analyzePattern(0, false) == PatternResult.PATTERN;
             if (pattern) {
                 checkSourceLevel(token.pos, Feature.PATTERN_SWITCH);
                 JCPattern p = parsePattern(patternPos, mods, null, false, true);
@@ -3455,7 +3442,7 @@ public class JavacParser implements Parser {
         return guard;
     }
     @SuppressWarnings("fallthrough")
-    PatternResult analyzePattern(int lookahead) {
+    PatternResult analyzePattern(int lookahead, boolean nested) {
         int typeDepth = 0;
         int parenDepth = 0;
         PatternResult pendingResult = PatternResult.EXPRESSION;
@@ -3517,7 +3504,7 @@ public class JavacParser implements Parser {
                     }
                 case LPAREN:
                     if (S.token(lookahead + 1).kind == RPAREN) {
-                        return parenDepth != 0 && S.token(lookahead + 2).kind == ARROW
+                        return nested || (parenDepth != 0 && S.token(lookahead + 2).kind == ARROW)
                                 ? PatternResult.EXPRESSION
                                 : PatternResult.PATTERN;
                     }
@@ -3531,8 +3518,8 @@ public class JavacParser implements Parser {
                         return PatternResult.PATTERN;
                     }
                     break;
-                case ARROW: return parenDepth > 0 ? PatternResult.EXPRESSION
-                                                   : pendingResult;
+                case ARROW: return parenDepth > 0 || nested ? PatternResult.EXPRESSION
+                                                            : pendingResult;
                 case FINAL:
                     if (parenDepth > 0) return PatternResult.PATTERN;
                 default: return pendingResult;

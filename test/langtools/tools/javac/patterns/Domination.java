@@ -257,20 +257,17 @@ public class Domination {
         }
     }
 
-    int testConstantPatternDominatedClass() {
+    int testNullDominance() {
         record R(Object o) {}
         R r = null;
         switch (r) {
             case R(Object o) -> {}
-            case R(String.class) -> {}
+            case R(null) -> {}
         }
         switch (r) {
-            case R(Class<?> c) -> {}
-            case R(String.class) -> {}
-        }
-        switch (r) {
-            case R(String.class) -> {}
-            case R(String.class) -> {}
+            case R(null) -> {}
+            case R(null) -> {}
         }
     }
+
 }

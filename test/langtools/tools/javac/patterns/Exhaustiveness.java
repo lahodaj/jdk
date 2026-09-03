@@ -2510,6 +2510,58 @@ public class Exhaustiveness extends TestRunner {
                List.of("--enable-preview", "--release", System.getProperty("java.specification.version")));
     }
 
+    @Test
+    public void testConstantPatternsBoolean(Path base) throws Exception {
+        doTest(base,
+               new String[0],
+               """
+               public class Test {
+                   record R(boolean data) { }
+
+                   static int r(R r) {
+                       return switch (r) {
+                           case R(true) -> 1;
+                           case R(false) -> 2;
+                       };
+                   }
+               }
+               """,
+               List.of("--enable-preview", "--release", System.getProperty("java.specification.version")));
+        doTest(base,
+               new String[0],
+               """
+               public class Test {
+                   record R(boolean data) { }
+
+                   static int r(R r) {
+                       return switch (r) {
+                           case R(true) -> 1;
+                       };
+                   }
+               }
+               """,
+               List.of("--enable-preview", "--release", System.getProperty("java.specification.version")),
+               "Test.java:5:16: compiler.err.not.exhaustive",
+               "- compiler.note.preview.filename: Test.java, DEFAULT",
+               "- compiler.note.preview.recompile",
+               "1 error");
+        doTest(base,
+               new String[0],
+               """
+               public class Test {
+                   record R(Boolean data) { }
+
+                   static int r(R r) {
+                       return switch (r) {
+                           case R(true) -> 1;
+                           case R(false) -> 2;
+                       };
+                   }
+               }
+               """,
+               List.of("--enable-preview", "--release", System.getProperty("java.specification.version")));
+    }
+
     private void doTest(Path base, String[] libraryCode, String testCode, String... expectedErrors) throws IOException {
         doTest(base, libraryCode, testCode, List.of(), expectedErrors);
     }

@@ -1750,6 +1750,7 @@ public class Attr extends JCTree.Visitor {
                     JCCaseLabel label = labels.head;
                     if (label instanceof JCConstantCaseLabel constLabel) {
                         JCExpression expr = constLabel.expr;
+                        chk.checkComplexConstants(false, expr);
                         if (TreeInfo.isNull(expr)) {
                             preview.checkSourceLevel(expr.pos(), Feature.CASE_NULL);
                             if (hasNullPattern) {
@@ -1838,7 +1839,7 @@ public class Attr extends JCTree.Visitor {
                         } else if (!primaryType.hasTag(TYPEVAR)) {
                             primaryType = chk.checkClassOrArrayType(pat.pos(), primaryType);
                         }
-                        checkCastablePattern(pat.pos(), seltype, primaryType);
+                        checkApplicablePattern(pat.pos(), seltype, pat);
                         Type patternType = types.erasure(primaryType);
                         JCExpression guard = c.guard;
                         if (guardBindings == null && guard != null) {
@@ -4183,6 +4184,52 @@ public class Attr extends JCTree.Visitor {
         result = check(tree, syms.booleanType, KindSelector.VAL, resultInfo);
     }
 
+    private boolean checkApplicablePattern(DiagnosticPosition pos,
+                                         Type exprType,
+                                         JCPattern pattern) {
+        Type pattType = TreeInfo.primaryPatternType(pattern);
+        // if any type is erroneous, the problem is reported elsewhere
+        if (exprType.isErroneous() || pattType.isErroneous()) {
+            return false;
+        }
+        if (pattern instanceof JCConstantPattern cp) {
+            if (pattType.hasTag(BOT)) {
+                if (!exprType.isReference()) {
+                    chk.basicHandler.report(pos,
+                            diags.fragment(Fragments.InconvertibleTypes(exprType, pattType)));
+                    return false;
+                }
+            } else if (TreeInfo.symbol(cp.expr) instanceof VarSymbol enumCand && enumCand.isEnum()) {
+                if (!types.isAssignable(enumCand.type, exprType)) {
+                    chk.basicHandler.report(pos,
+                            diags.fragment(Fragments.InconvertibleTypes(exprType, pattType)));
+                    return false;
+                }
+            } else {
+                boolean valid = switch (types.unboxedTypeOrType(exprType).getTag()) {
+                    case LONG -> pattType.hasTag(LONG);
+                    case FLOAT -> pattType.hasTag(FLOAT);
+                    case DOUBLE -> pattType.hasTag(DOUBLE);
+                    case BOOLEAN -> pattType.hasTag(BOOLEAN);
+                    case BYTE, CHAR, SHORT, INT -> types.isAssignable(pattType, exprType);
+                    case CLASS -> exprType.tsym == syms.stringType.tsym &&
+                        types.isAssignable(pattType, exprType);
+                    default -> false;
+                };
+                if (!valid) {
+                    chk.basicHandler.report(pos,
+                            diags.fragment(Fragments.InconvertibleTypes(exprType, pattType)));
+                    return false;
+                }
+            }
+            return true;
+        } else {
+            return checkCastablePattern(pos, exprType, pattType);
+        }
+    }
+
+    //TODO: can we make the checkApplicablePattern and checkCastablePattern simpler?
+
     private boolean checkCastablePattern(DiagnosticPosition pos,
                                          Type exprType,
                                          Type pattType) {
@@ -4255,20 +4302,9 @@ public class Attr extends JCTree.Visitor {
             ident.type = enumConstant.type;
         } else {
             Type actualType = attribExpr(tree.expr, env);
-            if (actualType.constValue() instanceof Number constant) {
-                if (resultInfo.pt.isNumeric() && !types.isUnconditionallyExactValueBased(actualType, types.unboxedTypeOrType(resultInfo.pt))) {
-                    chk.basicHandler.report(tree.pos(),
-                        diags.fragment(Fragments.ValueOutOfRange(constant.toString(), resultInfo.pt)));
-                }
-            } else if (tree.expr instanceof JCFieldAccess access && access.name == names._class) {
-                //TODO: what is the correct type for String.class??? Class<String> won't pass the cast test(?)
-                tree.expr.type = new ClassType(Type.noType,
-                                               List.of(new WildcardType(syms.objectType,
-                                                                        BoundKind.UNBOUND,
-                                                                        syms.boundClass)),
-                                               syms.classType.tsym);
-            } else if (actualType.constValue() == null &&
-                       !(TreeInfo.symbolFor(tree.expr) instanceof VarSymbol sym && sym.isEnum())) {
+            if (actualType.constValue() == null &&
+                !(TreeInfo.symbolFor(tree.expr) instanceof VarSymbol sym && sym.isEnum()) &&
+                !actualType.hasTag(BOT)) {
                 chk.basicHandler.report(tree.pos(),
                     diags.fragment(Fragments.ConstExprReq));
             }
@@ -4323,7 +4359,7 @@ public class Attr extends JCTree.Visitor {
         try {
             while (recordTypes.nonEmpty() && nestedPatterns.nonEmpty()) {
                 attribExpr(nestedPatterns.head, localEnv, recordTypes.head);
-                checkCastablePattern(nestedPatterns.head.pos(), recordTypes.head, nestedPatterns.head.type);
+                checkApplicablePattern(nestedPatterns.head.pos(), recordTypes.head, nestedPatterns.head);
                 outBindings.addAll(matchBindings.bindingsWhenTrue);
                 matchBindings.bindingsWhenTrue.forEach(localEnv.info.scope::enter);
                 nestedPatterns = nestedPatterns.tail;

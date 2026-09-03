@@ -555,11 +555,19 @@ public class ExhaustivenessComputer {
 
     private Set<PatternDescription> reduceConstantPatterns(Set<PatternDescription> patterns) {
         Map<ClassSymbol, Set<EnumConstantPattern>> enum2PatternDescriptions = new HashMap<>();
+        boolean seenBooleanFalse = false;
+        boolean seenBooleanTrue = false;
 
         for (PatternDescription pd : patterns) {
             if (pd instanceof EnumConstantPattern ecp) {
                 enum2PatternDescriptions.computeIfAbsent(ecp.enumType(), _ -> new HashSet<>())
                                         .add(ecp);
+            } else if (pd instanceof BooleanConstantPattern bcp) {
+                if (bcp.value) {
+                    seenBooleanTrue = true;
+                } else {
+                    seenBooleanFalse = true;
+                }
             }
         }
 
@@ -584,6 +592,14 @@ public class ExhaustivenessComputer {
                 result.removeAll(e.getValue());
                 result.add(new BindingPattern(e.getKey().type));
             }
+        }
+
+        if (seenBooleanFalse && seenBooleanTrue) {
+            if (result == null) {
+                result = new HashSet<>(patterns);
+            }
+            result.removeIf(p -> p instanceof BooleanConstantPattern);
+            result.add(new BindingPattern(syms.booleanType));
         }
 
         return result != null ? result : patterns;
@@ -647,6 +663,8 @@ public class ExhaustivenessComputer {
             Symbol sym = TreeInfo.symbol(cp.expr);
             if (sym != null && sym.isEnum() && sym instanceof VarSymbol enumSymbol) {
                 return new EnumConstantPattern((ClassSymbol) enumSymbol.owner, enumSymbol.name);
+            } else if (cp.type.hasTag(TypeTag.BOOLEAN) && cp.type.constValue() instanceof Integer value) {
+                return new BooleanConstantPattern(value != 0);
             }
             return new NoopPattern();
         } else {
@@ -726,6 +744,12 @@ public class ExhaustivenessComputer {
     record EnumConstantPattern(ClassSymbol enumType, Name enumValue, Set<PatternDescription> sourcePatterns) implements PatternDescription {
         public EnumConstantPattern(ClassSymbol enumType, Name enumValue) {
             this(enumType, enumValue, Set.of());
+        }
+    }
+
+    record BooleanConstantPattern(boolean value, Set<PatternDescription> sourcePatterns) implements PatternDescription {
+        public BooleanConstantPattern(boolean value) {
+            this(value, Set.of());
         }
     }
 }

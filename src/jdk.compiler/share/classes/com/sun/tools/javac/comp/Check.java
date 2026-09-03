@@ -4842,11 +4842,10 @@ public class Check {
                 } else if (existingPattern instanceof JCConstantPattern existingConstant) {
                     if (existingConstant.expr.type.isPrimitive() || existingConstant.expr.type.tsym == syms.stringType.tsym) {
                         return Objects.equals(currentConstant.expr.type.constValue(), existingConstant.expr.type.constValue());
-                    } else if (existingConstant.expr instanceof JCFieldAccess existingAccess && existingAccess.name == names._class &&
-                               currentConstant.expr instanceof JCFieldAccess currentAccess && currentAccess.name == names._class) {
-                        return Objects.equals(TreeInfo.symbol(existingAccess.selected), TreeInfo.symbol(currentAccess.selected));
                     } else if (existingConstant.type.tsym.isEnum()) {
                         return Objects.equals(TreeInfo.symbol(existingConstant.expr), TreeInfo.symbol(currentConstant.expr));
+                    } else if (existingConstant.type.hasTag(BOT)) {
+                        return currentConstant.expr.type.hasTag(BOT);
                     } else {
                         //should not happen, error recovery(?)
                         return false;
@@ -4864,7 +4863,10 @@ public class Check {
         }
 
     void checkConstantPatternStructure(Env<AttrContext> env, JCConstantPattern tree) {
-        JCExpression expr = tree.expr;
+        checkComplexConstants(true, tree.expr);
+    }
+
+    void checkComplexConstants(boolean error, JCExpression expr) {
         boolean simpleConstant = true;
 
         while (simpleConstant && expr != null) {
@@ -4877,10 +4879,10 @@ public class Check {
         }
 
         if (!simpleConstant) {
-            if (env.tree.hasTag(Tag.SWITCH) || env.tree.hasTag(Tag.SWITCH_EXPRESSION)) {
-                log.warning(tree.pos(), LintWarnings.ConstantPatternSimpleExpressionOnly);
+            if (error) {
+                log.error(expr.pos(), Errors.ConstantPatternSimpleExpressionOnly);
             } else {
-                log.error(tree.pos(), Errors.ConstantPatternSimpleExpressionOnly);
+                log.warning(expr.pos(), LintWarnings.ConstantPatternSimpleExpressionOnly);
             }
         }
     }

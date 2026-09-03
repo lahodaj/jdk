@@ -10,13 +10,13 @@ Domination.java:185:18: compiler.err.pattern.dominated
 Domination.java:194:18: compiler.err.pattern.dominated
 Domination.java:203:18: compiler.err.pattern.dominated
 Domination.java:212:18: compiler.err.pattern.dominated
-Domination.java:228:18: compiler.err.pattern.dominated
+Domination.java:229:18: compiler.err.pattern.dominated
 Domination.java:238:18: compiler.err.pattern.dominated
-Domination.java:242:18: compiler.err.pattern.dominated
-Domination.java:246:18: compiler.err.pattern.dominated
-Domination.java:255:18: compiler.err.pattern.dominated
-Domination.java:259:18: compiler.err.pattern.dominated
-Domination.java:263:18: compiler.err.pattern.dominated
+Domination.java:248:18: compiler.err.pattern.dominated
+Domination.java:252:18: compiler.err.pattern.dominated
+Domination.java:256:18: compiler.err.pattern.dominated
+Domination.java:265:18: compiler.err.pattern.dominated
+Domination.java:269:18: compiler.err.pattern.dominated
 - compiler.note.preview.filename: Domination.java, DEFAULT
 - compiler.note.preview.recompile
 19 errors
