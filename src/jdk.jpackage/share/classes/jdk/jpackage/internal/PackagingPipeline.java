@@ -32,7 +32,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -379,21 +378,21 @@ final class PackagingPipeline {
             private <T extends Application, U extends AppImageLayout> TaskBuilder logAppImageAction(ActionRole role, String keyId, Function<AppImageBuildEnv<T, U>, Object[]> formatArgsSupplier) {
                 Objects.requireNonNull(keyId);
                 return appImageAction(role, (AppImageBuildEnv<T, U> env) -> {
-                    Log.verbose(I18N.format(keyId, formatArgsSupplier.apply(env)));
+                    Log.progress(I18N.format(keyId, formatArgsSupplier.apply(env)));
                 });
             }
 
             private <T extends Package, U extends AppImageLayout> TaskBuilder logPackageAction(ActionRole role, String keyId, Function<PackageBuildEnv<T, U>, Object[]> formatArgsSupplier) {
                 Objects.requireNonNull(keyId);
                 return packageAction(role, (PackageBuildEnv<T, U> env) -> {
-                    Log.verbose(I18N.format(keyId, formatArgsSupplier.apply(env)));
+                    Log.progress(I18N.format(keyId, formatArgsSupplier.apply(env)));
                 });
             }
 
             private TaskBuilder logAction(ActionRole role, String keyId, Supplier<Object[]> formatArgsSupplier) {
                 Objects.requireNonNull(keyId);
                 return action(role, () -> {
-                    Log.verbose(I18N.format(keyId, formatArgsSupplier.get()));
+                    Log.progress(I18N.format(keyId, formatArgsSupplier.get()));
                 });
             }
 
@@ -428,12 +427,6 @@ final class PackagingPipeline {
             });
         }
 
-        Builder excludeDirFromCopying(Path path) {
-            Objects.requireNonNull(path);
-            excludeCopyDirs.add(path);
-            return this;
-        }
-
         Builder contextMapper(UnaryOperator<TaskContext> v) {
             contextMapper = v;
             return this;
@@ -456,7 +449,6 @@ final class PackagingPipeline {
         }
 
         private final FixedDAG.Builder<TaskID> taskGraphBuilder = FixedDAG.build();
-        private final List<Path> excludeCopyDirs = new ArrayList<>();
         private final Map<TaskID, TaskConfig> taskConfig = new HashMap<>();
         private UnaryOperator<TaskContext> contextMapper;
         private FixedDAG<TaskID> taskGraphSnapshot;
@@ -490,7 +482,7 @@ final class PackagingPipeline {
 
         builder.task(BuildApplicationTaskID.CONTENT)
                 .addDependent(BuildApplicationTaskID.APP_IMAGE_FILE)
-                .applicationAction(ApplicationImageUtils.createCopyContentAction(() -> builder.excludeCopyDirs)).add();
+                .applicationAction(ApplicationImageUtils.createCopyContentAction()).add();
 
         return builder;
     }

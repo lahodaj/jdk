@@ -131,6 +131,7 @@ public class ObjectStreamPrinter implements HexPrinter.Formatter {
      * @return a label for the object just read
      * @throws IOException if an error occurs on the stream
      */
+    @SuppressWarnings("constants") //the '(STREAM_MAGIC >>> 8) & 0xff' triggers a warning from constant patterns:
     Handle formatObject(DataInputStream in, Appendable infoOut, int indent) throws IOException {
         int tc;
         if (((tc = in.read()) < TC_NULL || tc > TC_MAX) && tc != ((STREAM_MAGIC >>> 8) & 0xff)) {

@@ -444,6 +444,9 @@ public class CP {
                     "R.java:5:20: compiler.warn.constant.pattern.simple.expression.only",
                     "R.java:6:23: compiler.warn.constant.pattern.simple.expression.only",
                     "R.java:7:18: compiler.warn.constant.pattern.simple.expression.only",
+                    //due to strict fields in records:
+                    "- compiler.note.preview.filename: R.java, DEFAULT",
+                    "- compiler.note.preview.recompile",
                     "3 warnings");
     }
 
