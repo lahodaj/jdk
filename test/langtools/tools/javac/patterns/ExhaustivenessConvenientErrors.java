@@ -450,6 +450,65 @@ public class ExhaustivenessConvenientErrors extends TestRunner {
                public record R(R r1, R r2, R r3, Object o) {}
                """,
                "test.Test.E _");
+        doTest(base,
+               new String[0],
+               """
+               package test;
+               public class Test {
+                   private int test(R r) {
+                       return switch (r) {
+                           case R(E.A) -> 0;
+                           case R(C _) -> 1;
+                       };
+                   }
+                   sealed interface I {}
+                   enum E implements I {A, B}
+                   final class C implements I {}
+                   record R(I i) {}
+               }
+               public record R(R r1, R r2, R r3, Object o) {}
+               """,
+               "test.Test.R(test.Test.E.B)");
+        doTest(base,
+               new String[0],
+               """
+               package test;
+               public class Test {
+                   private int test(R r) {
+                       return switch (r) {
+                           case R(C _) -> 1;
+                       };
+                   }
+                   sealed interface I {}
+                   enum E implements I {A, B}
+                   final class C implements I {}
+                   record R(I i) {}
+               }
+               public record R(R r1, R r2, R r3, Object o) {}
+               """,
+               "test.Test.R(test.Test.E _)");
+    }
+
+    @Test
+    public void testBoolean(Path base) throws Exception {
+        doTest(base,
+               new String[0],
+               """
+               package test;
+               public class Test {
+                   private int test(R r) {
+                       return switch (r) {
+                           case R(true) -> 0;
+                       };
+                   }
+                   sealed interface I {}
+                   enum E implements I {A, B}
+                   final class C implements I {}
+                   record R(boolean b) {}
+               }
+               public record R(R r1, R r2, R r3, Object o) {}
+               """,
+               "test.Test.R(false)");
     }
 
     @Test

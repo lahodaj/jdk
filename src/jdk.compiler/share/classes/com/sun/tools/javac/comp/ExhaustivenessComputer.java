@@ -142,18 +142,7 @@ public class ExhaustivenessComputer {
             }
 
             Set<PatternDescription> details =
-                    this.computeMissingPatternDescriptions(selector.type, coveredResult.incompletePatterns())
-                        .stream()
-                        //TODO: enum type expansion needs to be done inline:
-//                        .flatMap(pd -> {
-//                            if (pd instanceof BindingPattern bp && enum2Constants.containsKey(bp.type.tsym)) {
-//                                Symbol enumType = bp.type.tsym;
-//                                return enum2Constants.get(enumType).stream().map(c -> new EnumConstantPattern(bp.type, c.name));
-//                            } else {
-//                                return Stream.of(pd);
-//                            }
-//                        })
-                        .collect(Collectors.toCollection(LinkedHashSet::new));
+                    computeMissingPatternDescriptions(selector.type, coveredResult.incompletePatterns());
 
             return ExhaustivenessResult.ofDetails(details);
         } catch (CompletionFailure cf) {
@@ -956,7 +945,36 @@ public class ExhaustivenessComputer {
                                                                        Set<? extends PatternDescription> basePatterns,
                                                                        Set<PatternDescription> inMissingPatterns) {
         if (toExpand instanceof BindingPattern bp) {
-            if (bp.type.tsym.isSealed()) {
+            if (bp.type.tsym.isEnum() || bp.type.tsym == syms.booleanType.tsym) {
+                //try to:
+                //- replace binding patterns for enum types with all their enum constants
+                //- replace binding patterns for boolean with true and false
+                //TODO: only do at top-level and/or if constant patterns are enabled?
+                //but should automatically be rejected if no constant patterns are present (and hence not enabled)?
+                //so this is mostly performance?
+                Set<PatternDescription> constantPatterns = new HashSet<>();
+                if (bp.type.tsym.isEnum()) {
+                    for (Symbol constant : bp.type.tsym.members()
+                                                       .getSymbols(sym -> sym.kind == Kind.VAR && sym.isEnum())) {
+                        constantPatterns.add(new EnumConstantPattern(bp.type, constant.name));
+                    }
+                } else {
+                    constantPatterns.add(new BooleanConstantPattern(syms, false));
+                    constantPatterns.add(new BooleanConstantPattern(syms, true));
+                }
+
+                //remove the enum constants that are not needed to achieve exhaustivity
+                boolean reduced =
+                        removeUnnecessaryPatterns(selectorType, bp, basePatterns, inMissingPatterns, constantPatterns);
+
+                if (!reduced) {
+                    //if all immediate permitted subtypes are needed
+                    //give up, and simply use the current pattern:
+                    return inMissingPatterns;
+                }
+
+                return replace(inMissingPatterns, toExpand, constantPatterns);
+            } else if (bp.type.tsym.isSealed()) {
                 //try to replace binding patterns for sealed types with all their immediate permitted applicable types:
                 Set<PatternDescription> applicableDirectPermittedPatterns =
                         directPermittedSubTypes(bp.type)

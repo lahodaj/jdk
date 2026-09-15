@@ -816,7 +816,7 @@ public class Flow {
                     Fragments.EnumConstantPattern(patternType,
                                                   ep.enumConstant());
                 case BooleanConstantPattern bp -> //XXX: todo
-                    Fragments.BindingPattern(patternType);
+                    Fragments.BooleanConstantPattern(bp.value() ? "true": "false");
                 case NoopPattern noop -> throw new IllegalStateException(desc.toString());
             });
         }
