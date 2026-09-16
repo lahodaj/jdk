@@ -271,9 +271,9 @@ public class TypeAnnosOnMemberReferenceTest {
                 """);
 
         List<String> expected = List.of(
-            "Test.java:11:28: compiler.err.type.annotation.inadmissible: (compiler.misc.type.annotation.1: @p.Test.Ann1), p.Test, @p.Test.Ann1 p.Test.N",
-            "Test.java:12:28: compiler.err.type.annotation.inadmissible: (compiler.misc.type.annotation.1: @p.Test.Ann1), p.Test, @p.Test.Ann1 p.Test.N",
-            "Test.java:13:28: compiler.err.type.annotation.inadmissible: (compiler.misc.type.annotation.1: @p.Test.Ann1), p.Test, p.Test.@p.Test.Ann1 I",
+            "Test.java:11:28: compiler.err.type.annotation.inadmissible: (compiler.misc.type.annotation.1: @p.Test.Ann1), p.Test, @p.Test.Ann1, N",
+            "Test.java:12:28: compiler.err.type.annotation.inadmissible: (compiler.misc.type.annotation.1: @p.Test.Ann1), p.Test, @p.Test.Ann1, N",
+            "Test.java:13:28: compiler.err.type.annotation.inadmissible: (compiler.misc.type.annotation.1: @p.Test.Ann1), p.Test, @p.Test.Ann1, I",
             "3 errors"
         );
 

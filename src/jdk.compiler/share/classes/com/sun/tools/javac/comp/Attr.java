@@ -5986,10 +5986,8 @@ public class Attr extends JCTree.Visitor {
                             Fragment annotationFragment = onlyTypeAnnotations.size() == 1 ?
                                     Fragments.TypeAnnotation1(onlyTypeAnnotations.head) :
                                     Fragments.TypeAnnotation(onlyTypeAnnotations);
-                            JCDiagnostic.AnnotatedType annotatedType = new JCDiagnostic.AnnotatedType(
-                                    type.stripMetadata().annotatedType(onlyTypeAnnotations));
                             log.error(at.underlyingType.pos(), Errors.TypeAnnotationInadmissible(annotationFragment,
-                                    type.tsym.owner, annotatedType));
+                                    type.tsym.owner, onlyTypeAnnotations, type.tsym.name));
                         }
                         repeat = false;
                     }

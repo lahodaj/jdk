@@ -538,12 +538,11 @@ public class TypeAnnotations {
                         // The normal declaration annotation checks make sure that the use is valid.
                         return type;
                     }
-                    Type annotated = typeWithAnnotations(type.stripMetadata(), enclTy, annotations);
                     JCDiagnostic.Fragment annotationFragment = onlyTypeAnnotations.size() == 1 ?
                             Fragments.TypeAnnotation1(onlyTypeAnnotations.head) :
                             Fragments.TypeAnnotation(onlyTypeAnnotations);
                     log.error(typetree.pos(), Errors.TypeAnnotationInadmissible(
-                            annotationFragment, annotated.tsym.owner, new JCDiagnostic.AnnotatedType(annotated)));
+                            annotationFragment, type.tsym.owner, annotations, type.tsym.name));
                     return type;
                 }
 

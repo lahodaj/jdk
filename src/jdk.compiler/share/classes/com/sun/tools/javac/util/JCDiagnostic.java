@@ -450,7 +450,9 @@ public class JCDiagnostic implements Diagnostic<JavaFileObject> {
          */
         SOURCE_LEVEL,
         /** Flag for warnings that cannot be disabled */
-        STRICT;
+        STRICT,
+        SEPARATOR_SPACE,
+        ;
     }
 
     private final DiagnosticSource source;

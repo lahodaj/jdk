@@ -54,6 +54,7 @@ import com.sun.tools.javac.jvm.Target;
 import com.sun.tools.javac.main.Option;
 import com.sun.tools.javac.tree.JCTree.*;
 import com.sun.tools.javac.tree.Pretty;
+import com.sun.tools.javac.util.JCDiagnostic.DiagnosticFlag;
 
 import static com.sun.tools.javac.util.JCDiagnostic.DiagnosticType.*;
 
@@ -263,11 +264,13 @@ public abstract class AbstractDiagnosticFormatter implements DiagnosticFormatter
      */
     protected String formatIterable(JCDiagnostic d, Iterable<?> it, Locale l) {
         StringBuilder sbuf = new StringBuilder();
-        String sep = "";
+        String separator =
+                d.isFlagSet(DiagnosticFlag.SEPARATOR_SPACE) ? " " : ",";
+        String runningSeparator = "";
         for (Object o : it) {
-            sbuf.append(sep);
+            sbuf.append(runningSeparator);
             sbuf.append(formatArgument(d, o, l));
-            sep = ",";
+            runningSeparator = separator;
         }
         return sbuf.toString();
     }
