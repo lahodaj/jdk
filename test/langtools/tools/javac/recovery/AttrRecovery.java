@@ -23,7 +23,7 @@
 
 /*
  * @test
- * @bug 8301580 8322159 8333107 8332230 8338678 8351260 8366196 8372336 8373094 8384229 8387865
+ * @bug 8301580 8322159 8333107 8332230 8338678 8351260 8366196 8372336 8373094 8384229 8387865 8391547
  * @summary Verify error recovery w.r.t. Attr
  * @library /tools/lib
  * @modules jdk.compiler/com.sun.tools.javac.api
@@ -881,6 +881,35 @@ public class AttrRecovery {
         List<String> expected = List.of(
                 "C.java:3:13: compiler.err.cant.resolve: kindname.variable, unknown, , ",
                 "C.java:3:24: compiler.err.cant.resolve.location: kindname.variable, unknown, , , (compiler.misc.location: kindname.class, C, null)",
+                "2 errors"
+        );
+
+        assertEquals(expected, actual);
+    }
+
+    @Test //JDK-8391547
+    public void testDereferencePrimitiveNull() throws Exception {
+        String code = """
+                      import java.math.BigDecimal;
+
+                      class Test {
+                          void test(BigDecimal v1, double v2) {
+                              BigDecimal _ = BigDecimal.ONE.add(v2.divide(BigDecimal.valueOf(100)));
+                              BigDecimal _ = BigDecimal.ONE.add(null.divide(BigDecimal.valueOf(100)));
+                          }
+                      }
+                      """;
+        List<String> actual = new JavacTask(tb)
+                .options("-XDrawDiagnostics")
+                .sources(code)
+                .outdir(base)
+                .run(Expect.FAIL)
+                .writeAll()
+                .getOutputLines(OutputKind.DIRECT);
+
+        List<String> expected = List.of(
+                "Test.java:5:45: compiler.err.cant.deref: double",
+                "Test.java:6:47: compiler.err.cant.deref: compiler.misc.type.null",
                 "2 errors"
         );
 
