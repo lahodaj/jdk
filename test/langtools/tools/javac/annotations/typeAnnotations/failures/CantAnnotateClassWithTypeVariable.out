@@ -1,2 +1,2 @@
-CantAnnotateClassWithTypeVariable.java:18:14: compiler.err.type.annotation.inadmissible: (compiler.misc.type.annotation.1: @CantAnnotateClassWithTypeVariable.TA), CantAnnotateClassWithTypeVariable.A, @CantAnnotateClassWithTypeVariable.TA CantAnnotateClassWithTypeVariable.A.B<T>
+CantAnnotateClassWithTypeVariable.java:18:14: compiler.err.type.annotation.inadmissible: (compiler.misc.type.annotation.1: @CantAnnotateClassWithTypeVariable.TA), CantAnnotateClassWithTypeVariable.A, @CantAnnotateClassWithTypeVariable.TA, B
 1 error
