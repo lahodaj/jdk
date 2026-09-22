@@ -42,6 +42,7 @@ import com.sun.tools.javac.util.List;
 import static com.sun.tools.javac.code.Flags.*;
 import static com.sun.tools.javac.code.Kinds.Kind.*;
 import static com.sun.tools.javac.code.Scope.LookupKind.NON_RECURSIVE;
+import static com.sun.tools.javac.code.TypeTag.BOOLEAN;
 import static com.sun.tools.javac.code.TypeTag.CLASS;
 import static com.sun.tools.javac.code.TypeTag.TYPEVAR;
 import static com.sun.tools.javac.code.TypeTag.VOID;
@@ -1057,16 +1058,30 @@ public class TransTypes extends TreeTranslator {
                 ? typeCast.expr
                 : newExpression;
         }
-        if (originalTarget.isIntersection()) {
-            Type.IntersectionClassType ict = (Type.IntersectionClassType)originalTarget;
-            for (Type c : ict.getExplicitComponents()) {
-                Type ec = erasure(c);
-                if (!types.isSameType(ec, tree.type) && (!types.isSameType(ec, pt))) {
-                    tree.expr = coerce(tree.expr, ec);
+        if (tree.expr.type.hasTag(BOOLEAN) &&
+            pt.hasTag(BOOLEAN) &&
+            types.unboxedTypeOrType(tree.clazz.type).hasTag(BOOLEAN)) {
+            //elide the cast completely if the target type and the type of the expression
+            //is boolean, and the cast type is boolean or Boolean. Cast to
+            //(boolean) is a no-op, and a cast to (Boolean) is harmful
+            //in cases like:
+            //(Boolean) (b && (result = 1) > 0)
+            //which gets desugared to:
+            //((Boolean)Boolean.valueOf((b && (result = 1) > 0))).booleanValue()
+            //and the DA status of result is lost in the method invocations
+            result = tree.expr;
+        } else {
+            if (originalTarget.isIntersection()) {
+                Type.IntersectionClassType ict = (Type.IntersectionClassType)originalTarget;
+                for (Type c : ict.getExplicitComponents()) {
+                    Type ec = erasure(c);
+                    if (!types.isSameType(ec, tree.type) && (!types.isSameType(ec, pt))) {
+                        tree.expr = coerce(tree.expr, ec);
+                    }
                 }
             }
+            result = retype(tree, tree.type, pt);
         }
-        result = retype(tree, tree.type, pt);
     }
 
     public void visitTypeTest(JCInstanceOf tree) {
