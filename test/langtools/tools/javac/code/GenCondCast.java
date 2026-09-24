@@ -115,8 +115,25 @@ public class GenCondCast {
     }
 
     static int annotated(boolean b) {
-        if ((@Ann boolean) b) return 1;
-        if ((@Ann Boolean) b) return 1;
+        {
+            int result;
+            if ((@Ann boolean) (b && (result = 1) > 0)) return result;
+        }
+        {
+            int result;
+            if ((@Ann boolean) ((result = 1) > 0) && b) return result;
+        }
+        //note that the boxing&unboxing is duplicated, but the type annotations
+        //is only assigned to the second duplicate. That's consistent with
+        //how duplicated code for e.g. try-finally works:
+        {
+            int result;
+            if ((@Ann Boolean) (b && (result = 1) > 0)) return result;
+        }
+        {
+            int result;
+            if ((@Ann Boolean) ((result = 1) > 0) && b) return result;
+        }
         boolean _ = (@Ann boolean) b;
         boolean _ = (@Ann Boolean) b;
         return 0;
@@ -155,10 +172,12 @@ public class GenCondCast {
         RuntimeInvisibleTypeAnnotationsAttribute typeAnnotations = annotated.code().orElseThrow().findAttribute(Attributes.runtimeInvisibleTypeAnnotations()).orElseThrow();
         List<String> actualTAs = typeAnnotations.annotations().stream().map(ta -> toString(ta.targetInfo())  + ", " + ta.targetPath() + ", " + ta.annotation()).toList();
         List<String> expectedTAs = List.of(
-            "CAST:0:1, [], Annotation[LGenCondCast$Ann;]",
-            "CAST:0:25, [], Annotation[LGenCondCast$Ann;]",
-            "CAST:0:35, [], Annotation[LGenCondCast$Ann;]",
-            "CAST:0:40, [], Annotation[LGenCondCast$Ann;]"
+            "CAST:0:7, [], Annotation[LGenCondCast$Ann;]",
+            "CAST:0:15, [], Annotation[LGenCondCast$Ann;]",
+            "CAST:0:49, [], Annotation[LGenCondCast$Ann;]",
+            "CAST:0:79, [], Annotation[LGenCondCast$Ann;]",
+            "CAST:0:93, [], Annotation[LGenCondCast$Ann;]",
+            "CAST:0:98, [], Annotation[LGenCondCast$Ann;]"
         );
 
         if (!Objects.equals(expectedTAs, actualTAs)) {
