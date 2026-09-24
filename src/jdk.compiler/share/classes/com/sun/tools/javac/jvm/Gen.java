@@ -802,11 +802,6 @@ public class Gen extends JCTree.Visitor {
                    tc.type.tsym == types.boxedClass(syms.booleanType) &&
                    tc.expr instanceof JCMethodInvocation boxing &&
                    boxing.boxingKind == JCMethodInvocation.BoxingKind.BOX) {
-            if (!tc.type.isAnnotated()) {
-                //skip the boxing, cast and unboxing, and just generate the expression:
-                return genCond(boxing.args.head, markBranches);
-            }
-
             //case like:
             //(Boolean) (b && (result = 1) > 0)
             //expanded to:
