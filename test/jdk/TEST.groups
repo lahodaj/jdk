@@ -43,7 +43,8 @@ tier1 = \
     :tier1_part3
 
 tier1_part1 = \
-    :jdk_lang
+    :jdk_lang \
+    :jdk_launcher
 
 tier1_part1_no_valhalla = \
     :tier1_part1 \
