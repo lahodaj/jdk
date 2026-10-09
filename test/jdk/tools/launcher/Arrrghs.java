@@ -307,6 +307,17 @@ public class Arrrghs extends TestHelper {
             throw new RuntimeException("Error: compiling java wildcards with vmoptions");
         }
 
+        // test if javac (the command) can compile *.java with a vmoption that represents VM variant
+        if (haveClientVM || haveServerVM) {
+            String variant = haveServerVM ? "-server" : "-client";
+            tr = doExec(javacCmd, "-cp", ".",
+                        variant,
+                        libDir.getName() + File.separator + "*.java");
+            if (!tr.isOK()) {
+                System.out.println(tr);
+                throw new RuntimeException("Error: compiling java wildcards with vmoptions");
+            }
+        }
 
         // use the jar cmd to create jars using the ? wildcard
         File jarFoo = new File(libDir, "Foo.jar");
