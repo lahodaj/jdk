@@ -853,6 +853,8 @@ CheckJvmType(int *pargc, char ***argv, jboolean speculative) {
 
         if (!isVMType) {
             newArgv[newArgvIdx++] = arg;
+        } else {
+            MarkArgFilteredOut(argi);
         }
     }
 

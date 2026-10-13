@@ -1120,11 +1120,12 @@ CreateApplicationArgs(JNIEnv *env, char **strv, int argc)
     if (isTool) { idx++; } // skip tool name
     JLI_TraceLauncher("AppArgIndex: %d points to %s\n", idx, stdargs[idx].arg);
 
-    appArgIdx = calloc(argc, sizeof(int));
+    appArgIdx = calloc(stdargc, sizeof(int));
     for (i = idx, j = 0; i < stdargc; i++) {
         if (isTool) { // filter -J used by tools to pass JVM options
             arg = stdargs[i].arg;
-            if (arg[0] == '-' && arg[1] == 'J') {
+            if (stdargs[i].is_filtered_vm_variant ||
+                (arg[0] == '-' && arg[1] == 'J')) {
                 continue;
             }
         }
@@ -1184,4 +1185,9 @@ CreateApplicationArgs(JNIEnv *env, char **strv, int argc)
     JLI_MemFree(nargv);
     JLI_MemFree(appArgIdx);
     return outArray;
+}
+
+void
+MarkArgFilteredOut(int argIndex) {
+    JLI_GetStdArgs()[argIndex].is_filtered_vm_variant = JNI_TRUE;
 }

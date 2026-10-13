@@ -389,6 +389,10 @@ CreateApplicationArgs(JNIEnv *env, char **strv, int argc)
     return NewPlatformStringArray(env, strv, argc);
 }
 
+void
+MarkArgFilteredOut(int argIndex) {
+}
+
 /*
  * Provide a CurrentTimeMicros() implementation based on gettimeofday() which
  * is universally available, even though it may not be 'high resolution'

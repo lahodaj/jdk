@@ -229,12 +229,14 @@ JLI_CmdToArgs(char* cmdline) {
     // first argument is the app name, do not preprocess and make sure remains first
     argv[0].arg = JLI_StringDup(arg);
     argv[0].has_wildcard = wildcard;
+    argv[0].is_filtered_vm_variant = JNI_FALSE;
     nargs++;
 
     for (i = 1; i < cnt; i++) {
         argv[i].arg = envArgs->elements[i - 1];
         // wildcard is not supported in argfile
         argv[i].has_wildcard = JNI_FALSE;
+        argv[i].is_filtered_vm_variant = JNI_FALSE;
         nargs++;
     }
     JLI_MemFree(envArgs->elements);
@@ -255,6 +257,7 @@ JLI_CmdToArgs(char* cmdline) {
                 argv[nargs].arg = argsInFile->elements[i];
                 // wildcard is not supported in argfile
                 argv[nargs].has_wildcard = JNI_FALSE;
+                argv[nargs].is_filtered_vm_variant = JNI_FALSE;
                 nargs++;
             }
             // Shallow free, we reuse the string to avoid copy
@@ -265,6 +268,7 @@ JLI_CmdToArgs(char* cmdline) {
             argv = (StdArg*) JLI_MemRealloc(argv, (nargs+1) * sizeof(StdArg));
             argv[nargs].arg = JLI_StringDup(arg);
             argv[nargs].has_wildcard = wildcard;
+            argv[nargs].is_filtered_vm_variant = JNI_FALSE;
             *arg = '\0';
             nargs++;
         }

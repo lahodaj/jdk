@@ -202,6 +202,8 @@ jobjectArray CreateApplicationArgs(JNIEnv *env, char **strv, int argc);
 jobjectArray NewPlatformStringArray(JNIEnv *env, char **strv, int strc);
 jclass GetLauncherHelperClass(JNIEnv *env);
 
+void MarkArgFilteredOut(int argIndex);
+
 /*
  * Entry point.
  */

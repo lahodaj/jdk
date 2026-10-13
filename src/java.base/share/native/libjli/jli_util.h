@@ -57,6 +57,7 @@ jboolean   JLI_HasSuffix(const char *s1, const char *s2);
 typedef struct {
     char *arg;
     jboolean has_wildcard;
+    jboolean is_filtered_vm_variant;
 } StdArg;
 
 JNIEXPORT StdArg * JNICALL
