@@ -4258,7 +4258,9 @@ public class Attr extends JCTree.Visitor {
                     case FLOAT -> pattType.hasTag(FLOAT);
                     case DOUBLE -> pattType.hasTag(DOUBLE);
                     case BOOLEAN -> pattType.hasTag(BOOLEAN);
-                    case BYTE, CHAR, SHORT, INT -> types.isAssignable(pattType, exprType);
+                    case CHAR -> pattType.hasTag(CHAR);
+                    case BYTE, SHORT, INT -> types.isAssignable(pattType, exprType) &&
+                                             !pattType.hasTag(CHAR);
                     case CLASS -> exprType.tsym == syms.stringType.tsym &&
                         types.isAssignable(pattType, exprType);
                     default -> false;

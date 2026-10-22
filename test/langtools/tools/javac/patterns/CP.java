@@ -661,6 +661,43 @@ public class CP {
                 "str, 1");
     }
 
+    @Test
+    public void testCharSwitch() throws Exception {
+        runTest("""
+                public record R(char c, int i) {
+                    static void main() {
+                        Object o = new R('a', 0);
+                        switch (o) {
+                            case R('a', 0) -> System.out.println("correct");
+                            default -> System.out.println("incorrect");
+                        }
+                    }
+                }
+                """,
+                "correct");
+        compileTest(
+                """
+                public record R(char c, int i) {
+                    static void main() {
+                        Object o = new R('a', 0);
+                        switch (o) {
+                            case R(0, 'a') -> System.out.println("correct");
+                            case R(true, 0) -> System.out.println("correct");
+                            default -> System.out.println("incorrect");
+                        }
+                    }
+                }
+                """,
+                """
+                R.java:5:20: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: char, int)
+                R.java:5:23: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: int, char)
+                R.java:6:20: compiler.err.prob.found.req: (compiler.misc.inconvertible.types: char, boolean)
+                - compiler.note.preview.filename: R.java, DEFAULT
+                - compiler.note.preview.recompile
+                3 errors
+                """.split("\n"));
+    }
+
     //TODO: no .class
     //TODO: better tests .equals semantics for Float/Double?
     //TODO: no constant patterns in instanceof(!)
