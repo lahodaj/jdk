@@ -295,7 +295,9 @@ public class Attr extends JCTree.Visitor {
              &&
              ((v.flags() & STATIC) != 0) == Resolve.isStatic(env));
         boolean insideCompactConstructor = env.enclMethod != null && TreeInfo.isCompactConstructor(env.enclMethod);
-        return isAssignable & !insideCompactConstructor;
+        boolean assigningRecordField = (v.flags() & RECORD) != 0;
+        // Only record component fields are non-assignable in a compact constructor.
+        return isAssignable && (!insideCompactConstructor || !assigningRecordField);
     }
 
     /** Check that variable can be assigned to.
@@ -819,7 +821,16 @@ public class Attr extends JCTree.Visitor {
                 List<Type> bounds = List.of(attribType(tvar.bounds.head, env));
                 for (JCExpression bound : tvar.bounds.tail)
                     bounds = bounds.prepend(attribType(bound, env));
-                types.setBounds(a, bounds.reverse());
+                bounds = bounds.reverse();
+                if (bounds.head.hasTag(ARRAY)) {
+                    /* A single bound that is an array type may structurally reference
+                     * this same type variable, as in `<T extends T[]>`, setting the bound to
+                     * Object as a recovery strategy
+                     */
+                    types.setBounds(a, List.of(syms.objectType));
+                } else {
+                    types.setBounds(a, bounds);
+                }
             } else {
                 // if no bounds are given, assume a single bound of
                 // java.lang.Object.
@@ -1175,7 +1186,7 @@ public class Attr extends JCTree.Visitor {
             }
 
             for (List<JCExpression> l = tree.thrown; l.nonEmpty(); l = l.tail)
-                chk.checkType(l.head.pos(), l.head.type, syms.throwableType);
+                chk.checkType(l.head.pos(), l.head.type, syms.throwableType, chk.subtypeHandler);
 
             if (tree.body == null) {
                 // Empty bodies are only allowed for
@@ -1999,7 +2010,7 @@ public class Attr extends JCTree.Visitor {
             try {
                 // Attribute resource declarations
                 for (JCTree resource : tree.resources) {
-                    CheckContext twrContext = new Check.NestedCheckContext(resultInfo.checkContext) {
+                    CheckContext twrContext = new Check.NestedCheckContext(chk.subtypeHandler) {
                         @Override
                         public void report(DiagnosticPosition pos, JCDiagnostic details) {
                             chk.basicHandler.report(pos, diags.fragment(Fragments.TryNotApplicableToType(details)));
@@ -2047,7 +2058,8 @@ public class Attr extends JCTree.Visitor {
                     }
                     chk.checkType(c.param.vartype.pos(),
                                   chk.checkClassType(c.param.vartype.pos(), ctype),
-                                  syms.throwableType);
+                                  syms.throwableType,
+                                  chk.subtypeHandler);
                     attribStat(c.body, catchEnv);
                 } finally {
                     catchEnv.info.scope.leave();
@@ -2267,7 +2279,7 @@ public class Attr extends JCTree.Visitor {
                                  .collect(List.collector());
 
             for (Type type : condTypes) {
-                if (condTypes.stream().filter(t -> t != type).allMatch(t -> types.isAssignable(t, type)))
+                if (condTypes.stream().filter(t -> t != type).allMatch(t -> types.isSubtype(t, type)))
                     return type.baseType();
             }
 
@@ -2628,8 +2640,10 @@ public class Attr extends JCTree.Visitor {
                         // Check that the prefix expression conforms
                         // to the outer instance type of the class.
                         chk.checkRefType(qualifier.pos(),
-                                         attribExpr(qualifier, localEnv,
-                                                    encl));
+                                attribTree(qualifier, localEnv,
+                                           new ResultInfo(KindSelector.VAL,
+                                                          encl,
+                                                          chk.subtypeHandler)));
                     }
                 } else if (tree.meth.hasTag(SELECT)) {
                     log.error(tree.meth.pos(),
@@ -5245,7 +5259,8 @@ public class Attr extends JCTree.Visitor {
             Type ctype = attribType(typeTree, env);
             ctype = chk.checkType(typeTree.pos(),
                           chk.checkClassType(typeTree.pos(), ctype),
-                          syms.throwableType);
+                          syms.throwableType,
+                          chk.subtypeHandler);
             if (!ctype.isErroneous()) {
                 //check that alternatives of a union type are pairwise
                 //unrelated w.r.t. subtyping
